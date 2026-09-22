@@ -29,6 +29,18 @@ export type CurvePreset = {
 
 export const CURVE_PRESETS: CurvePreset[] = [
   {
+    id: "short",
+    name: "Short raise",
+    tagline: "Fast path to graduate",
+    description:
+      "Low migration market cap so a funded wallet can buy through the curve and demo DAMM v2 graduation without a long runway. Real SDK config — not a mock.",
+    bestFor: "Devnet demos, smoke tests, short raises",
+    feeLabel: "Linear 150→50 bps over 30m",
+    initialMarketCap: 500,
+    migrationMarketCap: 2_500,
+    accent: "from-teal-400/25 to-sky-500/10",
+  },
+  {
     id: "flat",
     name: "Flat",
     tagline: "Steady discovery",
@@ -96,6 +108,16 @@ type FeeSpec = {
 };
 
 const FEE_BY_PRESET: Record<PresetId, FeeSpec> = {
+  short: {
+    mode: BaseFeeMode.FeeSchedulerLinear,
+    startingFeeBps: 150,
+    endingFeeBps: 50,
+    numberOfPeriod: 30,
+    totalDuration: 1_800,
+    dynamicFeeEnabled: false,
+    creatorTradingFeePercentage: 50,
+    enableFirstSwapWithMinFee: false,
+  },
   flat: {
     mode: BaseFeeMode.FeeSchedulerLinear,
     startingFeeBps: 200,
@@ -138,20 +160,60 @@ const FEE_BY_PRESET: Record<PresetId, FeeSpec> = {
   },
 };
 
-/** Real Meteora ConfigParameters via buildCurveWithMarketCap (verified against installed SDK). */
+/** On-chain minimum locked LP (MIN_LOCKED_LIQUIDITY_BPS = 1000 → 10%). */
+export const MIN_LP_LOCK_PCT = 10;
+
+export type BuildPresetOverrides = {
+  totalTokenSupply?: number;
+  leftover?: number;
+  /** Creator share of trading fees 0–100; partner (feeClaimer) gets remainder. */
+  creatorTradingFeePercentage?: number;
+  /** Permanent partner-locked LP % after migration; clamped to ≥10. */
+  lpLockPct?: number;
+  /**
+   * Renounce mint (CreatorUpdateAuthority / no mint) vs retain
+   * (CreatorUpdateAndMintAuthority).
+   */
+  mintRenounce?: boolean;
+  /** When true, enables first-swap min fee on the fee config. */
+  antiSniper?: boolean;
+};
+
+/**
+ * Real Meteora ConfigParameters via buildCurveWithMarketCap.
+ * Wizard fee / lock / mint controls map into these fields.
+ */
 export function buildPresetConfig(
   presetId: PresetId,
-  opts: { totalTokenSupply?: number; leftover?: number } = {},
+  opts: BuildPresetOverrides = {},
 ): ConfigParameters {
   const preset = getPreset(presetId);
   const feeSpec = FEE_BY_PRESET[presetId];
+
+  const creatorPct = Math.min(
+    100,
+    Math.max(0, Math.round(opts.creatorTradingFeePercentage ?? feeSpec.creatorTradingFeePercentage)),
+  );
+  const lpLock = Math.min(
+    100,
+    Math.max(MIN_LP_LOCK_PCT, Math.round(opts.lpLockPct ?? 100)),
+  );
+  const partnerUnlocked = 100 - lpLock;
+
+  const mintRenounce = opts.mintRenounce !== false;
+  const tokenAuthorityOption = mintRenounce
+    ? TokenAuthorityOption.CreatorUpdateAuthority
+    : TokenAuthorityOption.CreatorUpdateAndMintAuthority;
+
+  const enableFirstSwapWithMinFee =
+    opts.antiSniper ?? feeSpec.enableFirstSwapWithMinFee;
 
   return buildCurveWithMarketCap({
     token: {
       tokenType: TokenType.SPLToken,
       tokenBaseDecimal: TokenDecimal.NINE,
       tokenQuoteDecimal: TokenDecimal.NINE,
-      tokenAuthorityOption: TokenAuthorityOption.CreatorUpdateAuthority,
+      tokenAuthorityOption,
       totalTokenSupply: opts.totalTokenSupply ?? 1_000_000_000,
       leftover: opts.leftover ?? 0,
     },
@@ -167,9 +229,9 @@ export function buildPresetConfig(
       },
       dynamicFeeEnabled: feeSpec.dynamicFeeEnabled,
       collectFeeMode: CollectFeeMode.QuoteToken,
-      creatorTradingFeePercentage: feeSpec.creatorTradingFeePercentage,
+      creatorTradingFeePercentage: creatorPct,
       poolCreationFee: 1_000_000,
-      enableFirstSwapWithMinFee: feeSpec.enableFirstSwapWithMinFee,
+      enableFirstSwapWithMinFee,
     },
     migration: {
       migrationOption: MigrationOption.MET_DAMM_V2,
@@ -183,8 +245,8 @@ export function buildPresetConfig(
       },
     },
     liquidityDistribution: {
-      partnerPermanentLockedLiquidityPercentage: 100,
-      partnerLiquidityPercentage: 0,
+      partnerPermanentLockedLiquidityPercentage: lpLock,
+      partnerLiquidityPercentage: partnerUnlocked,
       creatorPermanentLockedLiquidityPercentage: 0,
       creatorLiquidityPercentage: 0,
     },

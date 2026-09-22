@@ -1,56 +1,15 @@
 import Link from "next/link";
 import { CurveMiniViz } from "@/components/ui/CurveMiniViz";
-import { OfferingCard } from "@/components/ui/OfferingCard";
-import { DEMO_OFFERINGS } from "@/lib/demo/offerings";
+import { HomeLocalStrip } from "@/components/home/HomeLocalStrip";
 import { CURVE_PRESETS } from "@/lib/dbc/presets";
 
-const DEMO_STRIP = [
-  {
-    t: "0:00",
-    title: "Home",
-    body: "Equity positioning · DBC → DAMM",
-    href: "/#hero",
-    cta: "Start here",
-  },
-  {
-    t: "0:20",
-    title: "Create",
-    body: "Long preset · fees · LP ≥10%",
-    href: "/create?step=curve&preset=long",
-    cta: "Open wizard",
-  },
-  {
-    t: "1:10",
-    title: "Trade",
-    body: "Buy on curve · watch progress",
-    href: "/explore?tab=raising",
-    cta: "Explore raising",
-  },
-  {
-    t: "1:50",
-    title: "Graduate",
-    body: "Migrate TX · DAMM v2",
-    href: "/docs#graduate",
-    cta: "How graduate works",
-  },
-  {
-    t: "2:35",
-    title: "Trust",
-    body: "Program IDs for judges",
-    href: "/trust",
-    cta: "Trust Center",
-  },
-];
-
 export default function HomePage() {
-  const featured = DEMO_OFFERINGS.slice(0, 3);
   const official = CURVE_PRESETS.filter((p) =>
-    ["flat", "exponential", "long"].includes(p.id),
+    ["short", "flat", "exponential", "long"].includes(p.id),
   );
 
   return (
     <div className="space-y-16">
-      {/* Hero */}
       <section
         id="hero"
         className="grid items-center gap-10 lg:grid-cols-[1.1fr_0.9fr]"
@@ -64,8 +23,8 @@ export default function HomePage() {
           </h1>
           <p className="mt-4 max-w-xl text-base leading-relaxed text-fg-secondary sm:text-lg">
             Launch on Meteora Dynamic Bonding Curve. Graduate into DAMM v2.
-            Studio-class create wizard, Bags-grade fee economics, xStocks-grade
-            trust — not a meme pad with compliance bolted on.
+            Studio-class create wizard with on-chain fee share, LP lock, and mint
+            authority — SOL quote MVP, not a meme pad with compliance bolted on.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link href="/create" className="ec-btn-primary">
@@ -76,7 +35,7 @@ export default function HomePage() {
             </Link>
           </div>
           <div className="mt-6 flex flex-wrap gap-2">
-            {["LP lock ≥10%", "Program IDs", "Disclosures"].map((t) => (
+            {["LP lock ≥10% on-chain", "Program IDs", "SOL quote"].map((t) => (
               <span
                 key={t}
                 className="rounded-pill border border-line bg-elevated px-3 py-1 text-xs text-fg-secondary"
@@ -128,70 +87,8 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Demo strip — ≤3 min path matching design script */}
-      <section className="space-y-4" aria-labelledby="demo-path">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h2
-              id="demo-path"
-              className="text-2xl font-semibold text-fg-primary"
-            >
-              Demo path ≤3 min
-            </h2>
-            <p className="mt-1 text-sm text-fg-secondary">
-              Film in this order: Home → Create → Trade → Graduate → Trust.
-            </p>
-          </div>
-          <Link href="/docs" className="text-sm text-accent hover:underline">
-            Full docs →
-          </Link>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          {DEMO_STRIP.map((step, i) => (
-            <Link
-              key={step.title}
-              href={step.href}
-              className="ec-card group flex flex-col p-4 transition hover:border-accent/40"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span className="font-mono text-[10px] text-accent">
-                  {step.t}
-                </span>
-                <span className="font-mono text-[10px] text-fg-muted">
-                  {i + 1}/5
-                </span>
-              </div>
-              <h3 className="mt-2 font-semibold text-fg-primary">
-                {step.title}
-              </h3>
-              <p className="mt-1 flex-1 text-xs text-fg-secondary">
-                {step.body}
-              </p>
-              <span className="mt-3 text-xs font-medium text-accent group-hover:underline">
-                {step.cta} →
-              </span>
-            </Link>
-          ))}
-        </div>
-      </section>
-
-      {/* Stat strip */}
-      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {[
-          { label: "Capital in discovery", value: "$216k" },
-          { label: "Graduated pools", value: "2" },
-          { label: "Avg raise time", value: "6.4d" },
-          { label: "Official presets", value: "3" },
-        ].map((s) => (
-          <div
-            key={s.label}
-            className="rounded-pill border border-line bg-elevated px-5 py-3 text-center sm:text-left"
-          >
-            <p className="font-mono text-lg text-fg-primary">{s.value}</p>
-            <p className="text-xs text-fg-muted">{s.label}</p>
-          </div>
-        ))}
-      </section>
+      {/* Real local stats + featured — no fake capital strip */}
+      <HomeLocalStrip />
 
       {/* How it works */}
       <section className="space-y-4">
@@ -201,19 +98,19 @@ export default function HomePage() {
             {
               n: "1",
               title: "Configure curve",
-              body: "Pick Flat, Exponential, or Long. Set fees, locks ≥10%, and disclosures.",
+              body: "Pick Short / Flat / Exponential / Long. Set creator fee share, LP lock ≥10%, and mint authority — all mapped on-chain.",
               href: "/create",
             },
             {
               n: "2",
               title: "Discover on DBC",
-              body: "Investors trade the bonding curve. Progress rings track real raise toward graduation.",
+              body: "Investors trade the bonding curve in SOL. Progress rings track real quote progress toward graduation.",
               href: "/explore",
             },
             {
               n: "3",
               title: "Graduate DAMM v2",
-              body: "When the threshold hits, migrate into Meteora DAMM v2 with locked LP.",
+              body: "When the threshold hits, migrate into Meteora DAMM v2 with partner-locked LP.",
               href: "/docs#graduate",
             },
           ].map((c) => (
@@ -230,23 +127,6 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Featured */}
-      <section className="space-y-4">
-        <div className="flex items-end justify-between gap-4">
-          <h2 className="text-2xl font-semibold text-fg-primary">
-            Featured offerings
-          </h2>
-          <Link href="/explore" className="text-sm text-accent hover:underline">
-            View all
-          </Link>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {featured.map((o) => (
-            <OfferingCard key={o.id} offering={o} />
-          ))}
-        </div>
-      </section>
-
       {/* Preset teaser */}
       <section className="space-y-4">
         <div className="flex items-end justify-between gap-4">
@@ -257,7 +137,7 @@ export default function HomePage() {
             Preset gallery
           </Link>
         </div>
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {official.map((p) => (
             <Link
               key={p.id}

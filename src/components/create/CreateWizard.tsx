@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { CurveMiniViz } from "@/components/ui/CurveMiniViz";
 import { explorerAddressUrl, explorerTxUrl, getCluster } from "@/lib/constants";
 import { prepareLaunchTransaction } from "@/lib/dbc/create";
-import { CURVE_PRESETS, getPreset } from "@/lib/dbc/presets";
+import { CURVE_PRESETS, getPreset, MIN_LP_LOCK_PCT } from "@/lib/dbc/presets";
 import type { PresetId } from "@/lib/dbc/types";
 import { toUserMessage } from "@/lib/errors";
 import { pushActivity, upsertLaunch } from "@/lib/local/launches";
@@ -25,7 +25,14 @@ import {
   type WizardStepId,
 } from "./wizardTypes";
 
-const OFFICIAL: PresetId[] = ["flat", "exponential", "long"];
+const OFFICIAL: PresetId[] = ["short", "flat", "exponential", "long"];
+const ALL_PRESET_IDS: PresetId[] = [
+  "short",
+  "flat",
+  "exponential",
+  "long",
+  "equity",
+];
 
 export function CreateWizard() {
   const { connection } = useConnection();
@@ -41,10 +48,10 @@ export function CreateWizard() {
 
   const initialPreset = useMemo((): PresetId => {
     const q = search.get("preset");
-    if (q && ["flat", "exponential", "long", "equity"].includes(q)) {
+    if (q && ALL_PRESET_IDS.includes(q as PresetId)) {
       return q as PresetId;
     }
-    return "long";
+    return "short";
   }, [search]);
 
   const [step, setStep] = useState<WizardStepId>(initialStep);
@@ -63,6 +70,7 @@ export function CreateWizard() {
   const eligibility = useEligibilityGate();
 
   const idx = stepIndex(step);
+  const feePlatform = 100 - state.feeIssuer;
 
   function patch(p: Partial<WizardState>) {
     setState((s) => ({ ...s, ...p }));
@@ -100,34 +108,62 @@ export function CreateWizard() {
     }
     setBusy(true);
     setResult(null);
-    setLaunchLog(["Preparing DBC createConfigAndPool…"]);
+    setLaunchLog(["Preparing DBC createConfigAndPool (SOL quote)…"]);
     try {
-      const { prepared, tx } = await prepareLaunchTransaction({
-        connection,
-        payer: wallet.publicKey,
-        input: {
-          name: state.name,
-          symbol: state.ticker,
-          uri: state.uri,
-          presetId: state.presetId,
-          totalSupply: state.totalSupply,
-        },
-      });
+      const { prepared, transactions, signersPerTx } =
+        await prepareLaunchTransaction({
+          connection,
+          payer: wallet.publicKey,
+          input: {
+            name: state.name,
+            symbol: state.ticker,
+            uri: state.uri,
+            presetId: state.presetId,
+            totalSupply: state.totalSupply,
+            creatorTradingFeePercentage: state.feeIssuer,
+            lpLockPct: state.lpLockPct,
+            mintRenounce: state.mintRenounce,
+            seedBuySol: state.seedBuy,
+            antiSniper: state.antiSniper,
+          },
+        });
       setLaunchLog((l) => [
         ...l,
         `Mode: ${prepared.mode}`,
+        `Quote: SOL (WSOL)`,
+        `Creator fee share: ${prepared.creatorTradingFeePercentage}%`,
+        `Partner LP lock: ${prepared.lpLockPct}%`,
+        `Mint: ${prepared.mintRenounce ? "renounced (no mint auth)" : "retained"}`,
+        prepared.seedBuySol > 0
+          ? `Seed buy: ${prepared.seedBuySol} SOL (in create TX)`
+          : "Seed buy: none",
         `Config: ${prepared.configPubkey}`,
         `Mint: ${prepared.baseMintPubkey}`,
         `Pool: ${prepared.poolPubkey}`,
-        "Awaiting wallet signature…",
+        `Transactions to sign: ${transactions.length}`,
       ]);
-      const sig = await signAndSendTransaction({ connection, wallet, tx });
-      setLaunchLog((l) => [...l, `TX: ${sig}`]);
+
+      let lastSig = "";
+      for (let i = 0; i < transactions.length; i++) {
+        const tx = transactions[i];
+        const { blockhash } = await connection.getLatestBlockhash("confirmed");
+        tx.recentBlockhash = blockhash;
+        tx.feePayer = wallet.publicKey;
+        const partial = signersPerTx[i] ?? [];
+        if (partial.length) tx.partialSign(...partial);
+        setLaunchLog((l) => [
+          ...l,
+          `Awaiting wallet signature (${i + 1}/${transactions.length})…`,
+        ]);
+        lastSig = await signAndSendTransaction({ connection, wallet, tx });
+        setLaunchLog((l) => [...l, `TX ${i + 1}: ${lastSig}`]);
+      }
+
       setResult({
         pool: prepared.poolPubkey,
         mint: prepared.baseMintPubkey,
         config: prepared.configPubkey,
-        sig,
+        sig: lastSig,
       });
       upsertLaunch({
         id: prepared.poolPubkey,
@@ -138,27 +174,37 @@ export function CreateWizard() {
         ticker: state.ticker,
         thesis: state.thesis,
         sector: state.sector,
-        quote: state.quote,
+        quote: "SOL",
         raiseTarget: state.raiseTarget,
         presetId: state.presetId,
-        feeBps: state.totalTradingFeeBps,
-        lockPct: state.lpLockPct,
-        sig,
+        feeBps: 0,
+        feeIssuerPct: prepared.creatorTradingFeePercentage,
+        lockPct: prepared.lpLockPct,
+        mintRenounce: prepared.mintRenounce,
+        attestations: {
+          memo: state.docMemo,
+          risk: state.docRisk,
+          issuer: state.docIssuer,
+          legal: state.docLegal,
+          financials: state.docFinancials,
+        },
+        sig: lastSig,
         creator: wallet.publicKey.toBase58(),
         createdAt: new Date().toISOString(),
         cluster: getCluster(),
         status: "raising",
       });
       pushActivity({
-        id: `${sig}-launch`,
+        id: `${lastSig}-launch`,
         pool: prepared.poolPubkey,
         mint: prepared.baseMintPubkey,
         kind: "launch",
-        sig,
+        sig: lastSig,
         wallet: wallet.publicKey.toBase58(),
         at: new Date().toISOString(),
       });
       toast.success("Offering live on curve");
+      void router;
     } catch (err) {
       const msg = toUserMessage(err);
       setLaunchLog((l) => [...l, `Error: ${msg}`]);
@@ -173,96 +219,105 @@ export function CreateWizard() {
       requireForAction={eligibility.needGate}
       onAccepted={eligibility.onAccepted}
     >
-    <div className="space-y-6">
-      {/* Stepper */}
-      <div className="sticky top-16 z-30 -mx-4 border-b border-line bg-base/95 px-4 py-3 backdrop-blur md:top-[4.5rem]">
-        <ol className="mx-auto flex max-w-6xl flex-wrap items-center gap-2">
-          {WIZARD_STEPS.map((s, i) => {
-            const active = s.id === step;
-            const done = i < idx;
-            return (
-              <li key={s.id} className="flex items-center gap-2">
-                <button
-                  type="button"
-                  disabled={i > idx}
-                  onClick={() => i <= idx && go(s.id)}
-                  className={clsx(
-                    "rounded-pill px-3 py-1 text-xs font-medium transition",
-                    active && "bg-accent/20 text-accent",
-                    done && !active && "text-fg-primary hover:bg-subtle",
-                    !done && !active && "text-fg-muted",
+      <div className="space-y-6">
+        <div className="sticky top-16 z-30 -mx-4 border-b border-line bg-base/95 px-4 py-3 backdrop-blur md:top-[4.5rem]">
+          <ol className="mx-auto flex max-w-6xl flex-wrap items-center gap-2">
+            {WIZARD_STEPS.map((s, i) => {
+              const active = s.id === step;
+              const done = i < idx;
+              return (
+                <li key={s.id} className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={i > idx}
+                    onClick={() => i <= idx && go(s.id)}
+                    className={clsx(
+                      "rounded-pill px-3 py-1 text-xs font-medium transition",
+                      active && "bg-accent/20 text-accent",
+                      done && !active && "text-fg-primary hover:bg-subtle",
+                      !done && !active && "text-fg-muted",
+                    )}
+                  >
+                    <span className="mr-1 font-mono">{i + 1}</span>
+                    {s.label}
+                  </button>
+                  {i < WIZARD_STEPS.length - 1 && (
+                    <span className="hidden text-line sm:inline">→</span>
                   )}
-                >
-                  <span className="mr-1 font-mono">{i + 1}</span>
-                  {s.label}
-                </button>
-                {i < WIZARD_STEPS.length - 1 && (
-                  <span className="hidden text-line sm:inline">→</span>
-                )}
-              </li>
-            );
-          })}
-        </ol>
-      </div>
+                </li>
+              );
+            })}
+          </ol>
+        </div>
 
-      <div className="grid gap-8 lg:grid-cols-[1.15fr_0.85fr]">
-        <div className="space-y-6">
-          {step === "basics" && <StepBasics state={state} patch={patch} />}
-          {step === "offering" && <StepOffering state={state} patch={patch} />}
-          {step === "curve" && <StepCurve state={state} patch={patch} />}
-          {step === "fees" && <StepFees state={state} patch={patch} />}
-          {step === "review" && (
-            <StepReview state={state} patch={patch} onEdit={go} />
-          )}
-          {step === "launch" && (
-            <StepLaunch
-              state={state}
-              busy={busy}
-              log={launchLog}
-              result={result}
-              onLaunch={onLaunch}
-              walletConnected={!!wallet.publicKey}
-            />
-          )}
+        <div className="grid gap-8 lg:grid-cols-[1.15fr_0.85fr]">
+          <div className="space-y-6">
+            {step === "basics" && <StepBasics state={state} patch={patch} />}
+            {step === "offering" && <StepOffering state={state} patch={patch} />}
+            {step === "curve" && <StepCurve state={state} patch={patch} />}
+            {step === "fees" && (
+              <StepFees
+                state={state}
+                patch={patch}
+                feePlatform={feePlatform}
+              />
+            )}
+            {step === "review" && (
+              <StepReview
+                state={state}
+                patch={patch}
+                onEdit={go}
+                feePlatform={feePlatform}
+              />
+            )}
+            {step === "launch" && (
+              <StepLaunch
+                state={state}
+                busy={busy}
+                log={launchLog}
+                result={result}
+                onLaunch={onLaunch}
+                walletConnected={!!wallet.publicKey}
+              />
+            )}
+          </div>
+          <OfferingPreviewCard state={state} />
         </div>
-        <OfferingPreviewCard state={state} />
-      </div>
 
-      {/* Footer bar */}
-      {step !== "launch" && (
-        <div className="sticky bottom-0 z-20 -mx-4 flex items-center justify-between border-t border-line bg-base/95 px-4 py-3 backdrop-blur">
-          <button
-            type="button"
-            onClick={onBack}
-            disabled={idx === 0}
-            className="ec-btn-secondary"
-          >
-            Back
-          </button>
-          <span className="text-xs text-fg-muted">
-            Step {idx + 1} of {WIZARD_STEPS.length}
-          </span>
-          <button
-            type="button"
-            onClick={onContinue}
-            disabled={!canContinue(step, state)}
-            className="ec-btn-primary"
-          >
-            Continue
-          </button>
-        </div>
-      )}
-      {step === "launch" && result && (
-        <div className="flex flex-wrap gap-3">
-          <Link href={`/o/${result.pool}`} className="ec-btn-primary">
-            View offering
-          </Link>
-          <Link href={`/trade/${result.pool}`} className="ec-btn-secondary">
-            Trade on curve
-          </Link>
-        </div>
-      )}
-    </div>
+        {step !== "launch" && (
+          <div className="sticky bottom-0 z-20 -mx-4 flex items-center justify-between border-t border-line bg-base/95 px-4 py-3 backdrop-blur">
+            <button
+              type="button"
+              onClick={onBack}
+              disabled={idx === 0}
+              className="ec-btn-secondary"
+            >
+              Back
+            </button>
+            <span className="text-xs text-fg-muted">
+              Step {idx + 1} of {WIZARD_STEPS.length}
+            </span>
+            <button
+              type="button"
+              onClick={onContinue}
+              disabled={!canContinue(step, state)}
+              className="ec-btn-primary"
+            >
+              Continue
+            </button>
+          </div>
+        )}
+        {step === "launch" && result && (
+          <div className="flex flex-wrap gap-3">
+            <Link href={`/o/${result.pool}`} className="ec-btn-primary">
+              View offering
+            </Link>
+            <Link href={`/trade/${result.pool}`} className="ec-btn-secondary">
+              Trade on curve
+            </Link>
+          </div>
+        )}
+      </div>
     </EligibilityGate>
   );
 }
@@ -299,7 +354,9 @@ function StepBasics({
           maxLength={8}
           value={state.ticker}
           onChange={(e) =>
-            patch({ ticker: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "") })
+            patch({
+              ticker: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""),
+            })
           }
           placeholder="ACME"
         />
@@ -357,15 +414,15 @@ function StepOffering({
           Offering / compliance
         </h1>
         <p className="mt-1 text-sm text-fg-secondary">
-          Raise economics plus self-attested eligibility and disclosure checklist
-          (MVP — no KYC vendor).
+          Raise economics plus issuer attestation checklist (stored locally —
+          not an upload vault). MVP — no KYC vendor.
         </p>
       </header>
 
       <div className="ec-card space-y-4 p-5">
         <h2 className="text-sm font-semibold text-fg-primary">Offer economics</h2>
         <label className="block space-y-1.5">
-          <span className="ec-label">Raise target</span>
+          <span className="ec-label">Raise target (display only)</span>
           <input
             type="number"
             min={1}
@@ -376,42 +433,37 @@ function StepOffering({
         </label>
         <fieldset className="space-y-2">
           <legend className="ec-label">Quote asset</legend>
-          <div className="flex gap-3">
-            {(["USDC", "SOL"] as const).map((q) => (
-              <label key={q} className="flex items-center gap-2 text-sm">
-                <input
-                  type="radio"
-                  checked={state.quote === q}
-                  onChange={() => patch({ quote: q })}
-                />
-                {q}
-                {q === "USDC" && (
-                  <span className="text-xs text-fg-muted">(preferred)</span>
-                )}
-              </label>
-            ))}
-          </div>
+          <p className="rounded-input border border-line bg-subtle px-3 py-2 text-sm text-fg-primary">
+            <strong>SOL (WSOL)</strong> — only quote mint wired on-chain today.
+          </p>
           <p className="text-xs text-fg-muted">
-            Soft/hard cap is a mental model for issuers; on-chain graduation uses
-            the selected curve&apos;s migration market cap. Devnet launches quote
-            against SOL (WSOL) via DBC today.
+            USDC quote is not available in this MVP. Soft raise target is a
+            mental model; on-chain graduation uses the selected curve&apos;s
+            migration market cap (in SOL quote units).
           </p>
         </fieldset>
         <label className="block space-y-1.5">
-          <span className="ec-label">Initial seed buy (optional, quote units)</span>
+          <span className="ec-label">
+            Seed buy at launch (SOL — wired into create TX when &gt; 0)
+          </span>
           <input
             type="number"
             min={0}
+            step={0.01}
             className="ec-input font-mono"
             value={state.seedBuy}
             onChange={(e) => patch({ seedBuy: Number(e.target.value) })}
           />
+          <p className="text-xs text-fg-muted">
+            Uses SDK <code className="text-accent-soft">createConfigAndPoolWithFirstBuy</code>.
+            Leave 0 to buy manually after launch.
+          </p>
         </label>
       </div>
 
       <div className="ec-card space-y-4 p-5">
         <h2 className="text-sm font-semibold text-fg-primary">
-          Compliance & disclosures
+          Compliance &amp; disclosures
         </h2>
         <label className="block space-y-1.5">
           <span className="ec-label">Jurisdiction tags</span>
@@ -440,23 +492,17 @@ function StepOffering({
         </label>
         <label className="block space-y-1.5">
           <span className="ec-label">Transfer profile</span>
-          <select
-            className="ec-input"
-            value={state.transferProfile}
-            onChange={(e) =>
-              patch({
-                transferProfile: e.target
-                  .value as WizardState["transferProfile"],
-              })
-            }
-          >
+          <select className="ec-input" value="Open SPL" disabled>
             <option>Open SPL</option>
-            <option>Token-2022 hook</option>
-            <option>Hybrid</option>
           </select>
+          <p className="text-xs text-fg-muted">
+            Token-2022 transfer hooks — coming soon (create path is SPL only).
+          </p>
         </label>
         <div className="space-y-2">
-          <p className="ec-label">Docs checklist (self-attest for MVP)</p>
+          <p className="ec-label">
+            Issuer attestation (stored locally — not uploaded)
+          </p>
           {(
             [
               ["docMemo", "Offering memo (required)"],
@@ -466,7 +512,10 @@ function StepOffering({
               ["docFinancials", "Financials / NAV note (optional)"],
             ] as const
           ).map(([key, label]) => (
-            <label key={key} className="flex items-center gap-2 text-sm text-fg-secondary">
+            <label
+              key={key}
+              className="flex items-center gap-2 text-sm text-fg-secondary"
+            >
               <input
                 type="checkbox"
                 checked={state[key]}
@@ -502,12 +551,14 @@ function StepCurve({
       <header>
         <h1 className="text-2xl font-semibold text-fg-primary">Curve preset</h1>
         <p className="mt-1 text-sm text-fg-secondary">
-          Official Flat / Exponential / Long templates map to real{" "}
+          Official templates map to real{" "}
           <code className="text-accent-soft">buildCurveWithMarketCap</code>{" "}
-          configs. Migration target is always DAMM v2.
+          configs. Migration target is always DAMM v2. Prefer{" "}
+          <strong className="text-fg-primary">Short raise</strong> to demo
+          graduation quickly.
         </p>
       </header>
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {CURVE_PRESETS.filter((p) => OFFICIAL.includes(p.id)).map((p) => (
           <button
             key={p.id}
@@ -523,6 +574,9 @@ function StepCurve({
             <CurveMiniViz preset={p.id} className="mb-2 h-12 w-full" />
             <p className="font-semibold text-fg-primary">{p.name}</p>
             <p className="text-xs text-accent-soft">{p.tagline}</p>
+            <p className="mt-1 font-mono text-[10px] text-fg-muted">
+              Migrate @ ${p.migrationMarketCap.toLocaleString()}
+            </p>
           </button>
         ))}
       </div>
@@ -530,22 +584,12 @@ function StepCurve({
         <p className="font-medium text-fg-primary">Selected: {selected.name}</p>
         <p className="text-fg-secondary">{selected.description}</p>
         <p className="font-mono text-xs text-fg-muted">
-          Grad threshold ~${selected.migrationMarketCap.toLocaleString()} quote ·{" "}
-          {selected.feeLabel}
+          Grad threshold ~${selected.migrationMarketCap.toLocaleString()} SOL
+          quote · {selected.feeLabel}
         </p>
         <p className="text-xs text-signal-grad">
           Migration target: DAMM v2 (fixed — cannot pick v1)
         </p>
-        <details className="pt-2 text-xs text-fg-muted">
-          <summary className="cursor-pointer text-fg-secondary">
-            Advanced / Invent export (read-only)
-          </summary>
-          <p className="mt-2">
-            Best for: {selected.bestFor}. Config built via Meteora SDK{" "}
-            <code>buildCurveWithMarketCap</code> with partner-locked LP post
-            migration.
-          </p>
-        </details>
       </div>
       <p className="text-xs text-fg-muted">
         Equity-tuned preset also available via{" "}
@@ -565,62 +609,61 @@ function StepCurve({
 function StepFees({
   state,
   patch,
+  feePlatform,
 }: {
   state: WizardState;
   patch: (p: Partial<WizardState>) => void;
+  feePlatform: number;
 }) {
-  const sum = state.feeIssuer + state.feePlatform + state.feeAdvisor;
   return (
     <section className="space-y-6">
       <header>
-        <h1 className="text-2xl font-semibold text-fg-primary">Fees & locks</h1>
+        <h1 className="text-2xl font-semibold text-fg-primary">Fees &amp; locks</h1>
         <p className="mt-1 text-sm text-fg-secondary">
-          Issuer / platform / advisor split must sum to 100%. LP lock ≥10% is
-          required.
+          DBC supports a two-way split:{" "}
+          <code className="text-accent-soft">creatorTradingFeePercentage</code>{" "}
+          (issuer) vs partner (feeClaimer). LP permanent lock ≥{MIN_LP_LOCK_PCT}%
+          is enforced on-chain.
         </p>
       </header>
       <div className="ec-card space-y-4 p-5">
+        <p className="text-xs text-fg-muted">
+          Trading fee <em>schedule</em> (bps over time) comes from the selected
+          curve preset — not a free-form total. Below is the creator/partner
+          share of those fees.
+        </p>
         <label className="block space-y-1.5">
-          <span className="ec-label">Total trading fee (bps)</span>
+          <span className="ec-label">
+            Issuer (creator) fee share — {state.feeIssuer}%
+          </span>
           <input
-            type="number"
-            min={1}
-            max={1000}
-            className="ec-input font-mono"
-            value={state.totalTradingFeeBps}
-            onChange={(e) =>
-              patch({ totalTradingFeeBps: Number(e.target.value) })
-            }
+            type="range"
+            min={0}
+            max={100}
+            value={state.feeIssuer}
+            onChange={(e) => patch({ feeIssuer: Number(e.target.value) })}
+            className="w-full accent-accent"
           />
         </label>
-        {(
-          [
-            ["feeIssuer", "Issuer (deployer)"],
-            ["feePlatform", "Platform (EquiCurve)"],
-            ["feeAdvisor", "Advisors / partners"],
-          ] as const
-        ).map(([key, label]) => (
-          <label key={key} className="block space-y-1.5">
-            <span className="ec-label">
-              {label} — {state[key]}%
-            </span>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              value={state[key]}
-              onChange={(e) => patch({ [key]: Number(e.target.value) })}
-              className="w-full accent-accent"
-            />
-          </label>
-        ))}
-        <p
-          className={clsx(
-            "text-xs font-mono",
-            sum === 100 ? "text-signal-grad" : "text-signal-danger",
-          )}
-        >
-          Split sum: {sum}% {sum === 100 ? "✓" : "(must be 100)"}
+        <label className="block space-y-1.5">
+          <span className="ec-label">
+            Platform / partner fee share — {feePlatform}%
+          </span>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={feePlatform}
+            onChange={(e) =>
+              patch({ feeIssuer: 100 - Number(e.target.value) })
+            }
+            className="w-full accent-accent"
+          />
+        </label>
+        <p className="text-xs text-fg-muted">
+          Partner share accrues to the deployer’s wallet as feeClaimer in this
+          MVP (same wallet as creator). A separate platform claimer pubkey can
+          be added later.
         </p>
       </div>
       <div className="ec-card space-y-3 p-5">
@@ -630,39 +673,47 @@ function StepFees({
             checked={state.antiSniper}
             onChange={(e) => patch({ antiSniper: e.target.checked })}
           />
-          Anti-sniper fee schedule (high → decay) — on by default for equity
+          Anti-sniper: enable first-swap min fee (
+          <code className="text-accent-soft">enableFirstSwapWithMinFee</code>)
         </label>
         <label className="block space-y-1.5">
-          <span className="ec-label">LP lock % of migrated liquidity (≥10)</span>
+          <span className="ec-label">
+            Partner permanent LP lock % (≥{MIN_LP_LOCK_PCT}, on-chain)
+          </span>
           <input
             type="number"
-            min={10}
+            min={MIN_LP_LOCK_PCT}
             max={100}
             className="ec-input font-mono"
             value={state.lpLockPct}
-            onChange={(e) => patch({ lpLockPct: Number(e.target.value) })}
+            onChange={(e) =>
+              patch({
+                lpLockPct: Math.max(
+                  MIN_LP_LOCK_PCT,
+                  Number(e.target.value) || MIN_LP_LOCK_PCT,
+                ),
+              })
+            }
           />
-        </label>
-        <label className="block space-y-1.5">
-          <span className="ec-label">Vesting period (days)</span>
-          <input
-            type="number"
-            min={1}
-            max={730}
-            className="ec-input font-mono"
-            value={state.vestingDays}
-            onChange={(e) => patch({ vestingDays: Number(e.target.value) })}
-          />
+          <p className="text-xs text-fg-muted">
+            Maps to{" "}
+            <code className="text-accent-soft">
+              partnerPermanentLockedLiquidityPercentage
+            </code>
+            . Remainder stays as unlockable partner liquidity. Protocol minimum
+            is {MIN_LP_LOCK_PCT}% (
+            <code className="text-accent-soft">MIN_LOCKED_LIQUIDITY_BPS</code>).
+          </p>
         </label>
         <fieldset className="space-y-2">
-          <legend className="ec-label">Mint authority</legend>
+          <legend className="ec-label">Mint authority (TokenAuthorityOption)</legend>
           <label className="flex items-center gap-2 text-sm">
             <input
               type="radio"
               checked={state.mintRenounce}
               onChange={() => patch({ mintRenounce: true })}
             />
-            Renounce on launch
+            Renounce on launch — CreatorUpdateAuthority (no mint auth)
           </label>
           <label className="flex items-center gap-2 text-sm">
             <input
@@ -670,7 +721,7 @@ function StepFees({
               checked={!state.mintRenounce}
               onChange={() => patch({ mintRenounce: false })}
             />
-            Retain with disclosure
+            Retain with disclosure — CreatorUpdateAndMintAuthority
           </label>
         </fieldset>
       </div>
@@ -682,10 +733,12 @@ function StepReview({
   state,
   patch,
   onEdit,
+  feePlatform,
 }: {
   state: WizardState;
   patch: (p: Partial<WizardState>) => void;
   onEdit: (s: WizardStepId) => void;
+  feePlatform: number;
 }) {
   const preset = getPreset(state.presetId);
   return (
@@ -694,22 +747,31 @@ function StepReview({
         <h1 className="text-2xl font-semibold text-fg-primary">Review</h1>
         <p className="mt-1 text-sm text-fg-secondary">
           Confirm params before signing on {getCluster()}. Bonding price ≠ NAV.
+          Quote is SOL.
         </p>
       </header>
       <div className="ec-card divide-y divide-line text-sm">
         {(
           [
-            ["basics", "Basics", `${state.name} · $${state.ticker} · ${state.sector}`],
+            [
+              "basics",
+              "Basics",
+              `${state.name} · $${state.ticker} · ${state.sector}`,
+            ],
             [
               "offering",
               "Offering",
-              `$${state.raiseTarget.toLocaleString()} ${state.quote} · ${state.investorType}`,
+              `Target $${state.raiseTarget.toLocaleString()} · quote SOL · seed ${state.seedBuy || 0} SOL`,
             ],
-            ["curve", "Curve", `${preset.name} → DAMM v2 · ${preset.feeLabel}`],
+            [
+              "curve",
+              "Curve",
+              `${preset.name} → DAMM v2 · ${preset.feeLabel}`,
+            ],
             [
               "fees",
               "Fees & locks",
-              `${state.feeIssuer}/${state.feePlatform}/${state.feeAdvisor} · lock ${state.lpLockPct}%`,
+              `Creator ${state.feeIssuer}% / partner ${feePlatform}% · lock ${state.lpLockPct}% · mint ${state.mintRenounce ? "renounce" : "retain"}`,
             ],
           ] as const
         ).map(([id, title, summary]) => (
@@ -736,7 +798,10 @@ function StepReview({
         {(
           [
             ["ackBonding", "I understand bonding price ≠ NAV / fair value"],
-            ["ackDocs", "I uploaded / attested required disclosures"],
+            [
+              "ackDocs",
+              "I attested required disclosures (stored locally — not uploaded)",
+            ],
             [
               "ackFees",
               "I accept Meteora migration fee (~0.2%) and EquiCurve terms",
@@ -757,9 +822,19 @@ function StepReview({
       </div>
       <div className="rounded-card border border-line bg-subtle/50 p-4 font-mono text-xs text-fg-muted">
         <p>Network: {getCluster()}</p>
+        <p>Quote mint: WSOL</p>
         <p>Migration: DAMM v2</p>
-        <p>Preset MC: {preset.initialMarketCap} → {preset.migrationMarketCap}</p>
-        <p>SDK: partner.createConfigAndPool / creator.createPool</p>
+        <p>
+          Preset MC: {preset.initialMarketCap} → {preset.migrationMarketCap}
+        </p>
+        <p>
+          On-chain: creatorTradingFeePercentage={state.feeIssuer},
+          partnerPermanentLockedLiquidityPercentage={state.lpLockPct},
+          TokenAuthorityOption=
+          {state.mintRenounce
+            ? "CreatorUpdateAuthority"
+            : "CreatorUpdateAndMintAuthority"}
+        </p>
       </div>
     </section>
   );
@@ -791,9 +866,14 @@ function StepLaunch({
         </p>
       </header>
       <ol className="ec-card space-y-2 p-4 text-sm text-fg-secondary">
-        <li>1. Create / confirm DBC config</li>
-        <li>2. Create virtual pool + mint</li>
-        <li>3. Optional seed buy (manual after launch)</li>
+        <li>1. Create DBC config (fee / lock / mint authority from your inputs)</li>
+        <li>2. Create virtual pool + mint (SOL quote)</li>
+        <li>
+          3.{" "}
+          {state.seedBuy > 0
+            ? `Seed buy ${state.seedBuy} SOL in the same flow`
+            : "Optional seed buy skipped — trade after launch"}
+        </li>
       </ol>
       <button
         type="button"

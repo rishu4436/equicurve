@@ -1,4 +1,4 @@
-export type PresetId = "flat" | "exponential" | "long" | "equity";
+export type PresetId = "flat" | "exponential" | "long" | "equity" | "short";
 
 export type LaunchFormInput = {
   name: string;
@@ -6,6 +6,16 @@ export type LaunchFormInput = {
   uri: string;
   presetId: PresetId;
   totalSupply: number;
+  /** Creator share of trading fees (0–100). Partner gets the rest. */
+  creatorTradingFeePercentage: number;
+  /** Permanently locked partner LP % after migration (≥10). */
+  lpLockPct: number;
+  /** true = no mint authority; false = creator retains mint. */
+  mintRenounce: boolean;
+  /** Optional initial buy in SOL (quote units). */
+  seedBuySol: number;
+  /** Maps to enableFirstSwapWithMinFee when true. */
+  antiSniper: boolean;
 };
 
 export type PreparedLaunch = {
@@ -14,6 +24,12 @@ export type PreparedLaunch = {
   configPubkey: string;
   baseMintPubkey: string;
   poolPubkey: string;
+  quoteMint: string;
+  quoteLabel: "SOL";
+  lpLockPct: number;
+  creatorTradingFeePercentage: number;
+  mintRenounce: boolean;
+  seedBuySol: number;
   summary: {
     name: string;
     symbol: string;

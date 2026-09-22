@@ -1,6 +1,6 @@
 /**
  * Browser-local launch / activity persistence so Explore, Portfolio, and
- * Offering detail work in demos without an indexer. Never implies fake txs.
+ * Offering detail work without an indexer. Never implies fake txs.
  */
 
 import type { Sector } from "@/lib/demo/offerings";
@@ -18,11 +18,21 @@ export type StoredLaunch = {
   ticker: string;
   thesis: string;
   sector: Sector;
-  quote: "USDC" | "SOL";
+  quote: "SOL";
   raiseTarget: number;
   presetId: PresetId;
+  /** Legacy display field; prefer feeIssuerPct. */
   feeBps: number;
+  feeIssuerPct?: number;
   lockPct: number;
+  mintRenounce?: boolean;
+  attestations?: {
+    memo: boolean;
+    risk: boolean;
+    issuer: boolean;
+    legal: boolean;
+    financials: boolean;
+  };
   sig: string;
   creator: string;
   createdAt: string; // ISO

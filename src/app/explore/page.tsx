@@ -31,7 +31,7 @@ function launchToOffering(l: StoredLaunch): DemoOffering {
     ticker: l.ticker,
     sector: l.sector,
     thesis: l.thesis,
-    quote: l.quote,
+    quote: "SOL",
     raiseTarget: l.raiseTarget,
     raised: 0,
     presetId: l.presetId,
@@ -39,10 +39,11 @@ function launchToOffering(l: StoredLaunch): DemoOffering {
     verified: false,
     lockPct: l.lockPct,
     status: l.status,
-    volume24h: 1_000_000, // surface local launches at top of trending
+    volume24h: 1_000_000,
     createdAt: l.createdAt,
     pool: l.pool,
     mint: l.mint,
+    illustrative: false,
   };
 }
 
@@ -54,10 +55,13 @@ function ExploreInner() {
   const [q, setQ] = useState("");
   const [sector, setSector] = useState<string>("all");
   const [local, setLocal] = useState<DemoOffering[]>([]);
+  const [showExamples, setShowExamples] = useState(false);
 
   useEffect(() => {
     const t = search.get("tab");
     if (isTabId(t)) setTab(t);
+    const demo = search.get("demo");
+    if (demo === "1" || demo === "true") setShowExamples(true);
   }, [search]);
 
   useEffect(() => {
@@ -71,10 +75,17 @@ function ExploreInner() {
     router.replace(url.pathname + url.search, { scroll: false });
   }
 
+  function toggleExamples(next: boolean) {
+    setShowExamples(next);
+    const url = new URL(window.location.href);
+    if (next) url.searchParams.set("demo", "1");
+    else url.searchParams.delete("demo");
+    router.replace(url.pathname + url.search, { scroll: false });
+  }
+
   const items = useMemo(() => {
-    const demo = filterOfferings(tab);
+    const demo = showExamples ? filterOfferings(tab) : [];
     let merged: DemoOffering[] = [...local, ...demo];
-    // de-dupe by id/pool
     const seen = new Set<string>();
     merged = merged.filter((o) => {
       const key = o.pool ?? o.id;
@@ -84,7 +95,9 @@ function ExploreInner() {
     });
 
     if (tab === "raising") {
-      merged = merged.filter((o) => o.status === "raising" || o.status === "new");
+      merged = merged.filter(
+        (o) => o.status === "raising" || o.status === "new",
+      );
     } else if (tab === "graduated") {
       merged = merged.filter((o) => o.status === "graduated");
     } else if (tab === "new") {
@@ -110,7 +123,7 @@ function ExploreInner() {
       );
     }
     return merged;
-  }, [tab, q, sector, local]);
+  }, [tab, q, sector, local, showExamples]);
 
   return (
     <div className="space-y-6">
@@ -120,8 +133,8 @@ function ExploreInner() {
             Explore offerings
           </h1>
           <p className="mt-1 text-sm text-fg-secondary">
-            Equity / RWA discovery without casino chrome. Local Create launches
-            appear here for the demo path (no indexer).
+            Live launches from this browser (localStorage). No indexer — Create
+            an offering to populate the board.
             {local.length > 0 && (
               <span className="text-accent">
                 {" "}
@@ -138,23 +151,40 @@ function ExploreInner() {
         />
       </div>
 
-      <div className="flex flex-wrap gap-2 border-b border-line pb-3">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => selectTab(t.id)}
-            className={clsx(
-              "rounded-pill px-4 py-1.5 text-sm transition",
-              tab === t.id
-                ? "bg-accent/15 text-accent"
-                : "text-fg-secondary hover:text-fg-primary",
-            )}
-          >
-            {t.label}
-          </button>
-        ))}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap gap-2 border-b border-line pb-3">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => selectTab(t.id)}
+              className={clsx(
+                "rounded-pill px-4 py-1.5 text-sm transition",
+                tab === t.id
+                  ? "bg-accent/15 text-accent"
+                  : "text-fg-secondary hover:text-fg-primary",
+              )}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <label className="flex cursor-pointer items-center gap-2 text-xs text-fg-secondary">
+          <input
+            type="checkbox"
+            checked={showExamples}
+            onChange={(e) => toggleExamples(e.target.checked)}
+          />
+          Show examples (illustrative · not live pools)
+        </label>
       </div>
+
+      {showExamples && (
+        <p className="rounded-input border border-signal-warn/30 bg-signal-warn/5 px-3 py-2 text-xs text-signal-warn">
+          Example cards are static fiction for UI layout. They have no pool or
+          mint — trade is disabled. Real markets come from Create launches.
+        </p>
+      )}
 
       <div className="flex flex-wrap gap-2">
         {["all", "Equity", "RWA", "Fund", "Private Co"].map((s) => (
@@ -174,10 +204,23 @@ function ExploreInner() {
 
       {items.length === 0 ? (
         <div className="ec-card flex flex-col items-center gap-3 p-12 text-center">
-          <p className="text-fg-secondary">No offerings in this view.</p>
+          <p className="text-fg-secondary">
+            {showExamples
+              ? "No offerings in this view."
+              : "No live launches in this browser yet."}
+          </p>
           <Link href="/create" className="ec-btn-primary">
-            Create the first equity offering
+            Create an equity offering
           </Link>
+          {!showExamples && (
+            <button
+              type="button"
+              className="text-sm text-accent hover:underline"
+              onClick={() => toggleExamples(true)}
+            >
+              Or show illustrative examples
+            </button>
+          )}
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

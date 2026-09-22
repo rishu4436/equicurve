@@ -1,5 +1,6 @@
 import type { PresetId } from "@/lib/dbc/types";
 import type { Sector } from "@/lib/demo/offerings";
+import { MIN_LP_LOCK_PCT } from "@/lib/dbc/presets";
 
 export const WIZARD_STEPS = [
   { id: "basics", label: "Basics" },
@@ -19,11 +20,14 @@ export type WizardState = {
   sector: Sector;
   website: string;
   raiseTarget: number;
-  quote: "USDC" | "SOL";
+  /** SOL-only MVP — quote mint is always WSOL on-chain. */
+  quote: "SOL";
   seedBuy: number;
   jurisdictions: string;
   investorType: "Retail-friendly" | "Restricted" | "Accredited-oriented";
-  transferProfile: "Open SPL" | "Token-2022 hook" | "Hybrid";
+  /** Open SPL only for now; Token-2022 transfer hooks = coming soon. */
+  transferProfile: "Open SPL";
+  /** Issuer attestation flags (stored locally — not an upload vault). */
   docMemo: boolean;
   docRisk: boolean;
   docIssuer: boolean;
@@ -31,13 +35,10 @@ export type WizardState = {
   docFinancials: boolean;
   geoBlockUs: boolean;
   presetId: PresetId;
-  totalTradingFeeBps: number;
+  /** Creator (issuer) share of trading fees; platform/partner gets remainder. */
   feeIssuer: number;
-  feePlatform: number;
-  feeAdvisor: number;
   antiSniper: boolean;
   lpLockPct: number;
-  vestingDays: number;
   mintRenounce: boolean;
   ackBonding: boolean;
   ackDocs: boolean;
@@ -54,7 +55,7 @@ export const INITIAL_WIZARD: WizardState = {
   sector: "Equity",
   website: "",
   raiseTarget: 100_000,
-  quote: "USDC",
+  quote: "SOL",
   seedBuy: 0,
   jurisdictions: "",
   investorType: "Retail-friendly",
@@ -65,14 +66,10 @@ export const INITIAL_WIZARD: WizardState = {
   docLegal: false,
   docFinancials: false,
   geoBlockUs: true,
-  presetId: "long",
-  totalTradingFeeBps: 100,
+  presetId: "short",
   feeIssuer: 70,
-  feePlatform: 20,
-  feeAdvisor: 10,
   antiSniper: true,
-  lpLockPct: 10,
-  vestingDays: 1,
+  lpLockPct: 100,
   mintRenounce: true,
   ackBonding: false,
   ackDocs: false,
@@ -96,15 +93,14 @@ export function canContinue(step: WizardStepId, s: WizardState): boolean {
         s.thesis.trim().length >= 8
       );
     case "offering":
-      return (
-        s.raiseTarget > 0 && s.docMemo && s.docRisk && s.docIssuer
-      );
+      return s.raiseTarget > 0 && s.docMemo && s.docRisk && s.docIssuer;
     case "curve":
       return !!s.presetId;
     case "fees":
       return (
-        s.lpLockPct >= 10 &&
-        s.feeIssuer + s.feePlatform + s.feeAdvisor === 100
+        s.lpLockPct >= MIN_LP_LOCK_PCT &&
+        s.feeIssuer >= 0 &&
+        s.feeIssuer <= 100
       );
     case "review":
       return s.ackBonding && s.ackDocs && s.ackFees && s.ackClaimer;

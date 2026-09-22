@@ -40,7 +40,7 @@ export default async function GraduatePage({
           </div>
           <p className="text-sm text-fg-secondary">
             {offering
-              ? `${offering.name} is marked graduated on the demo board. Open a live pool address to run migrateToDammV2 (real SDK tx). LP lock ≥${offering.lockPct}%.`
+              ? `${offering.name} is an illustrative example (not a live pool). Open a live pool address to run migrateToDammV2 (real SDK tx). LP lock ≥${offering.lockPct}%.`
               : "Pass a DBC pool address to run the real migrator."}
           </p>
           <div className="rounded-input border border-line bg-subtle px-3 py-2 text-xs text-fg-muted">

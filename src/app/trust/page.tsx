@@ -6,6 +6,7 @@ import {
   explorerAddressUrl,
   getCluster,
 } from "@/lib/constants";
+import { MIN_LP_LOCK_PCT } from "@/lib/dbc/presets";
 
 const DBC_ID = DBC_PROGRAM_ID.toBase58();
 const DAMM_ID = DAMM_V2_PROGRAM.toBase58();
@@ -93,26 +94,77 @@ export default function TrustPage() {
 
       <section className="ec-card space-y-3 p-5 text-sm text-fg-secondary">
         <h2 className="font-semibold text-fg-primary">
-          Default LP lock policy (≥10%)
+          What Create actually sets on-chain
+        </h2>
+        <ul className="list-disc space-y-1.5 pl-5">
+          <li>
+            <strong className="text-fg-primary">Quote mint:</strong> SOL (WSOL)
+            only in this MVP — USDC is not wired.
+          </li>
+          <li>
+            <strong className="text-fg-primary">Creator fee share:</strong>{" "}
+            <code className="text-accent-soft">creatorTradingFeePercentage</code>{" "}
+            from the Fees step (partner gets the remainder via feeClaimer).
+          </li>
+          <li>
+            <strong className="text-fg-primary">LP lock:</strong>{" "}
+            <code className="text-accent-soft">
+              partnerPermanentLockedLiquidityPercentage
+            </code>{" "}
+            from the lock slider, clamped to ≥{MIN_LP_LOCK_PCT}% (
+            <code className="text-accent-soft">MIN_LOCKED_LIQUIDITY_BPS</code>).
+          </li>
+          <li>
+            <strong className="text-fg-primary">Mint authority:</strong>{" "}
+            Renounce →{" "}
+            <code className="text-accent-soft">CreatorUpdateAuthority</code>{" "}
+            (no mint). Retain →{" "}
+            <code className="text-accent-soft">
+              CreatorUpdateAndMintAuthority
+            </code>
+            .
+          </li>
+          <li>
+            <strong className="text-fg-primary">Seed buy:</strong> optional via{" "}
+            <code className="text-accent-soft">
+              createConfigAndPoolWithFirstBuy
+            </code>{" "}
+            when SOL amount &gt; 0.
+          </li>
+          <li>
+            <strong className="text-fg-primary">Token type:</strong> Open SPL
+            only. Token-2022 transfer hooks are not in the create path yet.
+          </li>
+          <li>
+            <strong className="text-fg-primary">Docs checklist:</strong> issuer
+            attestation stored in browser localStorage — not an upload vault.
+          </li>
+        </ul>
+      </section>
+
+      <section className="ec-card space-y-3 p-5 text-sm text-fg-secondary">
+        <h2 className="font-semibold text-fg-primary">
+          Default LP lock policy (≥{MIN_LP_LOCK_PCT}%)
         </h2>
         <p>
           When a curve graduates, a minimum share of migrated liquidity is
-          locked so early dump of the full AMM inventory is harder. EquiCurve
-          defaults enforce protocol minimums in the Create wizard.
+          permanently locked as partner LP so early dump of the full AMM
+          inventory is harder. EquiCurve Create maps the lock slider into the
+          config and clamps below {MIN_LP_LOCK_PCT}% at build time.
         </p>
         <ul className="list-disc space-y-1.5 pl-5">
           <li>
-            <strong className="text-fg-primary">≥10%</strong> of migrated
-            liquidity locked (Meteora{" "}
+            <strong className="text-fg-primary">≥{MIN_LP_LOCK_PCT}%</strong> of
+            migrated liquidity locked (Meteora{" "}
             <code className="text-accent-soft">MIN_LOCKED_LIQUIDITY_BPS</code>)
           </li>
           <li>
-            Vesting window <strong className="text-fg-primary">≥1 day</strong>{" "}
-            and <strong className="text-fg-primary">≤2 years</strong>
+            Create wizard <strong className="text-fg-primary">blocks Continue</strong>{" "}
+            if lock % is below {MIN_LP_LOCK_PCT}%
           </li>
           <li>
-            Create wizard <strong className="text-fg-primary">blocks Continue</strong>{" "}
-            if lock % is below 10%
+            Default wizard value is <strong className="text-fg-primary">100%</strong>{" "}
+            partner permanent lock (safest demo default)
           </li>
           <li>
             Protocol migration fee ~0.2% — shown on Graduation before you sign
@@ -128,21 +180,23 @@ export default function TrustPage() {
         <h2 className="font-semibold text-fg-primary">Mint authority policy</h2>
         <p>
           <strong className="text-fg-primary">Default: renounce on launch.</strong>{" "}
-          EquiCurve Create defaults to no retained mint authority so issuers
-          cannot inflate supply after the offering goes live.
+          Maps to{" "}
+          <code className="text-accent-soft">
+            TokenAuthorityOption.CreatorUpdateAuthority
+          </code>{" "}
+          — no mint authority after launch.
         </p>
         <ul className="list-disc space-y-1.5 pl-5">
           <li>
-            Retaining mint authority requires an explicit disclosure checkbox on
-            Fees &amp; locks
+            Retaining mint authority uses{" "}
+            <code className="text-accent-soft">
+              CreatorUpdateAndMintAuthority
+            </code>{" "}
+            and shows a warning badge on the preview
           </li>
           <li>
-            Offerings that keep mint authority show a warning badge on cards and
-            detail
-          </li>
-          <li>
-            Freeze / transfer-hook profiles (if used) must be disclosed in the
-            offering Disclosures tab
+            Transfer-hook / Token-2022 restriction profiles are{" "}
+            <strong className="text-fg-primary">not</strong> creatable yet
           </li>
         </ul>
       </section>
@@ -185,16 +239,6 @@ export default function TrustPage() {
               TypeScript SDK getting started
             </a>
           </li>
-          <li>
-            <a
-              className="text-accent hover:underline"
-              href="https://docs.meteora.ag/"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Meteora docs hub (audits / security pages)
-            </a>
-          </li>
         </ul>
         <p className="rounded-input border border-signal-warn/25 bg-signal-warn/5 px-3 py-2 text-xs text-signal-warn">
           EquiCurve itself has <strong>no separate audit</strong> yet. Treat the
@@ -216,11 +260,11 @@ export default function TrustPage() {
           </li>
           <li>
             Eligibility / geo self-attestations are MVP controls — not full KYC.
-            Blocked or restricted offerings may refuse your trade.
           </li>
           <li>
-            Demo offerings on the Explore board may be illustrative; live pools
-            require real wallet signatures and real SOL/USDC.
+            Explore defaults to <strong className="text-fg-primary">your local launches only</strong>.
+            “Show examples” reveals illustrative UI cards that are{" "}
+            <strong className="text-fg-primary">not live pools</strong>.
           </li>
           <li>
             Never send funds to EquiCurve. Interact only via your wallet with
@@ -246,12 +290,6 @@ export default function TrustPage() {
           </a>{" "}
           or contact the issuer wallet shown on each offering&apos;s On-chain
           tab.
-        </p>
-        <p className="text-xs text-fg-muted">
-          Asset recovery / maintenance: EquiCurve does not custody funds. If a
-          pool is stuck mid-migration, verify the migrate TX on Explorer and
-          retry from the Graduation page with the pool address — never share
-          seed phrases.
         </p>
       </section>
     </div>

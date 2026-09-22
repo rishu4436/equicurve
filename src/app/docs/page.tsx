@@ -174,9 +174,10 @@ export default function DocsPage() {
           for the hackathon demo. Mainnet is env-toggle only when you choose it.
         </p>
         <p>
-          <strong className="text-fg-primary">Where is the demo script?</strong>{" "}
-          See README § Demo script (≤3 min) mirroring Home → Create → Trade →
-          Graduate → Trust.
+          <strong className="text-fg-primary">How do I try graduation quickly?</strong>{" "}
+          Use the <strong className="text-fg-primary">Short raise</strong> preset
+          (low migration MC), fund a wallet, buy through the curve, then open
+          Graduation. Explore defaults to your local launches only.
         </p>
       </section>
 

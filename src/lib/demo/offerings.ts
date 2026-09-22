@@ -15,11 +15,12 @@ export type DemoOffering = {
   ticker: string;
   sector: Sector;
   thesis: string;
-  quote: "USDC" | "SOL";
+  quote: "SOL";
   raiseTarget: number;
   raised: number;
   presetId: PresetId;
   feeBps: number;
+  /** Never true for illustrative demos — no real attestation. */
   verified: boolean;
   lockPct: number;
   status: OfferingStatus;
@@ -27,9 +28,14 @@ export type DemoOffering = {
   createdAt: string; // ISO
   pool?: string;
   mint?: string;
+  /** Static fiction for UI examples — not live pools. */
+  illustrative?: boolean;
 };
 
-/** Static featured/demo board until live indexer — not fake on-chain success. */
+/**
+ * Illustrative board only. Hidden from default Explore; behind
+ * “Show examples” / `?demo=1`. Not live markets.
+ */
 export const DEMO_OFFERINGS: DemoOffering[] = [
   {
     id: "acme-equity",
@@ -37,16 +43,17 @@ export const DEMO_OFFERINGS: DemoOffering[] = [
     ticker: "ACME",
     sector: "Equity",
     thesis: "Tokenized participating interest in Acme Labs Series A SPV.",
-    quote: "USDC",
+    quote: "SOL",
     raiseTarget: 150_000,
     raised: 98_400,
     presetId: "long",
     feeBps: 100,
-    verified: true,
-    lockPct: 12,
+    verified: false,
+    lockPct: 100,
     status: "raising",
     volume24h: 42_100,
     createdAt: "2026-09-20T10:00:00+05:30",
+    illustrative: true,
   },
   {
     id: "harbor-rwa",
@@ -54,16 +61,17 @@ export const DEMO_OFFERINGS: DemoOffering[] = [
     ticker: "HRBR",
     sector: "RWA",
     thesis: "Short-duration invoice receivables pool with weekly NAV notes.",
-    quote: "USDC",
+    quote: "SOL",
     raiseTarget: 250_000,
     raised: 250_000,
     presetId: "flat",
     feeBps: 80,
-    verified: true,
-    lockPct: 15,
+    verified: false,
+    lockPct: 100,
     status: "graduated",
     volume24h: 18_200,
     createdAt: "2026-09-10T09:00:00+05:30",
+    illustrative: true,
   },
   {
     id: "northstar-fund",
@@ -77,10 +85,11 @@ export const DEMO_OFFERINGS: DemoOffering[] = [
     presetId: "exponential",
     feeBps: 120,
     verified: false,
-    lockPct: 10,
+    lockPct: 100,
     status: "new",
     volume24h: 6_400,
     createdAt: "2026-09-21T18:00:00+05:30",
+    illustrative: true,
   },
   {
     id: "cedar-private",
@@ -88,16 +97,17 @@ export const DEMO_OFFERINGS: DemoOffering[] = [
     ticker: "CEDAR",
     sector: "Private Co",
     thesis: "Employee liquidity window for Cedar Robotics preferred units.",
-    quote: "USDC",
+    quote: "SOL",
     raiseTarget: 100_000,
     raised: 61_200,
     presetId: "equity",
     feeBps: 100,
-    verified: true,
-    lockPct: 20,
+    verified: false,
+    lockPct: 100,
     status: "raising",
     volume24h: 9_900,
     createdAt: "2026-09-18T14:00:00+05:30",
+    illustrative: true,
   },
   {
     id: "lumen-carbon",
@@ -105,16 +115,17 @@ export const DEMO_OFFERINGS: DemoOffering[] = [
     ticker: "LUMN",
     sector: "RWA",
     thesis: "Verified carbon credit basket with quarterly retirement reports.",
-    quote: "USDC",
+    quote: "SOL",
     raiseTarget: 200_000,
     raised: 44_000,
-    presetId: "long",
+    presetId: "short",
     feeBps: 90,
     verified: false,
-    lockPct: 10,
+    lockPct: 100,
     status: "new",
     volume24h: 3_100,
     createdAt: "2026-09-21T22:30:00+05:30",
+    illustrative: true,
   },
   {
     id: "atlas-grad",
@@ -122,16 +133,17 @@ export const DEMO_OFFERINGS: DemoOffering[] = [
     ticker: "ATLAS",
     sector: "RWA",
     thesis: "Warehouse ABS tranche discovery; graduated to DAMM v2.",
-    quote: "USDC",
+    quote: "SOL",
     raiseTarget: 500_000,
     raised: 500_000,
     presetId: "flat",
     feeBps: 100,
-    verified: true,
-    lockPct: 25,
+    verified: false,
+    lockPct: 100,
     status: "graduated",
     volume24h: 55_000,
     createdAt: "2026-08-28T11:00:00+05:30",
+    illustrative: true,
   },
 ];
 

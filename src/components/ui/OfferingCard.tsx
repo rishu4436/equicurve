@@ -9,6 +9,7 @@ export function OfferingCard({ offering }: { offering: DemoOffering }) {
       ? (offering.raised / offering.raiseTarget) * 100
       : 0;
   const graduated = offering.status === "graduated";
+  const illustrative = offering.illustrative || !offering.pool;
 
   return (
     <Link
@@ -33,7 +34,7 @@ export function OfferingCard({ offering }: { offering: DemoOffering }) {
             </div>
           </div>
         ) : (
-          <ProgressRing value={pct} size={48} stroke={4} />
+          <ProgressRing value={illustrative ? pct : 0} size={48} stroke={4} />
         )}
       </div>
 
@@ -41,28 +42,37 @@ export function OfferingCard({ offering }: { offering: DemoOffering }) {
         <span className="ec-chip">{offering.sector}</span>
         <span className="ec-chip">{offering.quote}</span>
         <StatusPill status={offering.status} />
+        {illustrative && (
+          <span className="rounded-pill border border-signal-warn/40 bg-signal-warn/10 px-2 py-0.5 text-[10px] text-signal-warn">
+            Illustrative · not live
+          </span>
+        )}
       </div>
 
       <div className="space-y-1 text-xs text-fg-secondary">
-        {!graduated && (
+        {!graduated && illustrative && (
           <p>
-            Raised{" "}
+            Example raised{" "}
             <span className="font-mono text-fg-primary">
               ${offering.raised.toLocaleString()}
             </span>{" "}
             / ${offering.raiseTarget.toLocaleString()}
           </p>
         )}
+        {!graduated && !illustrative && (
+          <p>
+            Target{" "}
+            <span className="font-mono text-fg-primary">
+              ${offering.raiseTarget.toLocaleString()}
+            </span>{" "}
+            · live progress on detail
+          </p>
+        )}
         <p>
-          Curve: <span className="capitalize text-fg-primary">{offering.presetId}</span>
-          {" · "}Fees {(offering.feeBps / 100).toFixed(2)}%
+          Curve:{" "}
+          <span className="capitalize text-fg-primary">{offering.presetId}</span>
         </p>
         <div className="flex flex-wrap gap-2 pt-1">
-          {offering.verified && (
-            <span className="rounded-pill border border-gold/40 bg-gold/10 px-2 py-0.5 text-[10px] text-gold">
-              Verified
-            </span>
-          )}
           <span className="rounded-pill border border-line bg-subtle px-2 py-0.5 text-[10px] text-fg-secondary">
             Lock ≥{offering.lockPct}%
           </span>

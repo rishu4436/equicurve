@@ -2,18 +2,14 @@
 
 import { CurveMiniViz } from "@/components/ui/CurveMiniViz";
 import { getPreset } from "@/lib/dbc/presets";
-import type { PresetId } from "@/lib/dbc/types";
 import type { WizardState } from "./wizardTypes";
 
 export function OfferingPreviewCard({ state }: { state: WizardState }) {
   const preset = getPreset(state.presetId);
-  const docsDone = [
-    state.docMemo,
-    state.docRisk,
-    state.docIssuer,
-  ].filter(Boolean).length;
-  const feeSum =
-    state.feeIssuer + state.feePlatform + state.feeAdvisor;
+  const docsDone = [state.docMemo, state.docRisk, state.docIssuer].filter(
+    Boolean,
+  ).length;
+  const feePlatform = 100 - state.feeIssuer;
 
   return (
     <div className="ec-card sticky top-24 space-y-4 p-5 shadow-glow">
@@ -41,46 +37,41 @@ export function OfferingPreviewCard({ state }: { state: WizardState }) {
           <span>{preset.name} curve</span>
           <span className="text-signal-grad">→ DAMM v2</span>
         </div>
-        <CurveMiniViz
-          preset={
-            state.presetId === "equity" ? "equity" : state.presetId
-          }
-          className="h-14 w-full"
-        />
+        <CurveMiniViz preset={state.presetId} className="h-14 w-full" />
       </div>
 
       <dl className="grid grid-cols-2 gap-2 text-xs">
         <div>
           <dt className="text-fg-muted">Raise target</dt>
           <dd className="font-mono text-fg-primary">
-            ${state.raiseTarget.toLocaleString()} {state.quote}
+            ${state.raiseTarget.toLocaleString()} SOL
           </dd>
         </div>
         <div>
-          <dt className="text-fg-muted">LP lock</dt>
+          <dt className="text-fg-muted">LP lock (on-chain)</dt>
           <dd className="text-fg-primary">≥{state.lpLockPct}%</dd>
         </div>
         <div>
           <dt className="text-fg-muted">Fee split</dt>
           <dd className="text-fg-primary">
-            {state.feeIssuer}/{state.feePlatform}/{state.feeAdvisor}
-            {feeSum !== 100 && (
-              <span className="text-signal-danger"> (!{feeSum}%)</span>
-            )}
+            Creator {state.feeIssuer}% / partner {feePlatform}%
           </dd>
         </div>
         <div>
-          <dt className="text-fg-muted">Docs</dt>
+          <dt className="text-fg-muted">Attestations</dt>
           <dd className="text-fg-primary">{docsDone}/3 required</dd>
         </div>
       </dl>
 
       <div className="flex flex-wrap gap-1.5">
         <span className="rounded-pill border border-line bg-subtle px-2 py-0.5 text-[10px] text-fg-secondary">
+          Quote: SOL
+        </span>
+        <span className="rounded-pill border border-line bg-subtle px-2 py-0.5 text-[10px] text-fg-secondary">
           {state.investorType}
         </span>
         <span className="rounded-pill border border-line bg-subtle px-2 py-0.5 text-[10px] text-fg-secondary">
-          {state.transferProfile}
+          Open SPL
         </span>
         {state.mintRenounce ? (
           <span className="rounded-pill border border-gold/40 bg-gold/10 px-2 py-0.5 text-[10px] text-gold">
