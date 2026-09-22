@@ -24,7 +24,7 @@ export default function HomePage() {
           <p className="mt-4 max-w-xl text-base leading-relaxed text-fg-secondary sm:text-lg">
             Launch on Meteora Dynamic Bonding Curve. Graduate into DAMM v2.
             Studio-class create wizard with on-chain fee share, LP lock, and mint
-            authority — SOL quote MVP, not a meme pad with compliance bolted on.
+            authority — SOL or USDC quote, not a meme pad with compliance bolted on.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link href="/create" className="ec-btn-primary">
@@ -35,7 +35,7 @@ export default function HomePage() {
             </Link>
           </div>
           <div className="mt-6 flex flex-wrap gap-2">
-            {["LP lock ≥10% on-chain", "Program IDs", "SOL quote"].map((t) => (
+            {["LP lock ≥10% on-chain", "Program IDs", "SOL / USDC quote"].map((t) => (
               <span
                 key={t}
                 className="rounded-pill border border-line bg-elevated px-3 py-1 text-xs text-fg-secondary"

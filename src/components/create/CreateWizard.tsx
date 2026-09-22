@@ -117,7 +117,7 @@ export function CreateWizard() {
     }
     setBusy(true);
     setResult(null);
-    setLaunchLog(["Preparing DBC createConfigAndPool (SOL quote)…"]);
+    setLaunchLog([`Preparing DBC createConfigAndPool (${state.quote} quote)…`]);
     try {
       const launchKeypairs = {
         config: Keypair.generate(),
@@ -980,11 +980,11 @@ function StepLaunch({
       </header>
       <ol className="ec-card space-y-2 p-4 text-sm text-fg-secondary">
         <li>1. Create DBC config (fee / lock / mint authority from your inputs)</li>
-        <li>2. Create virtual pool + mint (SOL quote)</li>
+        <li>2. Create virtual pool + mint ({state.quote} quote)</li>
         <li>
           3.{" "}
           {state.seedBuy > 0
-            ? `Seed buy ${state.seedBuy} SOL in the same flow`
+            ? `Seed buy ${state.seedBuy} ${state.quote} in the same flow`
             : "Optional seed buy skipped — trade after launch"}
         </li>
       </ol>

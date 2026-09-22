@@ -99,7 +99,8 @@ export default function TrustPage() {
         <ul className="list-disc space-y-1.5 pl-5">
           <li>
             <strong className="text-fg-primary">Quote mint:</strong> SOL (WSOL)
-            only in this MVP — USDC is not wired.
+            by default, or USDC when selected on Create (cluster must have a known
+            USDC mint).
           </li>
           <li>
             <strong className="text-fg-primary">Creator fee share:</strong>{" "}
@@ -129,7 +130,7 @@ export default function TrustPage() {
             <code className="text-accent-soft">
               createConfigAndPoolWithFirstBuy
             </code>{" "}
-            when SOL amount &gt; 0.
+            when quote amount &gt; 0 (SOL or USDC).
           </li>
           <li>
             <strong className="text-fg-primary">Token type:</strong> Open SPL, Token-2022 (no hook), and Token-2022 transfer-hook when

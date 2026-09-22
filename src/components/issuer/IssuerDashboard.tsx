@@ -25,11 +25,12 @@ import {
 } from "@/lib/local/launches";
 import { signAndSendTransaction } from "@/lib/send";
 
-function lamportsToSol(raw: string): string {
+function formatQuoteAmount(raw: string, quote: "SOL" | "USDC" = "SOL"): string {
   try {
-    const n = Number(raw) / 1e9;
+    const decimals = quote === "USDC" ? 6 : 9;
+    const n = Number(raw) / 10 ** decimals;
     if (!Number.isFinite(n)) return raw;
-    return n.toFixed(6);
+    return `${n.toFixed(quote === "USDC" ? 4 : 6)} ${quote}`;
   } catch {
     return raw;
   }
@@ -112,6 +113,8 @@ export function IssuerDashboard() {
   }
 
   const current = launches.find((l) => l.pool === selected);
+  const quoteLabel: "SOL" | "USDC" =
+    current?.quote === "USDC" ? "USDC" : "SOL";
 
   return (
     <div className="space-y-6">
@@ -120,9 +123,10 @@ export function IssuerDashboard() {
           Issuer dashboard
         </h1>
         <p className="mt-1 text-sm text-fg-secondary">
-          Deployer wallet = fee claimer. Claims use real{" "}
-          <code className="text-accent-soft">claimCreatorTradingFee</code> from
-          the DBC SDK — never mocked.
+          Creator trading fees claimable by the deployer wallet via real{" "}
+          <code className="text-accent-soft">claimCreatorTradingFee</code>. Partner
+          / platform share accrues to the feeClaimer set at Create (not this
+          button). Amounts use the pool quote mint decimals (SOL=9, USDC=6).
         </p>
       </div>
 
@@ -131,7 +135,7 @@ export function IssuerDashboard() {
           {
             k: "Unclaimed quote",
             v: fees
-              ? `${lamportsToSol(fees.creatorUnclaimedQuote)} SOL`
+              ? formatQuoteAmount(fees.creatorUnclaimedQuote, quoteLabel)
               : "—",
           },
           {
@@ -140,7 +144,7 @@ export function IssuerDashboard() {
           },
           {
             k: "Claimed quote",
-            v: fees ? `${lamportsToSol(fees.creatorClaimedQuote)} SOL` : "—",
+            v: fees ? formatQuoteAmount(fees.creatorClaimedQuote, quoteLabel) : "—",
           },
           {
             k: "Your issuances",
@@ -205,9 +209,9 @@ export function IssuerDashboard() {
               {fees && (
                 <dl className="grid grid-cols-2 gap-2 text-xs">
                   <div>
-                    <dt className="text-fg-muted">Unclaimed quote (SOL)</dt>
+                    <dt className="text-fg-muted">Unclaimed quote ({quoteLabel})</dt>
                     <dd className="font-mono text-fg-primary">
-                      {lamportsToSol(fees.creatorUnclaimedQuote)}
+                      {formatQuoteAmount(fees.creatorUnclaimedQuote, quoteLabel)}
                     </dd>
                   </div>
                   <div>
@@ -219,7 +223,7 @@ export function IssuerDashboard() {
                   <div>
                     <dt className="text-fg-muted">Total quote fees</dt>
                     <dd className="font-mono text-fg-primary">
-                      {lamportsToSol(fees.creatorTotalQuote)}
+                      {formatQuoteAmount(fees.creatorTotalQuote, quoteLabel)}
                     </dd>
                   </div>
                   <div>

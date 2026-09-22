@@ -3,6 +3,7 @@ import { Inter, JetBrains_Mono } from "next/font/google";
 import { Toaster } from "sonner";
 import { AppFooter } from "@/components/AppFooter";
 import { AppHeader } from "@/components/AppHeader";
+import { ClusterBanner } from "@/components/ClusterBanner";
 import { GlobalEligibility } from "@/components/gate/GlobalEligibility";
 import { Providers } from "@/components/Providers";
 import "./globals.css";
@@ -33,6 +34,7 @@ export default function RootLayout({
           <GlobalEligibility>
             <div className="flex min-h-screen flex-col">
               <AppHeader />
+              <ClusterBanner />
               <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8">
                 {children}
               </main>
