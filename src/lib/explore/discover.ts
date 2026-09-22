@@ -6,6 +6,7 @@ import { fetchPoolSnapshot } from "@/lib/dbc/migrate";
 import { normalizePoolAccount } from "@/lib/dbc/poolAccount";
 import type { PresetId } from "@/lib/dbc/types";
 import {
+  getRegistryMeta,
   listRegistryLaunches,
   patchRegistryLaunch,
 } from "@/lib/registry/store";
@@ -207,13 +208,16 @@ export async function buildExploreResponse(
     };
   }
 
+  const registryMeta = getRegistryMeta();
   const limits = [
     "Primary source is the EquiCurve shared registry (POST /api/launches on Create) — not a full DBC chain indexer.",
     "Meteora DBC Data API (dbc.datapi.meteora.ag) lists all DBC pools but cannot filter EquiCurve-created offerings.",
     "Full-program getProgramAccounts is avoided on public RPC (cost / rate limits).",
     `On-chain progress enrichment is capped at ${MAX_ENRICH} pools per refresh.`,
     "In-memory cache ~45s to protect RPC.",
-    "Registry file lives under data/launches/ on this deployment (ephemeral on many serverless hosts).",
+    registryMeta.backend === "upstash"
+      ? "Registry backend: Upstash Redis REST (durable across deploys)."
+      : "Registry backend: local JSON file (data/launches/) — default for next dev; ephemeral on many serverless hosts unless Upstash env is set.",
   ];
 
   const registry = await listRegistryLaunches();
@@ -247,6 +251,7 @@ export async function buildExploreResponse(
     limits,
     warning,
     error: null,
+    registry: registryMeta,
   };
 
   cache = { at: now, payload };

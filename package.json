@@ -2,7 +2,7 @@
   "name": "equicurve",
   "version": "0.1.0",
   "private": true,
-  "description": "EquiCurve \u2014 tokenized equity / RWA launchpad on Meteora DBC with DAMM v2 graduation",
+  "description": "EquiCurve — tokenized equity / RWA launchpad on Meteora DBC with DAMM v2 graduation",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -21,6 +21,7 @@
     "@solana/wallet-adapter-solflare": "^0.6.34",
     "@solana/wallet-adapter-wallets": "^0.19.37",
     "@solana/web3.js": "^1.98.4",
+    "@upstash/redis": "^1.39.0",
     "bn.js": "^5.2.1",
     "bs58": "^6.0.0",
     "clsx": "^2.1.1",

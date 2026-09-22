@@ -1,111 +1,93 @@
-import { mkdir, readFile, writeFile } from "fs/promises";
-import path from "path";
-import type { RegistryLaunch, RegistryLaunchInput } from "./types";
+import { createFileStore, readLocalRegistryFile } from "./fileStore";
+import type {
+  LaunchRegistryStore,
+  RegistryBackend,
+  RegistryLaunch,
+  RegistryLaunchInput,
+  RegistryMeta,
+} from "./types";
+import {
+  createUpstashClient,
+  createUpstashStore,
+  isUpstashConfigured,
+  seedUpstashIfEmpty,
+} from "./upstashStore";
 
-const DIR = path.join(process.cwd(), "data", "launches");
-const FILE = path.join(DIR, "registry.json");
-const MAX_ENTRIES = 500;
+let cached: LaunchRegistryStore | null = null;
+let seedAttempted = false;
 
-type RegistryFile = {
-  version: 1;
-  updatedAt: string;
-  launches: RegistryLaunch[];
-};
-
-function empty(): RegistryFile {
-  return { version: 1, updatedAt: new Date().toISOString(), launches: [] };
+function resolveBackend(): RegistryBackend {
+  return isUpstashConfigured() ? "upstash" : "file";
 }
 
-async function readFileSafe(): Promise<RegistryFile> {
+/**
+ * Active launch registry store.
+ * - Upstash Redis REST when UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN are set
+ * - Local JSON file (data/launches/registry.json) otherwise — default for `next dev`
+ */
+export function getLaunchRegistryStore(): LaunchRegistryStore {
+  if (cached) return cached;
+  if (isUpstashConfigured()) {
+    cached = createUpstashStore(createUpstashClient());
+  } else {
+    cached = createFileStore();
+  }
+  return cached;
+}
+
+/** Which backend would be selected from current env (no I/O). */
+export function getRegistryBackend(): RegistryBackend {
+  return resolveBackend();
+}
+
+export function getRegistryMeta(): RegistryMeta {
+  return { backend: getRegistryBackend() };
+}
+
+/**
+ * Optional one-time seed: if Upstash is active and empty, copy local file
+ * entries (nice-to-have when promoting a populated local registry).
+ */
+async function maybeSeedFromFile(store: LaunchRegistryStore): Promise<void> {
+  if (seedAttempted || store.backend !== "upstash") return;
+  seedAttempted = true;
   try {
-    const raw = await readFile(FILE, "utf8");
-    const parsed = JSON.parse(raw) as RegistryFile;
-    if (!parsed || !Array.isArray(parsed.launches)) return empty();
-    return {
-      version: 1,
-      updatedAt: parsed.updatedAt || new Date().toISOString(),
-      launches: parsed.launches,
-    };
+    const local = await readLocalRegistryFile();
+    if (!local.launches.length) return;
+    const redis = createUpstashClient();
+    await seedUpstashIfEmpty(redis, local);
   } catch {
-    return empty();
+    /* seed is best-effort */
   }
 }
 
-async function writeFileSafe(data: RegistryFile): Promise<void> {
-  await mkdir(DIR, { recursive: true });
-  await writeFile(FILE, JSON.stringify(data, null, 2), "utf8");
+export async function listRegistryLaunches(): Promise<RegistryLaunch[]> {
+  const store = getLaunchRegistryStore();
+  await maybeSeedFromFile(store);
+  return store.list();
 }
 
-export async function listRegistryLaunches(): Promise<RegistryLaunch[]> {
-  const file = await readFileSafe();
-  return [...file.launches].sort(
-    (a, b) =>
-      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-  );
+export async function getRegistryLaunch(
+  pool: string,
+): Promise<RegistryLaunch | null> {
+  return getLaunchRegistryStore().get(pool);
 }
 
 export async function upsertRegistryLaunch(
   input: RegistryLaunchInput,
 ): Promise<RegistryLaunch> {
-  const pool = input.pool?.trim();
-  const mint = input.mint?.trim();
-  const config = input.config?.trim();
-  const name = input.name?.trim();
-  const ticker = input.ticker?.trim().toUpperCase();
-  if (!pool || !mint || !config || !name || !ticker) {
-    throw new Error("pool, mint, config, name, and ticker are required");
-  }
-
-  const now = new Date().toISOString();
-  const entry: RegistryLaunch = {
-    pool,
-    mint,
-    config,
-    name,
-    ticker,
-    thesis: (input.thesis ?? "").trim(),
-    sector: input.sector ?? "Other",
-    quote: input.quote === "USDC" ? "USDC" : "SOL",
-    raiseTarget: Math.max(0, Number(input.raiseTarget) || 0),
-    presetId: input.presetId ?? "flat",
-    feeBps: Math.max(0, Number(input.feeBps) || 0),
-    feeIssuerPct:
-      input.feeIssuerPct != null ? Number(input.feeIssuerPct) : undefined,
-    lockPct: Math.max(0, Number(input.lockPct) || 0),
-    creator: (input.creator ?? "").trim(),
-    createdAt: input.createdAt || now,
-    cluster: input.cluster || "devnet",
-    status: input.status === "graduated" ? "graduated" : input.status === "new" ? "new" : "raising",
-    sig: (input.sig ?? "").trim(),
-    dammPool: input.dammPool?.trim() || undefined,
-    migrateSig: input.migrateSig?.trim() || undefined,
-    registeredAt: input.registeredAt || now,
-  };
-
-  const file = await readFileSafe();
-  const prev = file.launches.filter((l) => l.pool !== entry.pool);
-  const merged: RegistryFile = {
-    version: 1,
-    updatedAt: now,
-    launches: [entry, ...prev].slice(0, MAX_ENTRIES),
-  };
-  await writeFileSafe(merged);
-  return entry;
+  return getLaunchRegistryStore().upsert(input);
 }
 
 export async function patchRegistryLaunch(
   pool: string,
   patch: Partial<RegistryLaunchInput>,
 ): Promise<RegistryLaunch | null> {
-  const file = await readFileSafe();
-  const idx = file.launches.findIndex((l) => l.pool === pool);
-  if (idx < 0) return null;
-  const current = file.launches[idx];
-  const next = await upsertRegistryLaunch({
-    ...current,
-    ...patch,
-    pool: current.pool,
-    registeredAt: current.registeredAt,
-  });
-  return next;
+  return getLaunchRegistryStore().patch(pool, patch);
+}
+
+/** Test helper — drop cached store so env changes take effect. */
+export function resetRegistryStoreCache(): void {
+  cached = null;
+  seedAttempted = false;
 }

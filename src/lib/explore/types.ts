@@ -1,5 +1,6 @@
 import type { Sector } from "@/lib/demo/offerings";
 import type { PresetId, QuoteLabel } from "@/lib/dbc/types";
+import type { RegistryMeta } from "@/lib/registry/types";
 
 export type ExploreOffering = {
   id: string;
@@ -40,4 +41,6 @@ export type ExploreResponse = {
   limits: string[];
   warning?: string | null;
   error?: string | null;
+  /** Active registry storage backend (file | upstash) — no secrets. */
+  registry?: RegistryMeta;
 };

@@ -3,6 +3,13 @@ import type { PresetId, QuoteLabel } from "@/lib/dbc/types";
 
 export type RegistryStatus = "raising" | "graduated" | "new";
 
+/** Active durable-storage backend for the Explore launch registry. */
+export type RegistryBackend = "file" | "upstash";
+
+export type RegistryMeta = {
+  backend: RegistryBackend;
+};
+
 /** Server-side EquiCurve launch registry entry (not a full chain indexer). */
 export type RegistryLaunch = {
   pool: string;
@@ -31,4 +38,22 @@ export type RegistryLaunch = {
 
 export type RegistryLaunchInput = Omit<RegistryLaunch, "registeredAt"> & {
   registeredAt?: string;
+};
+
+/** Durable store for EquiCurve Explore launch registry. */
+export interface LaunchRegistryStore {
+  readonly backend: RegistryBackend;
+  list(): Promise<RegistryLaunch[]>;
+  get(pool: string): Promise<RegistryLaunch | null>;
+  upsert(input: RegistryLaunchInput): Promise<RegistryLaunch>;
+  patch(
+    pool: string,
+    patch: Partial<RegistryLaunchInput>,
+  ): Promise<RegistryLaunch | null>;
+}
+
+export type RegistryFilePayload = {
+  version: 1;
+  updatedAt: string;
+  launches: RegistryLaunch[];
 };

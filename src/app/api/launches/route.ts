@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { invalidateExploreCache } from "@/lib/explore/discover";
 import {
+  getRegistryMeta,
   listRegistryLaunches,
   patchRegistryLaunch,
   upsertRegistryLaunch,
@@ -16,6 +17,7 @@ export async function GET() {
     ok: true,
     source: "equicurve-registry",
     label: "EquiCurve registry (not a full chain indexer)",
+    registry: getRegistryMeta(),
     count: launches.length,
     launches,
   });
@@ -31,7 +33,11 @@ export async function POST(req: Request) {
   try {
     const entry = await upsertRegistryLaunch(body);
     invalidateExploreCache();
-    return NextResponse.json({ ok: true, launch: entry });
+    return NextResponse.json({
+      ok: true,
+      launch: entry,
+      registry: getRegistryMeta(),
+    });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Failed to register launch";
     return NextResponse.json({ error: msg }, { status: 400 });
@@ -57,5 +63,9 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
   invalidateExploreCache();
-  return NextResponse.json({ ok: true, launch: updated });
+  return NextResponse.json({
+    ok: true,
+    launch: updated,
+    registry: getRegistryMeta(),
+  });
 }

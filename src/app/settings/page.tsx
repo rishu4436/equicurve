@@ -10,6 +10,7 @@ import {
   listActivity,
   listLaunches,
 } from "@/lib/local/launches";
+import type { RegistryBackend } from "@/lib/registry/types";
 
 type Health = {
   ok: boolean;
@@ -17,6 +18,7 @@ type Health = {
   rpcHost?: string;
   slot?: number | null;
   error?: string | null;
+  registry?: { backend?: RegistryBackend };
 };
 
 type RegistryInfo = {
@@ -24,6 +26,7 @@ type RegistryInfo = {
   count?: number;
   label?: string;
   error?: string;
+  registry?: { backend?: RegistryBackend };
 };
 
 export default function SettingsPage() {
@@ -54,6 +57,8 @@ export default function SettingsPage() {
   const cluster = getCluster();
   const rpcHost = health?.rpcHost ?? getRpcHost();
   const sharedConfig = getOptionalPoolConfigKey()?.toBase58() ?? null;
+  const backend =
+    registry?.registry?.backend ?? health?.registry?.backend ?? null;
 
   return (
     <main className="mx-auto max-w-2xl space-y-6 px-4 py-8">
@@ -127,6 +132,16 @@ export default function SettingsPage() {
         </p>
         <dl className="space-y-2 text-sm">
           <div className="flex justify-between gap-4">
+            <dt className="text-fg-muted">Registry backend</dt>
+            <dd className="font-mono text-fg-primary">
+              {backend == null
+                ? "…"
+                : backend === "upstash"
+                  ? "upstash (durable)"
+                  : "file (local JSON)"}
+            </dd>
+          </div>
+          <div className="flex justify-between gap-4">
             <dt className="text-fg-muted">Registry entries</dt>
             <dd className="font-mono text-fg-primary">
               {registry == null
@@ -143,6 +158,16 @@ export default function SettingsPage() {
             </dd>
           </div>
         </dl>
+        <p className="text-xs text-fg-muted">
+          Default for <code className="text-accent-soft">next dev</code> is the
+          local file under{" "}
+          <code className="text-accent-soft">data/launches/</code>. On Vercel /
+          serverless, set{" "}
+          <code className="text-accent-soft">UPSTASH_REDIS_REST_URL</code> +{" "}
+          <code className="text-accent-soft">UPSTASH_REDIS_REST_TOKEN</code> for
+          durable storage across deploys. Tokens are never exposed in the UI —
+          only the backend name.
+        </p>
         {sharedConfig && (
           <p className="text-xs text-fg-muted">
             When{" "}

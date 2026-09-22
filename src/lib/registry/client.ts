@@ -46,6 +46,7 @@ export async function fetchExploreOfferings(): Promise<ExploreResponse> {
       counts: { registry: 0, configGpa: 0, enriched: 0 },
       limits: [],
       error: json.error ?? `Explore API HTTP ${res.status}`,
+      registry: json.registry,
     };
   }
   return json;

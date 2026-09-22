@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { buildExploreResponse } from "@/lib/explore/discover";
+import { getRegistryMeta } from "@/lib/registry/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -32,6 +33,7 @@ export async function GET(req: Request) {
           ? "RPC rate-limited — try again shortly."
           : null,
         error: msg,
+        registry: getRegistryMeta(),
       },
       { status: rateLimited ? 503 : 500 },
     );
