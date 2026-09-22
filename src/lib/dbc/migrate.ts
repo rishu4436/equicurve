@@ -1,3 +1,4 @@
+import { deriveDammV2PoolAddress } from "@meteora-ag/dynamic-bonding-curve-sdk";
 import {
   PublicKey,
   type Connection,
@@ -62,6 +63,27 @@ export async function fetchPoolSnapshot(
   };
 }
 
+/**
+ * Best-effort DAMM v2 pool PDA from fee config + mints.
+ * Token order matters; we sort mints (common DAMM convention). Returns null on failure.
+ */
+export function tryDeriveDammV2PoolAddress(args: {
+  dammConfig: PublicKey;
+  baseMint: PublicKey;
+  quoteMint: PublicKey;
+}): string | null {
+  try {
+    const { dammConfig, baseMint, quoteMint } = args;
+    const [first, second] =
+      Buffer.compare(baseMint.toBuffer(), quoteMint.toBuffer()) <= 0
+        ? [baseMint, quoteMint]
+        : [quoteMint, baseMint];
+    return deriveDammV2PoolAddress(dammConfig, first, second).toBase58();
+  } catch {
+    return null;
+  }
+}
+
 export async function prepareDammV2Migration(args: {
   connection: Connection;
   payer: PublicKey;
@@ -73,6 +95,8 @@ export async function prepareDammV2Migration(args: {
   secondPositionNft: Keypair;
   dammConfig: PublicKey;
   progress: number;
+  dammPoolAddress: string | null;
+  baseMint: PublicKey;
 }> {
   const { connection, payer, pool } = args;
   if (!payer) {
@@ -106,11 +130,20 @@ export async function prepareDammV2Migration(args: {
     result.secondPositionNftKeypair,
   );
 
+  const baseMint = new PublicKey(snapshot.baseMint);
+  const dammPoolAddress = tryDeriveDammV2PoolAddress({
+    dammConfig,
+    baseMint,
+    quoteMint: WSOL_MINT,
+  });
+
   return {
     tx,
     firstPositionNft: result.firstPositionNftKeypair,
     secondPositionNft: result.secondPositionNftKeypair,
     dammConfig,
     progress,
+    dammPoolAddress,
+    baseMint,
   };
 }

@@ -30,6 +30,8 @@ export function GraduatePanel({ poolAddress }: { poolAddress: string }) {
   const [busy, setBusy] = useState(false);
   const [phase, setPhase] = useState<"idle" | "morph" | "success">("idle");
   const [migrateSig, setMigrateSig] = useState<string | null>(null);
+  const [dammPool, setDammPool] = useState<string | null>(null);
+  const [dammDerived, setDammDerived] = useState(false);
   const dammConfig = getDammV2ConfigKey().toBase58();
 
   const refresh = useCallback(async () => {
@@ -56,16 +58,24 @@ export function GraduatePanel({ poolAddress }: { poolAddress: string }) {
     setBusy(true);
     setPhase("morph");
     try {
-      const { tx, progress } = await prepareDammV2Migration({
+      const { tx, progress, dammPoolAddress } = await prepareDammV2Migration({
         connection,
         payer: wallet.publicKey,
         pool: new PublicKey(poolAddress),
       });
       const sig = await signAndSendTransaction({ connection, wallet, tx });
       setMigrateSig(sig);
+      if (dammPoolAddress) {
+        setDammPool(dammPoolAddress);
+        setDammDerived(true);
+      } else {
+        setDammPool(null);
+        setDammDerived(false);
+      }
       updateLaunch(poolAddress, {
         status: "graduated",
         migrateSig: sig,
+        ...(dammPoolAddress ? { dammPool: dammPoolAddress } : {}),
       });
       pushActivity({
         id: `${sig}-migrate`,
@@ -76,9 +86,8 @@ export function GraduatePanel({ poolAddress }: { poolAddress: string }) {
         at: new Date().toISOString(),
       });
       toast.success(
-        `Migrated at ${(progress * 100).toFixed(2)}% — ${sig.slice(0, 8)}…`,
+        `Migrated at ${(progress * 100).toFixed(2)}% — open explorer for TX`,
       );
-      window.open(explorerTxUrl(sig), "_blank");
       setPhase("success");
       await refresh();
     } catch (e) {
@@ -183,6 +192,64 @@ export function GraduatePanel({ poolAddress }: { poolAddress: string }) {
         )}
       </div>
 
+      {/* Prominent success card after migrate TX */}
+      {migrateSig && (
+        <div className="ec-card space-y-4 border-signal-grad/40 p-5 shadow-glow">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-lg font-semibold text-signal-grad">
+              Migration confirmed
+            </h2>
+            <span className="rounded-pill border border-signal-grad/40 bg-signal-grad/10 px-2.5 py-0.5 text-xs text-signal-grad">
+              On-chain
+            </span>
+          </div>
+          <div>
+            <p className="text-xs uppercase tracking-wider text-fg-muted">
+              Migration signature
+            </p>
+            <p className="mt-1 break-all font-mono text-sm text-fg-primary">
+              {migrateSig}
+            </p>
+            <a
+              href={explorerTxUrl(migrateSig)}
+              target="_blank"
+              rel="noreferrer"
+              className="ec-btn-primary mt-3 inline-flex"
+            >
+              Open TX on Solana Explorer →
+            </a>
+          </div>
+          {dammPool ? (
+            <div>
+              <p className="text-xs uppercase tracking-wider text-fg-muted">
+                DAMM v2 pool (best-effort derive)
+              </p>
+              <a
+                href={explorerAddressUrl(dammPool)}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-1 block break-all font-mono text-xs text-accent hover:underline"
+              >
+                {dammPool}
+              </a>
+              {dammDerived && (
+                <p className="mt-1 text-xs text-fg-muted">
+                  Derived from fee config + mints. Confirm the account exists on
+                  Explorer after confirmation settles.
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className="rounded-input border border-signal-warn/25 bg-signal-warn/5 px-3 py-2 text-xs text-signal-warn">
+              DAMM pool address could not be derived client-side. Use the
+              migration TX on Explorer to inspect created accounts (position
+              NFTs + DAMM pool). This is honest best-effort — we never invent an
+              address.
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="ec-card space-y-3 p-5 text-sm">
         <dl className="space-y-2">
           <div className="flex justify-between gap-4">
@@ -238,21 +305,6 @@ export function GraduatePanel({ poolAddress }: { poolAddress: string }) {
               )}
             </>
           )}
-          {migrateSig && (
-            <div className="flex justify-between gap-4">
-              <dt className="text-fg-muted">Migration TX</dt>
-              <dd className="font-mono text-xs">
-                <a
-                  href={explorerTxUrl(migrateSig)}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-accent underline"
-                >
-                  {migrateSig.slice(0, 12)}…
-                </a>
-              </dd>
-            </div>
-          )}
         </dl>
 
         <div className="rounded-input border border-line bg-subtle px-3 py-2 text-xs text-fg-secondary">
@@ -302,9 +354,23 @@ export function GraduatePanel({ poolAddress }: { poolAddress: string }) {
           <Link href="/issuer" className="ec-btn-secondary">
             Issuer claims
           </Link>
-          <Link href={`/trade/${poolAddress}`} className="ec-btn-primary">
-            Trade (post-grad path)
+          <Link href="/trust" className="ec-btn-secondary">
+            Trust Center
           </Link>
+          {migrateSig ? (
+            <a
+              href={explorerTxUrl(migrateSig)}
+              target="_blank"
+              rel="noreferrer"
+              className="ec-btn-primary"
+            >
+              Explorer TX
+            </a>
+          ) : (
+            <Link href={`/trade/${poolAddress}`} className="ec-btn-primary">
+              Trade (post-grad path)
+            </Link>
+          )}
         </div>
       )}
     </div>

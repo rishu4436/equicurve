@@ -4,32 +4,51 @@
 
 Built for [Superteam Earn · Meteora DBC](https://superteam.fun/earn/listing/meteora-dbc) + Colosseum Crypto World's Fair sidetrack.
 
-**Deadline:** 2026-10-13 · **Design approved:** 2026-09-22 (as-is) · Authority: `equicurve-research/04-equicurve-design.md`
+**Deadline:** 2026-10-13 · **Design approved:** 2026-09-22 (as-is) · See [DESIGN.md](./DESIGN.md)
 
-## What works (Slice A)
+## Status (Slices A–E)
 
 | Route | Status |
 | --- | --- |
-| `/` Home | Equity/RWA positioning, DBC→DAMM how-it-works, featured offerings, dual CTAs |
-| `/explore` | Tabs Trending / New / Raising / Graduated + sector chips + OfferingCards |
-| `/create` | **6-step wizard**: Basics → Offering → Curve → Fees & locks → Review → Launch |
+| `/` Home | Equity positioning + **≤3 min demo strip** (Create → Trade → Graduate → Trust) |
+| `/explore` | Tabs Trending / New / Raising / Graduated + `?tab=` deep links + local launches |
+| `/create` | **6-step wizard** on real DBC SDK (Basics → Offering → Curve → Fees → Review → Launch) |
 | `/presets` | Official Flat / Exponential / Long (+ Equity-tuned) |
-| `/trust` | Program IDs, LP lock ≥10%, mint policy skeleton |
-| `/docs` | How DBC→DAMM works, risk, issuer/investor skeletons |
-| `/o/[id]` | Offering detail (demo board or live pool address) + TradePanel |
-| `/o/[id]/graduate`, `/trade/[pool]`, `/graduate/[pool]` | Restyled stubs over real swap / migrate SDK |
-| `/portfolio`, `/issuer` | Skeletons for later slices |
+| `/o/[id]` | Offering depth: Overview, Disclosures, Holders, Activity, On-chain + TradePanel |
+| `/o/[id]/graduate`, `/graduate/[pool]` | Graduation ceremony + real `migrateToDammV2`; TX + explorer prominent |
+| `/trade/[pool]` | Quote & swap on curve |
+| `/portfolio` | Local activity / positions from browser launches |
+| `/issuer` | Fee claim dashboard over real claim SDK paths |
+| `/trust` | **Real Trust Center** — DBC + DAMM v2 IDs, LP lock ≥10%, mint policy, audits, risk |
+| `/docs` | Create → Trade → Graduate, preset glossary, env setup |
+| `/api/health` | Cluster + RPC host (no secrets) + slot ping |
 
-**Create → Launch** calls real `@meteora-ag/dynamic-bonding-curve-sdk` (`partner.createConfigAndPool` or `creator.createPool`). No mock success.
+**Create → Launch** and **Trade / Graduate** call `@meteora-ag/dynamic-bonding-curve-sdk`. No mock on-chain success.
 
-## Demo path (≤3 min)
+Eligibility gate (geo / risk self-attest) gates Create + first trade for Slice B trust beat.
 
-1. Open `/` — equity positioning + teal fintech chrome  
-2. `/create` — fill Basics → Offering (self-attest docs) → pick **Long** → Fees (70/20/10, lock ≥10%) → Review acks → **Launch**  
-3. Connect **devnet** wallet with SOL → sign DBC create  
-4. Land on `/o/<pool>` / `/trade/<pool>` → quote & swap on curve  
-5. `/graduate/<pool>` when threshold ready → DAMM v2 migrate  
-6. `/trust` — program IDs for judges  
+## Demo script (≤3 min)
+
+Matches design §9 — film in this order:
+
+| Time | Screen | Action |
+| --- | --- | --- |
+| 0:00–0:20 | `/` | Equity positioning + teal chrome; point at demo strip |
+| 0:20–0:50 | `/create` | Long preset + fee split + LP lock ≥10% + DAMM badge |
+| 0:50–1:10 | Review → Launch | Sign real DBC create; land on `/o/<pool>` |
+| 1:10–1:50 | Offering | Buy on curve; ProgressRing; On-chain tab; Disclosures |
+| 1:50–2:35 | Graduate | When threshold ready → migrate; **show TX + explorer**; DAMM note |
+| 2:35–2:50 | `/issuer` or `/trust` | Fee claim **or** program IDs for judges |
+| 2:50–3:00 | Close | Dual Colosseum + Earn; team |
+
+**B-roll:** Explore Raising/Graduated; Presets; eligibility gate.
+
+### What Rishu needs for the live demo
+
+1. **Dedicated devnet RPC URL** in `.env.local` (`NEXT_PUBLIC_RPC_URL`) — public RPC will rate-limit mid-film  
+2. **Wallet** (Phantom/Solflare) on **devnet**  
+3. **Seed SOL** on that wallet (create + several buys + migrate fees)  
+4. Optional: pre-create a partner `NEXT_PUBLIC_POOL_CONFIG_KEY` to speed launches  
 
 ## Brand
 
@@ -50,6 +69,8 @@ npm run typecheck
 npm run build
 ```
 
+Health check: `GET /api/health` → `{ ok, cluster, rpcHost, slot }` (host only — no API keys).
+
 ## Environment
 
 | Variable | Required | Notes |
@@ -67,19 +88,22 @@ Repo: https://github.com/rishu4436/equicurve
 
 If private, grant **pull** to **`dannxbt`**.
 
-> **Collaborator note:** Automatic invite for `dannxbt` (pull) via `gh api` returned 422 in this environment. Please invite manually: GitHub → Settings → Collaborators → Add **dannxbt** with Read.
+> **Collaborator note:** Automatic invite for `dannxbt` (pull) via `gh api` returned 422 in this environment. Please invite **manually**: GitHub → Settings → Collaborators → Add **dannxbt** with Read.
 
 ## Program IDs
 
 - DBC: `dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN`  
 - DAMM v2: `cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG`  
 
-## Known gaps (Slices B–E)
+(Also listed with explorer links on `/trust`.)
 
-- B: Live offering indexer, Disclosures/Holders/Activity tabs, eligibility gate modal polish  
-- C: Issuer fee claim dashboard, portfolio positions from wallet history  
-- D: Graduation ceremony morph animation, DAMM depth chart  
-- E: Metadata hosting, AI assist (rules→LLM), community preset marketplace, mainnet demo  
+## Remaining blockers for Earn / Colosseum submit
+
+- [ ] Film ≤3 min demo + ≤3 min pitch on **dedicated RPC** with funded wallet  
+- [ ] Manual GitHub invite for **`dannxbt`** (pull) if repo is private  
+- [ ] Fill Superteam Earn + Colosseum forms before **2026-10-13 12:29 IST**  
+- [ ] Optional but strong: one featured **mainnet** offering for traction criterion  
+- [ ] Metadata hosting / AI assist / community presets = post-MVP polish  
 
 ## Stack
 

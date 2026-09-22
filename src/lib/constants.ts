@@ -42,6 +42,16 @@ export function getRpcUrl(): string {
   );
 }
 
+/** Hostname (+ pathname) only — strips query/api-key secrets for health/UI. */
+export function getRpcHost(): string {
+  try {
+    const u = new URL(getRpcUrl());
+    return u.host + (u.pathname === "/" ? "" : u.pathname);
+  } catch {
+    return "invalid-rpc-url";
+  }
+}
+
 export function getCluster(): "devnet" | "mainnet-beta" | "testnet" {
   const raw = (process.env.NEXT_PUBLIC_CLUSTER || "devnet").toLowerCase();
   if (raw === "mainnet" || raw === "mainnet-beta") return "mainnet-beta";

@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { OfferingCard } from "@/components/ui/OfferingCard";
 import {
   filterOfferings,
@@ -18,6 +19,10 @@ const TABS = [
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
+
+function isTabId(v: string | null): v is TabId {
+  return !!v && TABS.some((t) => t.id === v);
+}
 
 function launchToOffering(l: StoredLaunch): DemoOffering {
   return {
@@ -41,15 +46,30 @@ function launchToOffering(l: StoredLaunch): DemoOffering {
   };
 }
 
-export default function ExplorePage() {
-  const [tab, setTab] = useState<TabId>("trending");
+function ExploreInner() {
+  const search = useSearchParams();
+  const router = useRouter();
+  const initial = search.get("tab");
+  const [tab, setTab] = useState<TabId>(isTabId(initial) ? initial : "trending");
   const [q, setQ] = useState("");
   const [sector, setSector] = useState<string>("all");
   const [local, setLocal] = useState<DemoOffering[]>([]);
 
   useEffect(() => {
+    const t = search.get("tab");
+    if (isTabId(t)) setTab(t);
+  }, [search]);
+
+  useEffect(() => {
     setLocal(listLaunches().map(launchToOffering));
   }, []);
+
+  function selectTab(id: TabId) {
+    setTab(id);
+    const url = new URL(window.location.href);
+    url.searchParams.set("tab", id);
+    router.replace(url.pathname + url.search, { scroll: false });
+  }
 
   const items = useMemo(() => {
     const demo = filterOfferings(tab);
@@ -70,7 +90,9 @@ export default function ExplorePage() {
     } else if (tab === "new") {
       const cutoff = Date.now() - 48 * 60 * 60 * 1000;
       merged = merged.filter(
-        (o) => new Date(o.createdAt).getTime() > cutoff || local.some((l) => l.id === o.id),
+        (o) =>
+          new Date(o.createdAt).getTime() > cutoff ||
+          local.some((l) => l.id === o.id),
       );
     } else {
       merged = [...merged].sort((a, b) => b.volume24h - a.volume24h);
@@ -121,7 +143,7 @@ export default function ExplorePage() {
           <button
             key={t.id}
             type="button"
-            onClick={() => setTab(t.id)}
+            onClick={() => selectTab(t.id)}
             className={clsx(
               "rounded-pill px-4 py-1.5 text-sm transition",
               tab === t.id
@@ -164,7 +186,18 @@ export default function ExplorePage() {
           ))}
         </div>
       )}
-
     </div>
+  );
+}
+
+export default function ExplorePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="text-sm text-fg-muted">Loading explore…</div>
+      }
+    >
+      <ExploreInner />
+    </Suspense>
   );
 }
