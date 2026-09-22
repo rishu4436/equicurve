@@ -28,7 +28,8 @@ Built for [Superteam Earn · Meteora DBC](https://superteam.fun/earn/listing/met
 | `/explore` | Tabs + shared registry + local launches; examples behind toggle / `?demo=1` |
 | `/create` | 6-step wizard; fee / lock / mint / seed buy wired to SDK |
 | `/presets` | Short raise · Flat · Exponential · Long (+ Equity-tuned) |
-| `/o/[id]` | Historical price chart (swap txs + spot), holders, trade |
+| `/o/[id]` | Offering detail + **in-app DAMM v2 post-grad ticket** (quote/swap2 + position fee claim) when graduated |
+| `/o/[id]` (legacy note) | Historical price chart (swap txs + spot), holders, trade |
 | `/o/[id]/graduate`, `/graduate/[pool]` | Real `migrateToDammV2` |
 | `/trade/[pool]` | Quote & swap on curve (SOL) |
 | `/portfolio` | Local activity / positions |
@@ -55,6 +56,11 @@ Eligibility gate (geo / risk self-attest) gates Create + first trade.
 | Seed buy (SOL &gt; 0) | `createConfigAndPoolWithFirstBuy` |
 | Transfer profile | `open-spl` → SPL `createConfigAndPool`; `token-2022` → Token2022 same builders; `transfer-hook` → `createConfigAndPoolWithTransferHook` (+ env program) |
 | Curve preset | `buildCurveWithMarketCap` (incl. **Short raise** for fast graduate demos) |
+
+
+### Post-grad DAMM v2 ticket
+
+After DBC → DAMM v2 migration, `/o/[id]` renders an in-app **DAMM ticket** powered by `@meteora-ag/cp-amm-sdk`: pool identity (derived/stored address + explorer/Meteora links), ExactIn **quote + swap** (`getQuote2` / `swap2`), and **claim position fees** for wallet-owned positions. Add/remove liquidity UI is intentionally deferred (honest empty-state). No fabricated TVL/volume.
 
 ## Quick start
 

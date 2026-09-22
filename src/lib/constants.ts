@@ -65,6 +65,8 @@ export const DOCS = {
     "https://docs.meteora.ag/developer-guides/dbc/typescript-sdk/getting-started.md",
   dbcExamples:
     "https://docs.meteora.ag/developer-guides/dbc/typescript-sdk/examples.md",
+  dammV2:
+    "https://docs.meteora.ag/developer-guides/damm-v2/typescript-sdk/getting-started.md",
   migration:
     "https://docs.meteora.ag/core-products/dbc/migration-and-liquidity.md",
   funLaunch: "https://docs.meteora.ag/invent/scaffold/fun-launch.md",

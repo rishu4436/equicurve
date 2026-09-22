@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { clsx } from "clsx";
 import { TradePanel } from "@/components/TradePanel";
+import { DammTicket } from "@/components/offering/DammTicket";
 import { FeeClaimsCard } from "@/components/issuer/FeeClaimsCard";
 import { EligibilityGate, useEligibilityGate } from "@/components/gate/EligibilityGate";
 import { PriceHistoryChart } from "@/components/offering/PriceHistoryChart";
@@ -19,6 +20,8 @@ import {
   explorerTxUrl,
   getDammV2ConfigKey,
   quoteLabelForMint,
+  getUsdcMint,
+  WSOL_MINT,
 } from "@/lib/constants";
 import { fetchPoolSnapshot } from "@/lib/dbc/migrate";
 import type { PoolSnapshot } from "@/lib/dbc/types";
@@ -796,35 +799,34 @@ export function OfferingDetailClient({ id, demo }: Props) {
 
           <div className="space-y-4">
             
-            {status === "graduated" && (
+                        {status === "graduated" && poolAddress && mint ? (
+              <DammTicket
+                dbcPool={poolAddress}
+                baseMint={mint}
+                quoteMint={
+                  snapshot?.quoteMint ??
+                  (quote === "USDC"
+                    ? (getUsdcMint()?.toBase58() ?? "")
+                    : WSOL_MINT.toBase58())
+                }
+                storedDammPool={launch?.dammPool}
+                onGateRequired={() => eligibility.ensure()}
+                gateOk={eligibility.ok || undefined}
+              />
+            ) : null}
+
+            {status === "graduated" && !(poolAddress && mint) ? (
               <div className="ec-card space-y-3 border-signal-grad/30 p-5 text-sm">
                 <h2 className="font-semibold text-signal-grad">
-                  Graduated — trade on DAMM v2
+                  Graduated — DAMM v2
                 </h2>
                 <p className="text-fg-secondary">
-                  The bonding curve ticket is inactive after migration. Liquidity
-                  lives on Meteora DAMM v2.
+                  This offering is marked graduated, but base mint / pool data is
+                  incomplete so the in-app DAMM ticket cannot load yet.
                 </p>
-                <a
-                  href="https://app.meteora.ag/"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="ec-btn-primary inline-flex"
-                >
-                  Open Meteora DAMM v2
-                </a>
-                {launch?.dammPool && (
-                  <a
-                    href={explorerAddressUrl(launch.dammPool)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="block font-mono text-xs text-accent hover:underline"
-                  >
-                    DAMM pool {short(launch.dammPool, 6)}
-                  </a>
-                )}
               </div>
-            )}
+            ) : null}
+
 
             {poolAddress && status !== "graduated" ? (
               <TradePanel
