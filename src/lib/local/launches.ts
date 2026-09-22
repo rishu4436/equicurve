@@ -5,6 +5,7 @@
 
 import type { Sector } from "@/lib/demo/offerings";
 import type { PresetId } from "@/lib/dbc/types";
+import { clearPriceHistory } from "@/lib/local/priceHistory";
 
 export const LAUNCHES_KEY = "equicurve.launches.v1";
 export const ACTIVITY_KEY = "equicurve.activity.v1";
@@ -134,5 +135,6 @@ export function clearActivity(): void {
 export function clearLocalLaunchData(): void {
   clearLaunches();
   clearActivity();
+  clearPriceHistory();
 }
 

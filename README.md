@@ -16,6 +16,7 @@ Built for [Superteam Earn · Meteora DBC](https://superteam.fun/earn/listing/met
 | **Home stats** | Counts from this browser’s launches — not invented capital figures. |
 | **Docs checklist** | Issuer attestation stored locally — not an upload vault. |
 | **Token-2022 / hooks** | Create supports Open SPL, Token-2022 (no hook), and Token-2022 + transfer hook when `NEXT_PUBLIC_TRANSFER_HOOK_PROGRAM` is set. Swap uses `swap2WithTransferHook` for hook pools. |
+| **Offering price chart** | Live pools: swap-implied points from confirmed txs (`getSignaturesForAddress` + EvtSwap / balance deltas) + live spot from pool `sqrtPrice`. Points accumulate in localStorage. Dashed series = bonding **curve shape (not history)**. Demo/empty: curve shape only — no invented history. |
 
 **Create → Launch** and **Trade / Graduate** call `@meteora-ag/dynamic-bonding-curve-sdk`. No mock on-chain success.
 
@@ -27,7 +28,7 @@ Built for [Superteam Earn · Meteora DBC](https://superteam.fun/earn/listing/met
 | `/explore` | Tabs + real local launches; examples behind toggle / `?demo=1` |
 | `/create` | 6-step wizard; fee / lock / mint / seed buy wired to SDK |
 | `/presets` | Short raise · Flat · Exponential · Long (+ Equity-tuned) |
-| `/o/[id]` | Progress chart, holders (mint supply + creator ATA), trade |
+| `/o/[id]` | Historical price chart (swap txs + spot), holders, trade |
 | `/o/[id]/graduate`, `/graduate/[pool]` | Real `migrateToDammV2` |
 | `/trade/[pool]` | Quote & swap on curve (SOL) |
 | `/portfolio` | Local activity / positions |
@@ -98,7 +99,7 @@ Health check: `GET /api/health` → `{ ok, cluster, rpcHost, slot }` (host only 
 - Seed buy in USDC needs a funded USDC ATA
 - Transfer-hook create needs a real executable `NEXT_PUBLIC_TRANSFER_HOOK_PROGRAM` (no default/fake hook)
 - Mint+update authority retain only on transfer-hook profiles
-- Price chart is an approximate bonding path from quote progress — not a historical series
+- Price chart: swap-implied history from recent pool txs + live spot; dashed overlay is curve shape (not history). Thin history until enough swaps exist; no indexer / no oracle
 - Holders list is mint supply + creator ATA + `getTokenLargestAccounts` (no full indexer)
 - Activity mixes RPC `getSignaturesForAddress` with browser-local rows
 - Explore has no global indexer — browser-local launches only

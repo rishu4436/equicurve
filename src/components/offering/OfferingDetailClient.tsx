@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { clsx } from "clsx";
 import { TradePanel } from "@/components/TradePanel";
 import { EligibilityGate, useEligibilityGate } from "@/components/gate/EligibilityGate";
+import { PriceHistoryChart } from "@/components/offering/PriceHistoryChart";
 import { ProgressRing } from "@/components/ui/ProgressRing";
 import { StatusPill } from "@/components/ui/StatusPill";
 import {
@@ -61,50 +62,6 @@ function short(a: string, n = 4) {
   return a.length > 12 ? `${a.slice(0, n)}…${a.slice(-n)}` : a;
 }
 
-/** Simple SVG progress chart from quote progress (0–1). Labeled as progress path. */
-function ProgressChart({ progress }: { progress: number }) {
-  const p = Math.min(1, Math.max(0, progress));
-  const w = 320;
-  const h = 120;
-  const pts: string[] = [];
-  for (let i = 0; i <= 24; i++) {
-    const t = i / 24;
-    const eased = Math.pow(t, 0.85) * p;
-    const x = 20 + t * (w - 40);
-    const y = h - 20 - eased * (h - 40);
-    pts.push(`${x},${y}`);
-  }
-  const nowX = 20 + p * (w - 40);
-  const nowY = h - 20 - p * (h - 40);
-
-  return (
-    <div className="space-y-1">
-      <svg viewBox={`0 0 ${w} ${h}`} className="h-28 w-full" aria-hidden>
-        <path d={`M20 ${h - 20} H${w - 20}`} stroke="#243044" />
-        <path d={`M20 20 V${h - 20}`} stroke="#243044" />
-        <polyline
-          points={pts.join(" ")}
-          fill="none"
-          stroke="#2DD4BF"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        <circle cx={nowX} cy={nowY} r="4" fill="#E8C547" />
-        <text x="22" y="16" fill="#6B7A8F" fontSize="10">
-          Approx. bonding path
-        </text>
-        <text x={w - 70} y="16" fill="#A78BFA" fontSize="10">
-          {(p * 100).toFixed(1)}%
-        </text>
-      </svg>
-      <p className="text-[10px] text-fg-muted">
-        Approximate path from on-chain quote progress + bonding-curve shape — not a historical price series or oracle.
-      </p>
-    </div>
-  );
-}
-
 export function OfferingDetailClient({ id, demo }: Props) {
   const { connection } = useConnection();
   const [tab, setTab] = useState<TabId>("Overview");
@@ -121,6 +78,7 @@ export function OfferingDetailClient({ id, demo }: Props) {
     largest: [],
     error: null,
   });
+  const [historyNonce, setHistoryNonce] = useState(0);
   const eligibility = useEligibilityGate();
 
   const illustrative = !!(demo?.illustrative || (demo && !demo.pool && !launch));
@@ -408,19 +366,28 @@ export function OfferingDetailClient({ id, demo }: Props) {
           <div className="space-y-4">
             <div className="ec-card p-5">
               <div className="mb-3 flex items-center justify-between">
-                <h2 className="font-semibold text-fg-primary">Curve progress</h2>
+                <h2 className="font-semibold text-fg-primary">Market / curve</h2>
                 {poolAddress && (
                   <button
                     type="button"
-                    onClick={() => void refreshSnap()}
+                    onClick={() => {
+                      void refreshSnap();
+                      setHistoryNonce((n) => n + 1);
+                    }}
                     className="text-xs text-accent hover:underline"
                   >
                     Refresh
                   </button>
                 )}
               </div>
-              <ProgressChart progress={progressPct / 100} />
-              <div className="mt-3 flex items-center gap-4">
+              <PriceHistoryChart
+                key={`${poolAddress ?? "none"}-${historyNonce}`}
+                poolAddress={poolAddress}
+                quoteLabel={quote}
+                progress={progressPct / 100}
+                illustrative={illustrative}
+              />
+              <div className="mt-4 flex items-center gap-4 border-t border-line pt-4">
                 <ProgressRing value={progressPct} size={72} stroke={5} />
                 <div className="space-y-1 text-sm text-fg-secondary">
                   <p>
@@ -864,6 +831,7 @@ export function OfferingDetailClient({ id, demo }: Props) {
                 compact
                 onGateRequired={() => eligibility.ensure()}
                 gateOk={eligibility.ok || undefined}
+                onSwapComplete={() => setHistoryNonce((n) => n + 1)}
               />
             ) : (
               <div className="ec-card space-y-3 p-5 text-sm text-fg-secondary">

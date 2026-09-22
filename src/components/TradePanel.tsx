@@ -31,6 +31,8 @@ type Props = {
   /** Parent-controlled gate (optional) */
   onGateRequired?: () => boolean;
   gateOk?: boolean;
+  /** Called after a confirmed swap so parent can refresh price history. */
+  onSwapComplete?: () => void;
 };
 
 export function TradePanel({
@@ -38,6 +40,7 @@ export function TradePanel({
   compact = false,
   onGateRequired,
   gateOk,
+  onSwapComplete,
 }: Props) {
   const { connection } = useConnection();
   const wallet = useWallet();
@@ -125,6 +128,7 @@ export function TradePanel({
       toast.success("Swap landed — " + sig.slice(0, 8));
       window.open(explorerTxUrl(sig), "_blank");
       await refresh();
+      onSwapComplete?.();
     } catch (e) {
       toast.error(toUserMessage(e));
     } finally {
