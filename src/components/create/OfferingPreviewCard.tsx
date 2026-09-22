@@ -71,7 +71,7 @@ export function OfferingPreviewCard({ state }: { state: WizardState }) {
           {state.investorType}
         </span>
         <span className="rounded-pill border border-line bg-subtle px-2 py-0.5 text-[10px] text-fg-secondary">
-          Open SPL
+          {state.transferProfile === "open-spl" ? "Open SPL" : state.transferProfile === "token-2022" ? "Token-2022" : "Transfer hook"}
         </span>
         {state.mintRenounce ? (
           <span className="rounded-pill border border-gold/40 bg-gold/10 px-2 py-0.5 text-[10px] text-gold">

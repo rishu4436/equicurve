@@ -525,8 +525,8 @@ export function OfferingDetailClient({ id, demo }: Props) {
                         or appraisal.
                       </li>
                       <li>
-                        Transfer restrictions / Token-2022 hooks are not used by
-                        current Create (Open SPL only).
+                        Transfer profile is set at Create time (Open SPL, Token-2022, or
+                        transfer-hook when NEXT_PUBLIC_TRANSFER_HOOK_PROGRAM is configured).
                       </li>
                       <li>
                         Migration fee ~0.2% protocol; LP lock ≥{lockPct}% post

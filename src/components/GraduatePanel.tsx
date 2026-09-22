@@ -109,6 +109,14 @@ export function GraduatePanel({ poolAddress }: { poolAddress: string }) {
         <p className="text-xs font-medium uppercase tracking-wider text-accent">
           Graduation ceremony
         </p>
+
+      <p className="text-xs text-fg-muted">
+        Transfer-hook pools: DBC revokes the base mint&apos;s transfer-hook program
+        and authority when the curve completes (
+        <code className="text-accent-soft">EvtCurveCompleteWithTransferHook</code>
+        ), then the same <code className="text-accent-soft">migrateToDammV2</code>{" "}
+        path applies. Graduated DAMM v2 liquidity has no active transfer hook.
+      </p>
         <h1 className="mt-1 text-3xl font-semibold text-fg-primary">
           Curve complete → DAMM v2
         </h1>

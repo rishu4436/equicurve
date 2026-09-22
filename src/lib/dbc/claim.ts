@@ -2,6 +2,7 @@ import { PublicKey, type Connection, type Transaction } from "@solana/web3.js";
 import BN from "bn.js";
 import { EquiCurveError } from "@/lib/errors";
 import { getDbcClient } from "./client";
+import { isTransferHookPoolAccount } from "./transferHook";
 
 export type FeeBreakdown = {
   creatorUnclaimedBase: string;
@@ -50,13 +51,23 @@ export async function prepareClaimCreatorFees(args: {
   }
 
   const client = getDbcClient(connection);
-  const tx = await client.creator.claimCreatorTradingFee({
-    creator,
-    payer: creator,
-    pool,
-    maxBaseAmount: unclaimedBase,
-    maxQuoteAmount: unclaimedQuote,
-  });
+  const poolAccount = await client.state.getPool(pool);
+  const tx = isTransferHookPoolAccount(poolAccount)
+    ? await client.creator.claimCreatorTradingFee2({
+        creator,
+        payer: creator,
+        pool,
+        receiver: creator,
+        maxBaseAmount: unclaimedBase,
+        maxQuoteAmount: unclaimedQuote,
+      })
+    : await client.creator.claimCreatorTradingFee({
+        creator,
+        payer: creator,
+        pool,
+        maxBaseAmount: unclaimedBase,
+        maxQuoteAmount: unclaimedQuote,
+      });
 
   const { blockhash } = await connection.getLatestBlockhash("confirmed");
   tx.feePayer = creator;

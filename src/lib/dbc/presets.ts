@@ -179,6 +179,13 @@ export type BuildPresetOverrides = {
   antiSniper?: boolean;
   /** Quote token decimals (9 = SOL/WSOL, 6 = USDC). */
   quoteDecimals?: 6 | 9;
+  /** SPL vs Token-2022 base mint. */
+  tokenType?: "spl" | "token-2022";
+  /**
+   * When true, CreatorUpdateAndMintAuthority is allowed (transfer-hook configs only).
+   * Standard SPL / Token-2022 configs reject mint-authority options.
+   */
+  allowMintAuthority?: boolean;
 };
 
 /**
@@ -203,16 +210,22 @@ export function buildPresetConfig(
   const partnerUnlocked = 100 - lpLock;
 
   const mintRenounce = opts.mintRenounce !== false;
-  const tokenAuthorityOption = mintRenounce
-    ? TokenAuthorityOption.CreatorUpdateAuthority
-    : TokenAuthorityOption.CreatorUpdateAndMintAuthority;
+  const allowMintAuthority = opts.allowMintAuthority === true;
+  // Mint+update authority is only valid on transfer-hook configs (Meteora docs).
+  const tokenAuthorityOption =
+    mintRenounce || !allowMintAuthority
+      ? TokenAuthorityOption.CreatorUpdateAuthority
+      : TokenAuthorityOption.CreatorUpdateAndMintAuthority;
 
   const enableFirstSwapWithMinFee =
     opts.antiSniper ?? feeSpec.enableFirstSwapWithMinFee;
 
+  const tokenType =
+    opts.tokenType === "token-2022" ? TokenType.Token2022 : TokenType.SPLToken;
+
   return buildCurveWithMarketCap({
     token: {
-      tokenType: TokenType.SPLToken,
+      tokenType,
       tokenBaseDecimal: TokenDecimal.NINE,
       tokenQuoteDecimal:
         opts.quoteDecimals === 6 ? TokenDecimal.SIX : TokenDecimal.NINE,

@@ -132,8 +132,9 @@ export default function TrustPage() {
             when SOL amount &gt; 0.
           </li>
           <li>
-            <strong className="text-fg-primary">Token type:</strong> Open SPL
-            only. Token-2022 transfer hooks are not in the create path yet.
+            <strong className="text-fg-primary">Token type:</strong> Open SPL, Token-2022 (no hook), and Token-2022 transfer-hook when
+            <code className="text-accent-soft">NEXT_PUBLIC_TRANSFER_HOOK_PROGRAM</code>{" "}
+            is set to an executable hook program. No fake hook IDs.
           </li>
           <li>
             <strong className="text-fg-primary">Docs checklist:</strong> issuer
@@ -195,8 +196,11 @@ export default function TrustPage() {
             and shows a warning badge on the preview
           </li>
           <li>
-            Transfer-hook / Token-2022 restriction profiles are{" "}
-            <strong className="text-fg-primary">not</strong> creatable yet
+            Token-2022 without a hook uses the standard create path with{" "}
+            <code className="text-accent-soft">TokenType.Token2022</code>. Transfer-hook
+            launches use <code className="text-accent-soft">createConfigAndPoolWithTransferHook</code>{" "}
+            and require a real executable program via env. Mint+update authority is{" "}
+            <strong className="text-fg-primary">only</strong> valid on transfer-hook configs
           </li>
         </ul>
       </section>

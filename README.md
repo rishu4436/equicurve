@@ -15,7 +15,7 @@ Built for [Superteam Earn · Meteora DBC](https://superteam.fun/earn/listing/met
 | **Create → Launch** | Real DBC SDK. Quote **SOL (WSOL)** default; **USDC** when a known mint exists for the cluster. Fee share, LP lock %, mint authority, optional seed buy, optional partner feeClaimer map on-chain. |
 | **Home stats** | Counts from this browser’s launches — not invented capital figures. |
 | **Docs checklist** | Issuer attestation stored locally — not an upload vault. |
-| **Token-2022 hooks** | Not in create path (Open SPL only; UI says coming soon). |
+| **Token-2022 / hooks** | Create supports Open SPL, Token-2022 (no hook), and Token-2022 + transfer hook when `NEXT_PUBLIC_TRANSFER_HOOK_PROGRAM` is set. Swap uses `swap2WithTransferHook` for hook pools. |
 
 **Create → Launch** and **Trade / Graduate** call `@meteora-ag/dynamic-bonding-curve-sdk`. No mock on-chain success.
 
@@ -50,6 +50,7 @@ Eligibility gate (geo / risk self-attest) gates Create + first trade.
 | Mint renounce / retain | `TokenAuthorityOption.CreatorUpdateAuthority` / `CreatorUpdateAndMintAuthority` |
 | Anti-sniper | `enableFirstSwapWithMinFee` |
 | Seed buy (SOL &gt; 0) | `createConfigAndPoolWithFirstBuy` |
+| Transfer profile | `open-spl` → SPL `createConfigAndPool`; `token-2022` → Token2022 same builders; `transfer-hook` → `createConfigAndPoolWithTransferHook` (+ env program) |
 | Curve preset | `buildCurveWithMarketCap` (incl. **Short raise** for fast graduate demos) |
 
 ## Quick start
@@ -95,7 +96,8 @@ Health check: `GET /api/health` → `{ ok, cluster, rpcHost, slot }` (host only 
 
 - USDC quote requires the known Circle mint on the active cluster (devnet/mainnet); testnet has none
 - Seed buy in USDC needs a funded USDC ATA
-- No Token-2022 transfer-hook create
+- Transfer-hook create needs a real executable `NEXT_PUBLIC_TRANSFER_HOOK_PROGRAM` (no default/fake hook)
+- Mint+update authority retain only on transfer-hook profiles
 - Price chart is an approximate bonding path from quote progress — not a historical series
 - Holders list is mint supply + creator ATA + `getTokenLargestAccounts` (no full indexer)
 - Activity mixes RPC `getSignaturesForAddress` with browser-local rows

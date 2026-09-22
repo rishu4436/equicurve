@@ -36,3 +36,5 @@ export function normalizePoolAccount(account: MaybeWrappedPool): NormalizedPool 
     raw: account,
   };
 }
+
+export { isTransferHookPoolAccount } from "./transferHook";

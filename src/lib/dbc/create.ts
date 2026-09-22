@@ -17,6 +17,12 @@ import { EquiCurveError } from "@/lib/errors";
 import { getDbcClient } from "./client";
 import { buildPresetConfig, getPreset, MIN_LP_LOCK_PCT } from "./presets";
 import type { LaunchFormInput, PreparedLaunch } from "./types";
+import {
+  isTransferHookProfileAvailable,
+  parseTransferProfile,
+  requireTransferHookProgram,
+  type TransferProfile,
+} from "./transferHook";
 
 export type LaunchKeypairs = {
   config: Keypair;
@@ -46,8 +52,8 @@ function clampCreatorFee(pct: number): number {
 
 /**
  * Build real DBC createConfigAndPool (optionally with first buy).
- * Quote defaults to WSOL; USDC when selected and a known mint exists
- * for the cluster. Optional feeClaimer sets partner fee recipient.
+ * Supports Open SPL, Token-2022 (no hook), and Token-2022 transfer-hook
+ * via dedicated SDK builders when NEXT_PUBLIC_TRANSFER_HOOK_PROGRAM is set.
  */
 export async function prepareLaunchTransaction(args: {
   connection: Connection;
@@ -84,6 +90,19 @@ export async function prepareLaunchTransaction(args: {
   const mintRenounce = input.mintRenounce !== false;
   const seedBuySol = Math.max(0, Number(input.seedBuySol) || 0);
   const antiSniper = !!input.antiSniper;
+
+  const transferProfile: TransferProfile = parseTransferProfile(
+    input.transferProfile,
+  );
+  const wantsTransferHook = transferProfile === "transfer-hook";
+  if (wantsTransferHook && !isTransferHookProfileAvailable()) {
+    throw new EquiCurveError(
+      "Transfer-hook profile selected but NEXT_PUBLIC_TRANSFER_HOOK_PROGRAM is not set to a valid program ID.",
+      "VALIDATION",
+    );
+  }
+  // Mint+update authority is only valid on transfer-hook configs (Meteora docs).
+  const effectiveMintRenounce = wantsTransferHook ? mintRenounce : true;
 
   const quoteLabel: QuoteLabel = input.quoteLabel === "USDC" ? "USDC" : "SOL";
   let quoteMint = WSOL_MINT;
@@ -127,6 +146,11 @@ export async function prepareLaunchTransaction(args: {
   const transactions: Transaction[] = [];
   const signersPerTx: Keypair[][] = [];
 
+  let transferHookProgramPk: PublicKey | undefined;
+  if (wantsTransferHook) {
+    transferHookProgramPk = await requireTransferHookProgram(connection);
+  }
+
   if (existingConfig) {
     mode = "pool-only";
     configPubkey = existingConfig;
@@ -138,23 +162,36 @@ export async function prepareLaunchTransaction(args: {
       poolCreator: payer,
       config: existingConfig,
       baseMint: keypairs.baseMint.publicKey,
+      ...(transferHookProgramPk
+        ? { transferHookProgram: transferHookProgramPk }
+        : {}),
     };
 
     if (seedBuySol > 0) {
       const buyAmount = new BN(Math.round(seedBuySol * 10 ** quoteDecimals));
-      const tx = await client.creator.createPoolWithFirstBuy({
-        createPoolParam,
-        firstBuyParam: {
-          buyer: payer,
-          buyAmount,
-          minimumAmountOut: new BN(0),
-          referralTokenAccount: null,
-        },
-      });
+      const firstBuyParam = {
+        buyer: payer,
+        buyAmount,
+        minimumAmountOut: new BN(0),
+        referralTokenAccount: null,
+      };
+      const tx = wantsTransferHook
+        ? await client.creator.createPoolWithFirstBuyWithTransferHook({
+            createPoolParam: createPoolParam as never,
+            firstBuyParam,
+          })
+        : await client.creator.createPoolWithFirstBuy({
+            createPoolParam,
+            firstBuyParam,
+          });
       transactions.push(tx);
       signersPerTx.push([keypairs.baseMint]);
     } else {
-      const tx = await client.creator.createPool(createPoolParam);
+      const tx = wantsTransferHook
+        ? await client.creator.createPoolWithTransferHook(
+            createPoolParam as never,
+          )
+        : await client.creator.createPool(createPoolParam);
       transactions.push(tx);
       signersPerTx.push([keypairs.baseMint]);
     }
@@ -165,9 +202,11 @@ export async function prepareLaunchTransaction(args: {
       totalTokenSupply: input.totalSupply || 1_000_000_000,
       creatorTradingFeePercentage,
       lpLockPct,
-      mintRenounce,
+      mintRenounce: effectiveMintRenounce,
       antiSniper,
       quoteDecimals: quoteDecimals as 6 | 9,
+      tokenType: transferProfile === "open-spl" ? "spl" : "token-2022",
+      allowMintAuthority: wantsTransferHook && !effectiveMintRenounce,
     });
 
     const baseParams = {
@@ -184,26 +223,44 @@ export async function prepareLaunchTransaction(args: {
         poolCreator: payer,
         baseMint: keypairs.baseMint.publicKey,
       },
+      ...(transferHookProgramPk
+        ? { transferHookProgram: transferHookProgramPk }
+        : {}),
     };
 
     if (seedBuySol > 0) {
       const buyAmount = new BN(Math.round(seedBuySol * 10 ** quoteDecimals));
-      const { createConfigTx, createPoolWithFirstBuyTx } =
-        await client.partner.createConfigAndPoolWithFirstBuy({
-          ...baseParams,
-          firstBuyParam: {
-            buyer: payer,
-            buyAmount,
-            minimumAmountOut: new BN(0),
-            referralTokenAccount: null,
-          },
-        });
-
-      transactions.push(createConfigTx, createPoolWithFirstBuyTx);
+      const firstBuyParam = {
+        buyer: payer,
+        buyAmount,
+        minimumAmountOut: new BN(0),
+        referralTokenAccount: null,
+      };
+      if (wantsTransferHook) {
+        const { createConfigTx, createPoolWithFirstBuyTx } =
+          await client.partner.createConfigAndPoolWithFirstBuyWithTransferHook({
+            ...baseParams,
+            firstBuyParam,
+          } as never);
+        transactions.push(createConfigTx, createPoolWithFirstBuyTx);
+      } else {
+        const { createConfigTx, createPoolWithFirstBuyTx } =
+          await client.partner.createConfigAndPoolWithFirstBuy({
+            ...baseParams,
+            firstBuyParam,
+          });
+        transactions.push(createConfigTx, createPoolWithFirstBuyTx);
+      }
       signersPerTx.push(
         [keypairs.config],
         [keypairs.config, keypairs.baseMint],
       );
+    } else if (wantsTransferHook) {
+      const tx = await client.partner.createConfigAndPoolWithTransferHook(
+        baseParams as never,
+      );
+      transactions.push(tx);
+      signersPerTx.push([keypairs.config, keypairs.baseMint]);
     } else {
       const tx = await client.partner.createConfigAndPool(baseParams);
       transactions.push(tx);
@@ -228,9 +285,11 @@ export async function prepareLaunchTransaction(args: {
       quoteLabel,
       lpLockPct,
       creatorTradingFeePercentage,
-      mintRenounce,
+      mintRenounce: effectiveMintRenounce,
       seedBuySol,
       feeClaimer: feeClaimer.toBase58(),
+      transferProfile,
+      transferHookProgram: transferHookProgramPk?.toBase58(),
       summary: {
         name,
         symbol,
@@ -238,7 +297,7 @@ export async function prepareLaunchTransaction(args: {
         initialMarketCapUsd: preset.initialMarketCap,
         migrationMarketCapUsd: preset.migrationMarketCap,
         feeLabel: preset.feeLabel,
-        migration: `DAMM v2 · partner LP lock ${lpLockPct}% · quote ${quoteLabel}`,
+        migration: `DAMM v2 · partner LP lock ${lpLockPct}% · quote ${quoteLabel} · ${transferProfile}`,
       },
     },
     keypairs,

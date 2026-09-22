@@ -2,6 +2,8 @@ export type PresetId = "flat" | "exponential" | "long" | "equity" | "short";
 
 export type QuoteLabel = "SOL" | "USDC";
 
+export type { TransferProfile } from "./transferHook";
+
 export type LaunchFormInput = {
   name: string;
   symbol: string;
@@ -15,6 +17,8 @@ export type LaunchFormInput = {
   antiSniper: boolean;
   quoteLabel?: QuoteLabel;
   feeClaimer?: string;
+  /** open-spl | token-2022 | transfer-hook */
+  transferProfile?: import("./transferHook").TransferProfile;
 };
 
 export type PreparedLaunch = {
@@ -30,6 +34,8 @@ export type PreparedLaunch = {
   mintRenounce: boolean;
   seedBuySol: number;
   feeClaimer: string;
+  transferProfile: import("./transferHook").TransferProfile;
+  transferHookProgram?: string;
   summary: {
     name: string;
     symbol: string;

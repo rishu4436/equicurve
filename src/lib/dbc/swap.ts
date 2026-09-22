@@ -4,6 +4,7 @@ import BN from "bn.js";
 import { EquiCurveError } from "@/lib/errors";
 import { getDbcClient } from "./client";
 import { normalizePoolAccount } from "./poolAccount";
+import { isTransferHookPoolAccount } from "./transferHook";
 import { quoteDecimalsForMint } from "@/lib/constants";
 
 export type SwapDirection = "buy" | "sell";
@@ -86,7 +87,7 @@ const amountIn = new BN(Math.round(amount * 10 ** resolvedDecimals));
     currentPoint,
   });
 
-  const tx = await client.pool.swap2({
+  const swapArgs = {
     owner,
     payer: owner,
     pool,
@@ -95,7 +96,10 @@ const amountIn = new BN(Math.round(amount * 10 ** resolvedDecimals));
     amountIn,
     minimumAmountOut: quote.minimumAmountOut ?? new BN(0),
     referralTokenAccount: null,
-  });
+  } as const;
+  const tx = isTransferHookPoolAccount(account)
+    ? await client.pool.swap2WithTransferHook(swapArgs as never)
+    : await client.pool.swap2(swapArgs as never);
 
   const { blockhash } = await connection.getLatestBlockhash("confirmed");
   tx.feePayer = owner;

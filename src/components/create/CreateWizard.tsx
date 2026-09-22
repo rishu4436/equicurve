@@ -27,6 +27,11 @@ import {
   type WizardState,
   type WizardStepId,
 } from "./wizardTypes";
+import {
+  isTransferHookProfileAvailable,
+  TRANSFER_PROFILE_LABELS,
+  type TransferProfile,
+} from "@/lib/dbc/transferHook";
 
 const OFFICIAL: PresetId[] = ["short", "flat", "exponential", "long"];
 const ALL_PRESET_IDS: PresetId[] = [
@@ -142,12 +147,14 @@ export function CreateWizard() {
             antiSniper: state.antiSniper,
             quoteLabel: state.quote,
             feeClaimer: state.feeClaimer.trim() || undefined,
+            transferProfile: state.transferProfile,
           },
         });
       setLaunchLog((l) => [
         ...l,
         `Mode: ${prepared.mode}`,
         `Quote: ${prepared.quoteLabel}`,
+        `Transfer profile: ${prepared.transferProfile}`,
         `Creator fee share: ${prepared.creatorTradingFeePercentage}%`,
         `Partner LP lock: ${prepared.lpLockPct}%`,
         `Mint: ${prepared.mintRenounce ? "renounced (no mint auth)" : "retained"}`,
@@ -544,13 +551,42 @@ function StepOffering({
             <option>Accredited-oriented</option>
           </select>
         </label>
-        <label className="block space-y-1.5">
+                <label className="block space-y-1.5">
           <span className="ec-label">Transfer profile</span>
-          <select className="ec-input" value="Open SPL" disabled>
-            <option>Open SPL</option>
+          <select
+            className="ec-input"
+            value={state.transferProfile}
+            onChange={(e) => {
+              const next = e.target.value as TransferProfile;
+              const nextPatch: Partial<WizardState> = { transferProfile: next };
+              // Mint+update authority only valid for transfer-hook configs.
+              if (next !== "transfer-hook" && !state.mintRenounce) {
+                nextPatch.mintRenounce = true;
+              }
+              patch(nextPatch);
+            }}
+          >
+            <option value="open-spl">{TRANSFER_PROFILE_LABELS["open-spl"]}</option>
+            <option value="token-2022">
+              {TRANSFER_PROFILE_LABELS["token-2022"]}
+            </option>
+            <option
+              value="transfer-hook"
+              disabled={!isTransferHookProfileAvailable()}
+            >
+              {TRANSFER_PROFILE_LABELS["transfer-hook"]}
+              {!isTransferHookProfileAvailable()
+                ? " (set NEXT_PUBLIC_TRANSFER_HOOK_PROGRAM)"
+                : ""}
+            </option>
           </select>
           <p className="text-xs text-fg-muted">
-            Token-2022 transfer hooks — coming soon (create path is SPL only).
+            {state.transferProfile === "open-spl" &&
+              "Standard SPL mint via createConfigAndPool. DAMM v2 graduation."}
+            {state.transferProfile === "token-2022" &&
+              "Token-2022 mint (metadata) via createConfigAndPool with TokenType.Token2022 — no transfer hook. DAMM v2 only."}
+            {state.transferProfile === "transfer-hook" &&
+              "Token-2022 + transfer hook via createConfigAndPoolWithTransferHook. Hook is revoked when the curve completes; then migrateToDammV2."}
           </p>
         </label>
         <div className="space-y-2">
@@ -787,9 +823,15 @@ function StepFees({
             <input
               type="radio"
               checked={!state.mintRenounce}
+              disabled={state.transferProfile !== "transfer-hook"}
               onChange={() => patch({ mintRenounce: false })}
             />
             Retain with disclosure — CreatorUpdateAndMintAuthority
+            {state.transferProfile !== "transfer-hook" && (
+              <span className="text-xs text-fg-muted">
+                (transfer-hook profile only)
+              </span>
+            )}
           </label>
         </fieldset>
       </div>

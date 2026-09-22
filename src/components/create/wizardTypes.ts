@@ -25,8 +25,8 @@ export type WizardState = {
   seedBuy: number;
   jurisdictions: string;
   investorType: "Retail-friendly" | "Restricted" | "Accredited-oriented";
-  /** Open SPL only for now; Token-2022 transfer hooks = coming soon. */
-  transferProfile: "Open SPL";
+  /** open-spl | token-2022 | transfer-hook (hook requires env program). */
+  transferProfile: "open-spl" | "token-2022" | "transfer-hook";
   /** Issuer attestation flags (stored locally — not an upload vault). */
   docMemo: boolean;
   docRisk: boolean;
@@ -61,7 +61,7 @@ export const INITIAL_WIZARD: WizardState = {
   seedBuy: 0,
   jurisdictions: "",
   investorType: "Retail-friendly",
-  transferProfile: "Open SPL",
+  transferProfile: "open-spl",
   docMemo: false,
   docRisk: false,
   docIssuer: false,

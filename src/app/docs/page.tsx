@@ -144,6 +144,28 @@ export default function DocsPage() {
         </p>
       </section>
 
+      
+      <section className="ec-card space-y-3 p-5 text-sm text-fg-secondary">
+        <h2 className="font-semibold text-fg-primary">Token-2022 &amp; transfer hooks</h2>
+        <ul className="list-disc space-y-1.5 pl-5">
+          <li>
+            <strong className="text-fg-primary">Open SPL</strong> — default create path
+            (<code className="text-accent-soft">createConfigAndPool</code>).
+          </li>
+          <li>
+            <strong className="text-fg-primary">Token-2022 (no hook)</strong> — same builders with{" "}
+            <code className="text-accent-soft">TokenType.Token2022</code>. Must graduate to DAMM v2.
+          </li>
+          <li>
+            <strong className="text-fg-primary">Transfer hook</strong> —{" "}
+            <code className="text-accent-soft">createConfigAndPoolWithTransferHook</code> +{" "}
+            <code className="text-accent-soft">swap2WithTransferHook</code>. Requires{" "}
+            <code className="text-accent-soft">NEXT_PUBLIC_TRANSFER_HOOK_PROGRAM</code>. Hook is
+            revoked on curve completion before DAMM v2 migration.
+          </li>
+        </ul>
+      </section>
+
       <section className="ec-card space-y-3 p-5 text-sm text-fg-secondary">
         <h2 className="font-semibold text-fg-primary">Investor risk (short)</h2>
         <ul className="list-disc space-y-1.5 pl-5">
@@ -224,3 +246,4 @@ export default function DocsPage() {
     </div>
   );
 }
+
