@@ -1,0 +1,82 @@
+import {
+  DAMM_V2_MIGRATION_FEE_ADDRESS,
+  DAMM_V2_PROGRAM_ID,
+  DYNAMIC_BONDING_CURVE_PROGRAM_ID,
+} from "@meteora-ag/dynamic-bonding-curve-sdk";
+import { NATIVE_MINT } from "@solana/spl-token";
+import { PublicKey } from "@solana/web3.js";
+
+export const DBC_PROGRAM_ID = DYNAMIC_BONDING_CURVE_PROGRAM_ID;
+export const DAMM_V2_PROGRAM = DAMM_V2_PROGRAM_ID;
+export const WSOL_MINT = NATIVE_MINT;
+
+export const DEFAULT_DAMM_V2_CONFIG =
+  DAMM_V2_MIGRATION_FEE_ADDRESS?.[2] ??
+  new PublicKey("Hv8Lmzmnju6m7kcokVKvwqz7QPmdX9XfKjJsXz8RXcjp");
+
+export const DOCS = {
+  dbc: "https://docs.meteora.ag/developer-guides/dbc/index.md",
+  dbcSdk:
+    "https://docs.meteora.ag/developer-guides/dbc/typescript-sdk/getting-started.md",
+  dbcExamples:
+    "https://docs.meteora.ag/developer-guides/dbc/typescript-sdk/examples.md",
+  migration:
+    "https://docs.meteora.ag/core-products/dbc/migration-and-liquidity.md",
+  funLaunch: "https://docs.meteora.ag/invent/scaffold/fun-launch.md",
+  earnListing: "https://superteam.fun/earn/listing/meteora-dbc",
+  colosseum: "https://www.colosseum.org/",
+} as const;
+
+export const HACKATHON = {
+  deadline: "2026-10-13",
+  listing: DOCS.earnListing,
+  note:
+    "Dual-submit to Colosseum Crypto World's Fair sidetrack + Superteam Earn listing.",
+  collaborator: "dannxbt",
+} as const;
+
+export function getRpcUrl(): string {
+  return (
+    process.env.NEXT_PUBLIC_RPC_URL?.trim() ||
+    "https://api.devnet.solana.com"
+  );
+}
+
+export function getCluster(): "devnet" | "mainnet-beta" | "testnet" {
+  const raw = (process.env.NEXT_PUBLIC_CLUSTER || "devnet").toLowerCase();
+  if (raw === "mainnet" || raw === "mainnet-beta") return "mainnet-beta";
+  if (raw === "testnet") return "testnet";
+  return "devnet";
+}
+
+export function getOptionalPoolConfigKey(): PublicKey | null {
+  const raw = process.env.NEXT_PUBLIC_POOL_CONFIG_KEY?.trim();
+  if (!raw) return null;
+  try {
+    return new PublicKey(raw);
+  } catch {
+    return null;
+  }
+}
+
+export function getDammV2ConfigKey(): PublicKey {
+  const raw = process.env.NEXT_PUBLIC_DAMM_V2_CONFIG?.trim();
+  if (!raw) return DEFAULT_DAMM_V2_CONFIG;
+  try {
+    return new PublicKey(raw);
+  } catch {
+    return DEFAULT_DAMM_V2_CONFIG;
+  }
+}
+
+export function explorerTxUrl(signature: string): string {
+  const cluster = getCluster();
+  const q = cluster === "mainnet-beta" ? "" : `?cluster=${cluster}`;
+  return `https://explorer.solana.com/tx/${signature}${q}`;
+}
+
+export function explorerAddressUrl(address: string): string {
+  const cluster = getCluster();
+  const q = cluster === "mainnet-beta" ? "" : `?cluster=${cluster}`;
+  return `https://explorer.solana.com/address/${address}${q}`;
+}

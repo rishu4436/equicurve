@@ -1,0 +1,52 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  @apply bg-base text-fg-primary antialiased;
+  background-image:
+    radial-gradient(ellipse 70% 45% at 15% -5%, rgba(45, 212, 191, 0.08), transparent),
+    radial-gradient(ellipse 50% 35% at 90% 0%, rgba(232, 197, 71, 0.04), transparent);
+}
+
+.wallet-adapter-button {
+  @apply !bg-accent/15 !text-accent-soft !border !border-accent/30 !rounded-pill !h-10 !text-sm !font-medium;
+}
+
+.wallet-adapter-button:hover {
+  @apply !bg-accent/25;
+}
+
+.wallet-adapter-modal-wrapper {
+  @apply !bg-elevated;
+}
+
+@layer components {
+  .ec-card {
+    @apply rounded-card border border-line bg-elevated;
+  }
+  .ec-input {
+    @apply w-full rounded-input border border-line bg-subtle px-3 py-2.5 text-sm text-fg-primary outline-none ring-accent/40 placeholder:text-fg-muted focus:ring-2;
+  }
+  .ec-label {
+    @apply text-xs font-medium uppercase tracking-wider text-fg-muted;
+  }
+  .ec-btn-primary {
+    @apply inline-flex items-center justify-center rounded-pill bg-accent px-5 py-2.5 text-sm font-semibold text-base transition hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .ec-btn-secondary {
+    @apply inline-flex items-center justify-center rounded-pill border border-line bg-transparent px-5 py-2.5 text-sm font-medium text-fg-primary transition hover:border-accent/40 hover:bg-subtle disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .ec-chip {
+    @apply inline-flex items-center rounded-pill border border-line bg-subtle px-2.5 py-0.5 text-xs text-fg-secondary;
+  }
+}
