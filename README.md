@@ -66,8 +66,8 @@ npm run build
 Repo: https://github.com/rishu4436/equicurve  
 
 If private, grant **pull** to **`dannxbt`**.
-> **Collaborator note:** Automatic invite for `dannxbt` (pull) via `gh api` did not succeed in this environment. Please invite manually: GitHub → Settings → Collaborators → Add **dannxbt** with Read.
 
+> **Collaborator note:** Automatic invite for `dannxbt` (pull) via `gh api` returned 422 in this environment. Please invite manually: GitHub → Settings → Collaborators → Add **dannxbt** with Read.
 
 ## Program IDs
 
