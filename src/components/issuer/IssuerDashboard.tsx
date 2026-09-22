@@ -3,7 +3,7 @@
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   DBC_PROGRAM_ID,
@@ -12,13 +12,16 @@ import {
   explorerTxUrl,
 } from "@/lib/constants";
 import {
-  fetchCreatorFeeBreakdown,
+  fetchPoolFeeBreakdown,
   prepareClaimCreatorFees,
+  prepareClaimPartnerFees,
+  resolvePoolFeeRoles,
   type FeeBreakdown,
+  type PoolFeeRoles,
 } from "@/lib/dbc/claim";
 import { toUserMessage } from "@/lib/errors";
 import {
-  launchesForWallet,
+  launchesForCreatorOrPartner,
   listLaunches,
   pushActivity,
   type StoredLaunch,
@@ -36,43 +39,63 @@ function formatQuoteAmount(raw: string, quote: "SOL" | "USDC" = "SOL"): string {
   }
 }
 
+function shortPk(pk: string, n = 4): string {
+  return pk.length > 12 ? `${pk.slice(0, n)}…${pk.slice(-n)}` : pk;
+}
+
 export function IssuerDashboard() {
   const { connection } = useConnection();
   const wallet = useWallet();
   const [launches, setLaunches] = useState<StoredLaunch[]>([]);
   const [selected, setSelected] = useState<string>("");
   const [fees, setFees] = useState<FeeBreakdown | null>(null);
+  const [roles, setRoles] = useState<PoolFeeRoles | null>(null);
   const [feeError, setFeeError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [busyCreator, setBusyCreator] = useState(false);
+  const [busyPartner, setBusyPartner] = useState(false);
 
   useEffect(() => {
     const all = listLaunches();
     if (wallet.publicKey) {
-      setLaunches(launchesForWallet(wallet.publicKey.toBase58()));
+      setLaunches(launchesForCreatorOrPartner(wallet.publicKey.toBase58()));
     } else {
       setLaunches(all);
     }
   }, [wallet.publicKey]);
 
   useEffect(() => {
-    if (launches.length && !selected) setSelected(launches[0].pool);
+    if (launches.length && !selected) {
+      setSelected(launches[0].pool);
+      return;
+    }
+    if (
+      selected &&
+      launches.length > 0 &&
+      !launches.some((l) => l.pool === selected)
+    ) {
+      setSelected(launches[0].pool);
+    }
   }, [launches, selected]);
 
   const refreshFees = useCallback(async () => {
     if (!selected) {
       setFees(null);
+      setRoles(null);
       return;
     }
     try {
       setFeeError(null);
-      const b = await fetchCreatorFeeBreakdown(
-        connection,
-        new PublicKey(selected),
-      );
-      setFees(b);
+      const pool = new PublicKey(selected);
+      const [breakdown, poolRoles] = await Promise.all([
+        fetchPoolFeeBreakdown(connection, pool),
+        resolvePoolFeeRoles(connection, pool),
+      ]);
+      setFees(breakdown);
+      setRoles(poolRoles);
     } catch (e) {
       setFeeError(toUserMessage(e));
       setFees(null);
+      setRoles(null);
     }
   }, [connection, selected]);
 
@@ -80,13 +103,39 @@ export function IssuerDashboard() {
     void refreshFees();
   }, [refreshFees]);
 
-  async function onClaim() {
+  const current = launches.find((l) => l.pool === selected);
+  const quoteLabel: "SOL" | "USDC" =
+    current?.quote === "USDC" ? "USDC" : "SOL";
+
+  const walletPk = wallet.publicKey?.toBase58() ?? null;
+  const isCreator = !!(walletPk && roles && roles.creator === walletPk);
+  const isPartner = !!(walletPk && roles && roles.feeClaimer === walletPk);
+  const sameWallet = !!(roles && roles.creator === roles.feeClaimer);
+
+  const roleHint = useMemo(() => {
+    if (!walletPk) {
+      return "Connect a wallet to claim. Creator and partner feeClaimer are separate on-chain roles.";
+    }
+    if (!roles) return null;
+    if (isCreator && isPartner) {
+      return "This wallet is both creator and partner feeClaimer — you can claim either share.";
+    }
+    if (isCreator) {
+      return `Connected as creator. Partner fees go to ${shortPk(roles.feeClaimer)}.`;
+    }
+    if (isPartner) {
+      return `Connected as partner feeClaimer. Creator fees go to ${shortPk(roles.creator)}.`;
+    }
+    return `Connected wallet is neither creator (${shortPk(roles.creator)}) nor partner feeClaimer (${shortPk(roles.feeClaimer)}).`;
+  }, [walletPk, roles, isCreator, isPartner]);
+
+  async function onClaimCreator() {
     if (!wallet.publicKey) {
-      toast.error("Connect the deployer wallet to claim.");
+      toast.error("Connect the creator (deployer) wallet to claim creator fees.");
       return;
     }
     if (!selected) return;
-    setBusy(true);
+    setBusyCreator(true);
     try {
       const { tx } = await prepareClaimCreatorFees({
         connection,
@@ -95,26 +144,58 @@ export function IssuerDashboard() {
       });
       const sig = await signAndSendTransaction({ connection, wallet, tx });
       pushActivity({
-        id: `${sig}-claim`,
+        id: `${sig}-claim-creator`,
         pool: selected,
         kind: "claim",
         sig,
         wallet: wallet.publicKey.toBase58(),
         at: new Date().toISOString(),
       });
-      toast.success("Claim submitted — " + sig.slice(0, 8));
+      toast.success("Creator claim submitted — " + sig.slice(0, 8));
       window.open(explorerTxUrl(sig), "_blank");
       await refreshFees();
     } catch (e) {
       toast.error(toUserMessage(e));
     } finally {
-      setBusy(false);
+      setBusyCreator(false);
     }
   }
 
-  const current = launches.find((l) => l.pool === selected);
-  const quoteLabel: "SOL" | "USDC" =
-    current?.quote === "USDC" ? "USDC" : "SOL";
+  async function onClaimPartner() {
+    if (!wallet.publicKey) {
+      toast.error(
+        "Connect the partner feeClaimer wallet to claim partner fees.",
+      );
+      return;
+    }
+    if (!selected) return;
+    setBusyPartner(true);
+    try {
+      const { tx } = await prepareClaimPartnerFees({
+        connection,
+        feeClaimer: wallet.publicKey,
+        pool: new PublicKey(selected),
+      });
+      const sig = await signAndSendTransaction({ connection, wallet, tx });
+      pushActivity({
+        id: `${sig}-claim-partner`,
+        pool: selected,
+        kind: "claim",
+        sig,
+        wallet: wallet.publicKey.toBase58(),
+        at: new Date().toISOString(),
+      });
+      toast.success("Partner claim submitted — " + sig.slice(0, 8));
+      window.open(explorerTxUrl(sig), "_blank");
+      await refreshFees();
+    } catch (e) {
+      toast.error(toUserMessage(e));
+    } finally {
+      setBusyPartner(false);
+    }
+  }
+
+  const busy = busyCreator || busyPartner;
 
   return (
     <div className="space-y-6">
@@ -123,31 +204,40 @@ export function IssuerDashboard() {
           Issuer dashboard
         </h1>
         <p className="mt-1 text-sm text-fg-secondary">
-          Creator trading fees claimable by the deployer wallet via real{" "}
-          <code className="text-accent-soft">claimCreatorTradingFee</code>. Partner
-          / platform share accrues to the feeClaimer set at Create (not this
-          button). Amounts use the pool quote mint decimals (SOL=9, USDC=6).
+          Trading fees split on-chain between{" "}
+          <strong className="text-fg-primary">creator</strong> (
+          <code className="text-accent-soft">claimCreatorTradingFee</code>) and{" "}
+          <strong className="text-fg-primary">partner</strong> (
+          <code className="text-accent-soft">claimPartnerTradingFee</code>
+          ). Partner share accrues only to the config{" "}
+          <code className="text-accent-soft">feeClaimer</code> set at Create —
+          the deployer does not automatically receive it. Amounts use the pool
+          quote mint decimals (SOL=9, USDC=6).
         </p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {[
           {
-            k: "Unclaimed quote",
+            k: "Creator unclaimed",
             v: fees
               ? formatQuoteAmount(fees.creatorUnclaimedQuote, quoteLabel)
               : "—",
           },
           {
-            k: "Unclaimed base",
-            v: fees ? fees.creatorUnclaimedBase : "—",
+            k: "Partner unclaimed",
+            v: fees
+              ? formatQuoteAmount(fees.partnerUnclaimedQuote, quoteLabel)
+              : "—",
           },
           {
-            k: "Claimed quote",
-            v: fees ? formatQuoteAmount(fees.creatorClaimedQuote, quoteLabel) : "—",
+            k: "Creator claimed",
+            v: fees
+              ? formatQuoteAmount(fees.creatorClaimedQuote, quoteLabel)
+              : "—",
           },
           {
-            k: "Your issuances",
+            k: "Relevant launches",
             v: String(launches.length),
           },
         ].map((x) => (
@@ -161,7 +251,9 @@ export function IssuerDashboard() {
       {launches.length === 0 ? (
         <div className="ec-card flex flex-col items-center gap-3 p-12 text-center">
           <p className="text-fg-secondary">
-            No local launches yet. Create an offering to populate this dashboard.
+            No local launches for this wallet as creator or partner feeClaimer.
+            Create an offering (optionally set a partner feeClaimer) to populate
+            this dashboard.
           </p>
           <Link href="/create" className="ec-btn-primary">
             Create offering
@@ -171,30 +263,53 @@ export function IssuerDashboard() {
         <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
           <div className="ec-card p-4">
             <h2 className="mb-3 text-sm font-semibold text-fg-primary">
-              Your issuances
+              Your launches
             </h2>
             <ul className="space-y-2">
-              {launches.map((l) => (
-                <li key={l.pool}>
-                  <button
-                    type="button"
-                    onClick={() => setSelected(l.pool)}
-                    className={
-                      selected === l.pool
-                        ? "w-full rounded-input border border-accent/40 bg-accent/10 px-3 py-2 text-left text-sm"
-                        : "w-full rounded-input border border-line bg-subtle px-3 py-2 text-left text-sm hover:border-accent/30"
-                    }
-                  >
-                    <span className="font-medium text-fg-primary">
-                      ${l.ticker}
-                    </span>{" "}
-                    <span className="text-fg-muted">{l.name}</span>
-                    <div className="font-mono text-[10px] text-fg-muted">
-                      {l.pool.slice(0, 12)}…
-                    </div>
-                  </button>
-                </li>
-              ))}
+              {launches.map((l) => {
+                const asCreator = !!(
+                  walletPk &&
+                  l.creator.toLowerCase() === walletPk.toLowerCase()
+                );
+                const asPartner = !!(
+                  walletPk &&
+                  (l.feeClaimer ?? l.creator).toLowerCase() ===
+                    walletPk.toLowerCase()
+                );
+                return (
+                  <li key={l.pool}>
+                    <button
+                      type="button"
+                      onClick={() => setSelected(l.pool)}
+                      className={
+                        selected === l.pool
+                          ? "w-full rounded-input border border-accent/40 bg-accent/10 px-3 py-2 text-left text-sm"
+                          : "w-full rounded-input border border-line bg-subtle px-3 py-2 text-left text-sm hover:border-accent/30"
+                      }
+                    >
+                      <span className="font-medium text-fg-primary">
+                        ${l.ticker}
+                      </span>{" "}
+                      <span className="text-fg-muted">{l.name}</span>
+                      <div className="mt-0.5 flex flex-wrap gap-1 text-[10px]">
+                        {asCreator && (
+                          <span className="rounded bg-accent/15 px-1.5 py-0.5 text-accent">
+                            creator
+                          </span>
+                        )}
+                        {asPartner && (
+                          <span className="rounded bg-signal-ok/15 px-1.5 py-0.5 text-signal-ok">
+                            partner
+                          </span>
+                        )}
+                      </div>
+                      <div className="font-mono text-[10px] text-fg-muted">
+                        {l.pool.slice(0, 12)}…
+                      </div>
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           </div>
 
@@ -203,46 +318,200 @@ export function IssuerDashboard() {
               <h2 className="font-semibold text-fg-primary">
                 Fee claims — {current ? `$${current.ticker}` : "select pool"}
               </h2>
+              {roleHint && (
+                <p className="rounded-input border border-line bg-subtle px-3 py-2 text-xs text-fg-secondary">
+                  {roleHint}
+                </p>
+              )}
               {feeError && (
                 <p className="text-xs text-signal-warn">{feeError}</p>
               )}
-              {fees && (
-                <dl className="grid grid-cols-2 gap-2 text-xs">
+              {roles && (
+                <dl className="grid grid-cols-1 gap-1 text-[11px] sm:grid-cols-2">
                   <div>
-                    <dt className="text-fg-muted">Unclaimed quote ({quoteLabel})</dt>
-                    <dd className="font-mono text-fg-primary">
-                      {formatQuoteAmount(fees.creatorUnclaimedQuote, quoteLabel)}
+                    <dt className="text-fg-muted">On-chain creator</dt>
+                    <dd>
+                      <a
+                        href={explorerAddressUrl(roles.creator)}
+                        className="font-mono text-accent hover:underline"
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {shortPk(roles.creator, 6)}
+                      </a>
                     </dd>
                   </div>
                   <div>
-                    <dt className="text-fg-muted">Unclaimed base</dt>
-                    <dd className="font-mono text-fg-primary">
-                      {fees.creatorUnclaimedBase}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-fg-muted">Total quote fees</dt>
-                    <dd className="font-mono text-fg-primary">
-                      {formatQuoteAmount(fees.creatorTotalQuote, quoteLabel)}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-fg-muted">LP lock policy</dt>
-                    <dd className="text-fg-primary">
-                      ≥{current?.lockPct ?? 10}%
+                    <dt className="text-fg-muted">Partner feeClaimer</dt>
+                    <dd>
+                      <a
+                        href={explorerAddressUrl(roles.feeClaimer)}
+                        className="font-mono text-accent hover:underline"
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {shortPk(roles.feeClaimer, 6)}
+                      </a>
+                      {sameWallet && (
+                        <span className="ml-1 text-fg-muted">
+                          (same as creator)
+                        </span>
+                      )}
                     </dd>
                   </div>
                 </dl>
               )}
-              <div className="flex flex-wrap gap-2">
+
+              <div className="space-y-2 rounded-input border border-line bg-subtle/60 p-3">
+                <p className="text-xs font-semibold text-fg-primary">
+                  Creator share
+                </p>
+                {fees ? (
+                  <dl className="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <dt className="text-fg-muted">
+                        Unclaimed quote ({quoteLabel})
+                      </dt>
+                      <dd className="font-mono text-fg-primary">
+                        {formatQuoteAmount(
+                          fees.creatorUnclaimedQuote,
+                          quoteLabel,
+                        )}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-fg-muted">Unclaimed base</dt>
+                      <dd className="font-mono text-fg-primary">
+                        {fees.creatorUnclaimedBase}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-fg-muted">Total quote</dt>
+                      <dd className="font-mono text-fg-primary">
+                        {formatQuoteAmount(fees.creatorTotalQuote, quoteLabel)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-fg-muted">LP lock policy</dt>
+                      <dd className="text-fg-primary">
+                        ≥{current?.lockPct ?? 10}%
+                      </dd>
+                    </div>
+                  </dl>
+                ) : (
+                  <p className="text-xs text-fg-muted">
+                    {feeError
+                      ? "Could not load creator fees."
+                      : "No fee data yet — refresh after trades."}
+                  </p>
+                )}
                 <button
                   type="button"
-                  disabled={busy || !wallet.publicKey || !selected}
-                  onClick={() => void onClaim()}
+                  disabled={
+                    busy || !wallet.publicKey || !selected || !isCreator
+                  }
+                  onClick={() => void onClaimCreator()}
                   className="ec-btn-primary"
+                  title={
+                    !wallet.publicKey
+                      ? "Connect wallet"
+                      : !isCreator
+                        ? "Only the on-chain creator can claim this share"
+                        : undefined
+                  }
                 >
-                  {busy ? "Claiming…" : "Claim creator fees"}
+                  {busyCreator ? "Claiming…" : "Claim creator fees"}
                 </button>
+                {!isCreator && wallet.publicKey && roles && (
+                  <p className="text-[11px] text-fg-muted">
+                    Disabled — connect as {shortPk(roles.creator)} (creator) to
+                    claim this share.
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-2 rounded-input border border-accent/25 bg-accent/5 p-3">
+                <p className="text-xs font-semibold text-fg-primary">
+                  Partner share{" "}
+                  <span className="font-normal text-fg-muted">
+                    (feeClaimer)
+                  </span>
+                </p>
+                {fees ? (
+                  <dl className="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <dt className="text-fg-muted">
+                        Unclaimed quote ({quoteLabel})
+                      </dt>
+                      <dd className="font-mono text-fg-primary">
+                        {formatQuoteAmount(
+                          fees.partnerUnclaimedQuote,
+                          quoteLabel,
+                        )}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-fg-muted">Unclaimed base</dt>
+                      <dd className="font-mono text-fg-primary">
+                        {fees.partnerUnclaimedBase}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-fg-muted">Total quote</dt>
+                      <dd className="font-mono text-fg-primary">
+                        {formatQuoteAmount(fees.partnerTotalQuote, quoteLabel)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-fg-muted">Claimed quote</dt>
+                      <dd className="font-mono text-fg-primary">
+                        {formatQuoteAmount(
+                          fees.partnerClaimedQuote,
+                          quoteLabel,
+                        )}
+                      </dd>
+                    </div>
+                  </dl>
+                ) : (
+                  <p className="text-xs text-fg-muted">
+                    {feeError
+                      ? "Could not load partner fees."
+                      : "No fee data yet — partner share accrues as the pool trades."}
+                  </p>
+                )}
+                <button
+                  type="button"
+                  disabled={
+                    busy || !wallet.publicKey || !selected || !isPartner
+                  }
+                  onClick={() => void onClaimPartner()}
+                  className="ec-btn-primary"
+                  title={
+                    !wallet.publicKey
+                      ? "Connect wallet"
+                      : !isPartner
+                        ? "Only the on-chain feeClaimer can claim partner fees"
+                        : undefined
+                  }
+                >
+                  {busyPartner ? "Claiming…" : "Claim partner fees"}
+                </button>
+                {!isPartner && wallet.publicKey && roles && (
+                  <p className="text-[11px] text-fg-muted">
+                    Disabled — connect as {shortPk(roles.feeClaimer)}{" "}
+                    (feeClaimer) to claim the partner share. Create-time
+                    feeClaimer is authoritative on-chain.
+                  </p>
+                )}
+                {isPartner && !isCreator && (
+                  <p className="text-[11px] text-fg-muted">
+                    You are the partner feeClaimer for this pool — creator fees
+                    require the deployer wallet.
+                  </p>
+                )}
+              </div>
+
+              <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
                   className="ec-btn-secondary"
@@ -251,10 +520,7 @@ export function IssuerDashboard() {
                   Refresh
                 </button>
                 {selected && (
-                  <Link
-                    href={`/o/${selected}`}
-                    className="ec-btn-secondary"
-                  >
+                  <Link href={`/o/${selected}`} className="ec-btn-secondary">
                     View offering
                   </Link>
                 )}
@@ -286,8 +552,14 @@ export function IssuerDashboard() {
                 </a>
               </p>
               <p className="text-fg-muted">
-                Surplus / migration-fee withdraw paths exist on the SDK
-                (creatorWithdrawSurplus) — wire when surplus accrues post-grad.
+                Partner path uses real SDK{" "}
+                <code className="text-accent-soft">claimPartnerTradingFee</code>{" "}
+                /{" "}
+                <code className="text-accent-soft">
+                  claimPartnerTradingFee2
+                </code>{" "}
+                (transfer-hook pools). Devnet-ready — no mainnet funds required
+                to exercise the flow.
               </p>
             </div>
           </div>

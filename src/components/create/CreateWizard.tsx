@@ -215,6 +215,7 @@ export function CreateWizard() {
         },
         sig: lastSig,
         creator: wallet.publicKey.toBase58(),
+        feeClaimer: prepared.feeClaimer,
         createdAt: new Date().toISOString(),
         cluster: getCluster(),
         status: "raising" as const,

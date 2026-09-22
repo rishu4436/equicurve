@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { clsx } from "clsx";
 import { TradePanel } from "@/components/TradePanel";
+import { FeeClaimsCard } from "@/components/issuer/FeeClaimsCard";
 import { EligibilityGate, useEligibilityGate } from "@/components/gate/EligibilityGate";
 import { PriceHistoryChart } from "@/components/offering/PriceHistoryChart";
 import { ProgressRing } from "@/components/ui/ProgressRing";
@@ -848,6 +849,13 @@ export function OfferingDetailClient({ id, demo }: Props) {
                   Open Trade
                 </Link>
               </div>
+            )}
+            
+            {poolAddress && !illustrative && (
+              <FeeClaimsCard
+                pool={poolAddress}
+                quote={quote === "USDC" ? "USDC" : "SOL"}
+              />
             )}
             <div className="ec-card p-4 text-xs text-fg-muted">
               <p className="mb-1 font-medium text-fg-secondary">Trust mini-strip</p>

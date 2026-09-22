@@ -49,6 +49,7 @@ export function normalizeLaunchInput(
       input.feeIssuerPct != null ? Number(input.feeIssuerPct) : undefined,
     lockPct: Math.max(0, Number(input.lockPct) || 0),
     creator: (input.creator ?? "").trim(),
+    feeClaimer: input.feeClaimer?.trim() || undefined,
     createdAt: input.createdAt || now,
     cluster: input.cluster || "devnet",
     status:

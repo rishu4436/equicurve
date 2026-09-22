@@ -26,6 +26,8 @@ export type RegistryLaunch = {
   feeIssuerPct?: number;
   lockPct: number;
   creator: string;
+  /** Partner feeClaimer pubkey when known. */
+  feeClaimer?: string;
   createdAt: string; // ISO
   cluster: string;
   status: RegistryStatus;

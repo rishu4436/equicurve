@@ -36,6 +36,8 @@ export type StoredLaunch = {
   };
   sig: string;
   creator: string;
+  /** Partner / platform fee claimer (config feeClaimer). Defaults to creator when unset. */
+  feeClaimer?: string;
   createdAt: string; // ISO
   cluster: string;
   status: "raising" | "graduated" | "new";
@@ -120,6 +122,31 @@ export function launchesForWallet(wallet: string): StoredLaunch[] {
   return listLaunches().filter(
     (l) => l.creator.toLowerCase() === wallet.toLowerCase(),
   );
+}
+
+export function launchesForFeeClaimer(wallet: string): StoredLaunch[] {
+  const w = wallet.toLowerCase();
+  return listLaunches().filter((l) => {
+    const claimer = (l.feeClaimer ?? l.creator).toLowerCase();
+    return claimer === w;
+  });
+}
+
+/** Launches where wallet is creator and/or partner feeClaimer. */
+export function launchesForCreatorOrPartner(wallet: string): StoredLaunch[] {
+  const w = wallet.toLowerCase();
+  const seen = new Set<string>();
+  const out: StoredLaunch[] = [];
+  for (const l of listLaunches()) {
+    const claimer = (l.feeClaimer ?? l.creator).toLowerCase();
+    if (l.creator.toLowerCase() === w || claimer === w) {
+      if (!seen.has(l.pool)) {
+        seen.add(l.pool);
+        out.push(l);
+      }
+    }
+  }
+  return out;
 }
 
 export function clearLaunches(): void {
