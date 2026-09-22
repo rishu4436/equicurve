@@ -2,13 +2,17 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { OfferingCard } from "@/components/ui/OfferingCard";
 import {
   filterOfferings,
   type DemoOffering,
+  type Sector,
 } from "@/lib/demo/offerings";
+import type { ExploreOffering, ExploreResponse } from "@/lib/explore/types";
 import { listLaunches, type StoredLaunch } from "@/lib/local/launches";
+import { fetchExploreOfferings } from "@/lib/registry/client";
+import type { PresetId } from "@/lib/dbc/types";
 import { clsx } from "clsx";
 
 const TABS = [
@@ -24,6 +28,26 @@ function isTabId(v: string | null): v is TabId {
   return !!v && TABS.some((t) => t.id === v);
 }
 
+function isSector(v: string): v is Sector {
+  return (
+    v === "Equity" ||
+    v === "RWA" ||
+    v === "Fund" ||
+    v === "Private Co" ||
+    v === "Other"
+  );
+}
+
+function isPresetId(v: string): v is PresetId {
+  return (
+    v === "flat" ||
+    v === "exponential" ||
+    v === "long" ||
+    v === "equity" ||
+    v === "short"
+  );
+}
+
 function launchToOffering(l: StoredLaunch): DemoOffering {
   return {
     id: l.pool,
@@ -31,7 +55,7 @@ function launchToOffering(l: StoredLaunch): DemoOffering {
     ticker: l.ticker,
     sector: l.sector,
     thesis: l.thesis,
-    quote: "SOL",
+    quote: l.quote === "USDC" ? "USDC" : "SOL",
     raiseTarget: l.raiseTarget,
     raised: 0,
     presetId: l.presetId,
@@ -39,10 +63,33 @@ function launchToOffering(l: StoredLaunch): DemoOffering {
     verified: false,
     lockPct: l.lockPct,
     status: l.status,
-    volume24h: 1_000_000,
+    volume24h: 0,
     createdAt: l.createdAt,
     pool: l.pool,
     mint: l.mint,
+    illustrative: false,
+  };
+}
+
+function remoteToOffering(o: ExploreOffering): DemoOffering {
+  return {
+    id: o.pool,
+    name: o.name,
+    ticker: o.ticker,
+    sector: isSector(String(o.sector)) ? (o.sector as Sector) : "Other",
+    thesis: o.thesis,
+    quote: o.quote === "USDC" ? "USDC" : "SOL",
+    raiseTarget: o.raiseTarget,
+    raised: o.raised,
+    presetId: isPresetId(String(o.presetId)) ? (o.presetId as PresetId) : "flat",
+    feeBps: o.feeBps,
+    verified: false,
+    lockPct: o.lockPct,
+    status: o.status,
+    volume24h: o.volume24h,
+    createdAt: o.createdAt,
+    pool: o.pool,
+    mint: o.mint,
     illustrative: false,
   };
 }
@@ -55,7 +102,41 @@ function ExploreInner() {
   const [q, setQ] = useState("");
   const [sector, setSector] = useState<string>("all");
   const [local, setLocal] = useState<DemoOffering[]>([]);
+  const [remote, setRemote] = useState<DemoOffering[]>([]);
   const [showExamples, setShowExamples] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [exploreMeta, setExploreMeta] = useState<Pick<
+    ExploreResponse,
+    "label" | "warning" | "error" | "counts" | "cached" | "cacheTtlSec"
+  > | null>(null);
+
+  const loadRemote = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetchExploreOfferings();
+      setExploreMeta({
+        label: res.label,
+        warning: res.warning,
+        error: res.error,
+        counts: res.counts,
+        cached: res.cached,
+        cacheTtlSec: res.cacheTtlSec,
+      });
+      setRemote((res.offerings ?? []).map(remoteToOffering));
+    } catch (e) {
+      setExploreMeta({
+        label: "EquiCurve registry (not a full chain indexer)",
+        warning: null,
+        error: e instanceof Error ? e.message : "Failed to load discovery",
+        counts: { registry: 0, configGpa: 0, enriched: 0 },
+        cached: false,
+        cacheTtlSec: 45,
+      });
+      setRemote([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     const t = search.get("tab");
@@ -66,7 +147,8 @@ function ExploreInner() {
 
   useEffect(() => {
     setLocal(listLaunches().map(launchToOffering));
-  }, []);
+    void loadRemote();
+  }, [loadRemote]);
 
   function selectTab(id: TabId) {
     setTab(id);
@@ -85,7 +167,8 @@ function ExploreInner() {
 
   const items = useMemo(() => {
     const demo = showExamples ? filterOfferings(tab) : [];
-    let merged: DemoOffering[] = [...local, ...demo];
+    // Prefer remote (shared) over local when same pool; local fills gaps.
+    let merged: DemoOffering[] = [...remote, ...local, ...demo];
     const seen = new Set<string>();
     merged = merged.filter((o) => {
       const key = o.pool ?? o.id;
@@ -105,10 +188,18 @@ function ExploreInner() {
       merged = merged.filter(
         (o) =>
           new Date(o.createdAt).getTime() > cutoff ||
-          local.some((l) => l.id === o.id),
+          local.some((l) => l.id === o.id) ||
+          remote.some((r) => r.id === o.id),
       );
     } else {
-      merged = [...merged].sort((a, b) => b.volume24h - a.volume24h);
+      merged = [...merged].sort((a, b) => {
+        const ap = a.raiseTarget > 0 ? a.raised / a.raiseTarget : 0;
+        const bp = b.raiseTarget > 0 ? b.raised / b.raiseTarget : 0;
+        if (bp !== ap) return bp - ap;
+        return (
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+      });
     }
 
     if (sector !== "all") {
@@ -119,11 +210,20 @@ function ExploreInner() {
       merged = merged.filter(
         (o) =>
           o.name.toLowerCase().includes(s) ||
-          o.ticker.toLowerCase().includes(s),
+          o.ticker.toLowerCase().includes(s) ||
+          (o.pool ?? "").toLowerCase().includes(s),
       );
     }
     return merged;
-  }, [tab, q, sector, local, showExamples]);
+  }, [tab, q, sector, local, remote, showExamples]);
+
+  const liveCount = useMemo(() => {
+    const keys = new Set<string>();
+    for (const o of [...remote, ...local]) {
+      if (o.pool) keys.add(o.pool);
+    }
+    return keys.size;
+  }, [remote, local]);
 
   return (
     <div className="space-y-6">
@@ -133,23 +233,54 @@ function ExploreInner() {
             Explore offerings
           </h1>
           <p className="mt-1 text-sm text-fg-secondary">
-            Live launches from this browser (localStorage). No indexer — Create
-            an offering to populate the board.
-            {local.length > 0 && (
-              <span className="text-accent">
+            {exploreMeta?.label ??
+              "EquiCurve registry (not a full chain indexer)"}
+            {" · "}
+            shared discovery + this browser’s localStorage
+            {liveCount > 0 && (
+              <span className="text-accent"> · {liveCount} live</span>
+            )}
+            {exploreMeta?.counts != null && (
+              <span className="text-fg-muted">
                 {" "}
-                · {local.length} from this browser
+                · registry {exploreMeta.counts.registry}
+                {exploreMeta.counts.configGpa > 0 &&
+                  ` · config GPA ${exploreMeta.counts.configGpa}`}
               </span>
             )}
           </p>
         </div>
-        <input
-          className="ec-input max-w-xs"
-          placeholder="Search name or ticker"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            className="ec-btn-secondary text-xs"
+            disabled={loading}
+            onClick={() => void loadRemote()}
+          >
+            {loading ? "Refreshing…" : "Refresh"}
+          </button>
+          <input
+            className="ec-input max-w-xs"
+            placeholder="Search name, ticker, or pool"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+        </div>
       </div>
+
+      {loading && (
+        <p className="text-sm text-fg-muted">Loading shared discovery…</p>
+      )}
+      {exploreMeta?.warning && (
+        <p className="rounded-input border border-signal-warn/30 bg-signal-warn/5 px-3 py-2 text-xs text-signal-warn">
+          {exploreMeta.warning}
+        </p>
+      )}
+      {exploreMeta?.error && (
+        <p className="rounded-input border border-signal-danger/30 bg-signal-danger/5 px-3 py-2 text-xs text-signal-danger">
+          Discovery error: {exploreMeta.error}. Local launches still shown.
+        </p>
+      )}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-2 border-b border-line pb-3">
@@ -182,7 +313,8 @@ function ExploreInner() {
       {showExamples && (
         <p className="rounded-input border border-signal-warn/30 bg-signal-warn/5 px-3 py-2 text-xs text-signal-warn">
           Example cards are static fiction for UI layout. They have no pool or
-          mint — trade is disabled. Real markets come from Create launches.
+          mint — trade is disabled. Real markets come from Create launches
+          (registry + local).
         </p>
       )}
 
@@ -202,12 +334,12 @@ function ExploreInner() {
         ))}
       </div>
 
-      {items.length === 0 ? (
+      {!loading && items.length === 0 ? (
         <div className="ec-card flex flex-col items-center gap-3 p-12 text-center">
           <p className="text-fg-secondary">
             {showExamples
               ? "No offerings in this view."
-              : "No live launches in this browser yet."}
+              : "No shared or local launches yet."}
           </p>
           <Link href="/create" className="ec-btn-primary">
             Create an equity offering

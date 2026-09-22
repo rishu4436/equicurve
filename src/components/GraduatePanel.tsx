@@ -20,6 +20,7 @@ import {
 import type { PoolSnapshot } from "@/lib/dbc/types";
 import { toUserMessage } from "@/lib/errors";
 import { pushActivity, updateLaunch } from "@/lib/local/launches";
+import { patchLaunchRemote } from "@/lib/registry/client";
 import { signAndSendTransaction } from "@/lib/send";
 
 export function GraduatePanel({ poolAddress }: { poolAddress: string }) {
@@ -72,11 +73,13 @@ export function GraduatePanel({ poolAddress }: { poolAddress: string }) {
         setDammPool(null);
         setDammDerived(false);
       }
-      updateLaunch(poolAddress, {
-        status: "graduated",
+      const gradPatch = {
+        status: "graduated" as const,
         migrateSig: sig,
         ...(dammPoolAddress ? { dammPool: dammPoolAddress } : {}),
-      });
+      };
+      updateLaunch(poolAddress, gradPatch);
+      void patchLaunchRemote(poolAddress, gradPatch);
       pushActivity({
         id: `${sig}-migrate`,
         pool: poolAddress,

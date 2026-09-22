@@ -13,7 +13,7 @@ function toCard(l: StoredLaunch): DemoOffering {
     ticker: l.ticker,
     sector: l.sector,
     thesis: l.thesis,
-    quote: "SOL",
+    quote: l.quote === "USDC" ? "USDC" : "SOL",
     raiseTarget: l.raiseTarget,
     raised: 0,
     presetId: l.presetId,
@@ -69,7 +69,7 @@ export function HomeLocalStrip() {
               Your launches
             </h2>
             <p className="mt-1 text-sm text-fg-secondary">
-              From this browser only — no fake featured board.
+              Your browser launches — Explore also merges the shared EquiCurve registry.
             </p>
           </div>
           <Link href="/explore" className="text-sm text-accent hover:underline">

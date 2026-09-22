@@ -7,9 +7,12 @@ export function OfferingCard({ offering }: { offering: DemoOffering }) {
   const pct =
     offering.raiseTarget > 0
       ? (offering.raised / offering.raiseTarget) * 100
-      : 0;
+      : offering.raised > 0
+        ? Math.min(100, offering.raised)
+        : 0;
   const graduated = offering.status === "graduated";
   const illustrative = offering.illustrative || !offering.pool;
+  const ringValue = illustrative ? pct : pct;
 
   return (
     <Link
@@ -30,11 +33,13 @@ export function OfferingCard({ offering }: { offering: DemoOffering }) {
           <div className="text-right text-xs text-signal-grad">
             DAMM v2
             <div className="font-mono text-fg-secondary">
-              depth ${(offering.raised / 1000).toFixed(0)}k
+              {offering.raised > 0
+                ? `depth $${(offering.raised / 1000).toFixed(0)}k`
+                : "graduated"}
             </div>
           </div>
         ) : (
-          <ProgressRing value={illustrative ? pct : 0} size={48} stroke={4} />
+          <ProgressRing value={ringValue} size={48} stroke={4} />
         )}
       </div>
 
@@ -61,11 +66,17 @@ export function OfferingCard({ offering }: { offering: DemoOffering }) {
         )}
         {!graduated && !illustrative && (
           <p>
-            Target{" "}
-            <span className="font-mono text-fg-primary">
-              ${offering.raiseTarget.toLocaleString()}
-            </span>{" "}
-            · live progress on detail
+            {offering.raiseTarget > 0 ? (
+              <>
+                Progress{" "}
+                <span className="font-mono text-fg-primary">
+                  {pct.toFixed(1)}%
+                </span>{" "}
+                · target ${offering.raiseTarget.toLocaleString()}
+              </>
+            ) : (
+              <>Live progress on detail</>
+            )}
           </p>
         )}
         <p>

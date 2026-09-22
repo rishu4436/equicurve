@@ -15,6 +15,7 @@ import { CURVE_PRESETS, getPreset, MIN_LP_LOCK_PCT } from "@/lib/dbc/presets";
 import type { PresetId } from "@/lib/dbc/types";
 import { toUserMessage } from "@/lib/errors";
 import { pushActivity, upsertLaunch } from "@/lib/local/launches";
+import { registerLaunchRemote } from "@/lib/registry/client";
 import { signAndSendTransaction } from "@/lib/send";
 import { EligibilityGate, useEligibilityGate } from "@/components/gate/EligibilityGate";
 import { clsx } from "clsx";
@@ -189,7 +190,7 @@ export function CreateWizard() {
         config: prepared.configPubkey,
         sig: lastSig,
       });
-      upsertLaunch({
+      const launchRecord = {
         id: prepared.poolPubkey,
         pool: prepared.poolPubkey,
         mint: prepared.baseMintPubkey,
@@ -216,8 +217,10 @@ export function CreateWizard() {
         creator: wallet.publicKey.toBase58(),
         createdAt: new Date().toISOString(),
         cluster: getCluster(),
-        status: "raising",
-      });
+        status: "raising" as const,
+      };
+      upsertLaunch(launchRecord);
+      void registerLaunchRemote(launchRecord);
       pushActivity({
         id: `${lastSig}-launch`,
         pool: prepared.poolPubkey,

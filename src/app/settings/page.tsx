@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { getCluster, getRpcHost } from "@/lib/constants";
+import { getCluster, getRpcHost, getOptionalPoolConfigKey } from "@/lib/constants";
 import { clearEligibility } from "@/lib/local/eligibility";
 import {
   clearLocalLaunchData,
@@ -19,10 +19,18 @@ type Health = {
   error?: string | null;
 };
 
+type RegistryInfo = {
+  ok?: boolean;
+  count?: number;
+  label?: string;
+  error?: string;
+};
+
 export default function SettingsPage() {
   const [health, setHealth] = useState<Health | null>(null);
   const [launchCount, setLaunchCount] = useState(0);
   const [activityCount, setActivityCount] = useState(0);
+  const [registry, setRegistry] = useState<RegistryInfo | null>(null);
 
   const refreshLocal = useCallback(() => {
     setLaunchCount(listLaunches().length);
@@ -37,10 +45,15 @@ export default function SettingsPage() {
       .catch(() =>
         setHealth({ ok: false, error: "Health endpoint unreachable" }),
       );
+    void fetch("/api/launches")
+      .then((r) => r.json())
+      .then((j: RegistryInfo) => setRegistry(j))
+      .catch(() => setRegistry({ ok: false, error: "Registry unreachable" }));
   }, [refreshLocal]);
 
   const cluster = getCluster();
   const rpcHost = health?.rpcHost ?? getRpcHost();
+  const sharedConfig = getOptionalPoolConfigKey()?.toBase58() ?? null;
 
   return (
     <main className="mx-auto max-w-2xl space-y-6 px-4 py-8">
@@ -54,7 +67,8 @@ export default function SettingsPage() {
         </p>
         <h1 className="mt-2 text-3xl font-semibold text-fg-primary">Settings</h1>
         <p className="mt-1 text-sm text-fg-secondary">
-          Network display, RPC host (env-based), and local browser storage.
+          Network display, RPC host (env-based), discovery source, and local
+          browser storage.
         </p>
       </header>
 
@@ -96,11 +110,60 @@ export default function SettingsPage() {
 
       <section className="ec-card space-y-3 p-5">
         <h2 className="text-sm font-semibold text-fg-primary">
+          Explore discovery
+        </h2>
+        <p className="text-xs text-fg-muted">
+          <strong className="text-fg-secondary">
+            EquiCurve registry (not a full chain indexer).
+          </strong>{" "}
+          Successful Create calls{" "}
+          <code className="text-accent-soft">POST /api/launches</code>; Explore
+          reads{" "}
+          <code className="text-accent-soft">GET /api/explore</code> (registry +
+          best-effort on-chain progress, ~45s cache). Meteora’s DBC Data API
+          lists all DBC pools but cannot filter EquiCurve offerings — we do not
+          dump unlabeled meme markets onto the board. Full-program GPA is
+          avoided on public RPC.
+        </p>
+        <dl className="space-y-2 text-sm">
+          <div className="flex justify-between gap-4">
+            <dt className="text-fg-muted">Registry entries</dt>
+            <dd className="font-mono text-fg-primary">
+              {registry == null
+                ? "…"
+                : registry.error
+                  ? registry.error
+                  : String(registry.count ?? 0)}
+            </dd>
+          </div>
+          <div className="flex justify-between gap-4">
+            <dt className="text-fg-muted">Shared PoolConfig</dt>
+            <dd className="break-all font-mono text-xs text-fg-primary">
+              {sharedConfig ?? "not set (create-per-launch config)"}
+            </dd>
+          </div>
+        </dl>
+        {sharedConfig && (
+          <p className="text-xs text-fg-muted">
+            When{" "}
+            <code className="text-accent-soft">NEXT_PUBLIC_POOL_CONFIG_KEY</code>{" "}
+            is set, Explore also runs a filtered{" "}
+            <code className="text-accent-soft">getPoolsByConfig</code> GPA
+            (memcmp) as supplemental discovery.
+          </p>
+        )}
+        <Link href="/explore" className="text-sm text-accent hover:underline">
+          Open Explore →
+        </Link>
+      </section>
+
+      <section className="ec-card space-y-3 p-5">
+        <h2 className="text-sm font-semibold text-fg-primary">
           Local browser data
         </h2>
         <p className="text-xs text-fg-muted">
-          Launches and activity live in this browser only (no indexer). Clearing
-          does not affect on-chain pools.
+          Launches and activity in this browser (localStorage). Clearing does
+          not remove shared registry entries or on-chain pools.
         </p>
         <p className="font-mono text-xs text-fg-secondary">
           {launchCount} launches · {activityCount} activity rows

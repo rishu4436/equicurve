@@ -15,7 +15,7 @@ export type DemoOffering = {
   ticker: string;
   sector: Sector;
   thesis: string;
-  quote: "SOL";
+  quote: "SOL" | "USDC";
   raiseTarget: number;
   raised: number;
   presetId: PresetId;

@@ -10,7 +10,7 @@ Built for [Superteam Earn · Meteora DBC](https://superteam.fun/earn/listing/met
 
 | Surface | Reality |
 | --- | --- |
-| **Explore (default)** | Only **your localStorage launches** + empty state. No unlabeled fake live markets. |
+| **Explore (default)** | **EquiCurve registry** (`GET /api/explore`) + this browser’s localStorage, deduped by pool. No unlabeled fake live markets. |
 | **Show examples / `?demo=1`** | Static illustrative cards, badged **Illustrative · not live**. Trade disabled. |
 | **Create → Launch** | Real DBC SDK. Quote **SOL (WSOL)** default; **USDC** when a known mint exists for the cluster. Fee share, LP lock %, mint authority, optional seed buy, optional partner feeClaimer map on-chain. |
 | **Home stats** | Counts from this browser’s launches — not invented capital figures. |
@@ -25,7 +25,7 @@ Built for [Superteam Earn · Meteora DBC](https://superteam.fun/earn/listing/met
 | Route | Status |
 | --- | --- |
 | `/` Home | Equity positioning + How it works + local launch strip |
-| `/explore` | Tabs + real local launches; examples behind toggle / `?demo=1` |
+| `/explore` | Tabs + shared registry + local launches; examples behind toggle / `?demo=1` |
 | `/create` | 6-step wizard; fee / lock / mint / seed buy wired to SDK |
 | `/presets` | Short raise · Flat · Exponential · Long (+ Equity-tuned) |
 | `/o/[id]` | Historical price chart (swap txs + spot), holders, trade |
@@ -38,6 +38,8 @@ Built for [Superteam Earn · Meteora DBC](https://superteam.fun/earn/listing/met
 | `/docs` | Lifecycle docs |
 | `/api/health` | Cluster + RPC host (no secrets) + slot ping |
 | `/api/metadata/[id]` | Hosted token metadata JSON (no fake domain) |
+| `/api/launches` | Shared EquiCurve launch registry (GET / POST / PATCH) |
+| `/api/explore` | Explore discovery: registry + best-effort RPC enrich (~45s cache) |
 
 Eligibility gate (geo / risk self-attest) gates Create + first trade.
 
@@ -93,6 +95,19 @@ Health check: `GET /api/health` → `{ ok, cluster, rpcHost, slot }` (host only 
 
 (Also on `/trust`.)
 
+## Explore discovery model
+
+| Piece | Role |
+| --- | --- |
+| **EquiCurve registry** | On successful Create, client `POST /api/launches` stores pool/mint/config/name under `data/launches/registry.json` on this deployment. Honest label: *not a full chain indexer*. |
+| **`GET /api/explore`** | Returns registry offerings; best-effort on-chain progress via DBC SDK (`getPool` + curve progress helpers), capped + **~45s in-memory cache** to protect RPC. |
+| **localStorage** | Still kept so a single browser works offline from the registry; Explore merges and dedupes by pool. |
+| **Shared PoolConfig GPA** | If `NEXT_PUBLIC_POOL_CONFIG_KEY` is set, supplemental `getPoolsByConfig` (memcmp filter) — not a full-program scan. |
+| **Meteora DBC Data API** | `https://dbc.datapi.meteora.ag/pools` exists and indexes ~all DBC pools, but **cannot filter EquiCurve-created** offerings. We do **not** dump that feed onto Explore (would be unlabeled meme markets). |
+| **Show examples** | Separate illustrative toggle / `?demo=1` — never mixed in as live. |
+
+**Limits:** registry file is per-deployment filesystem (ephemeral on many serverless hosts); public RPC may rate-limit enrichment; never invents pools.
+
 ## Known limits
 
 - USDC quote requires the known Circle mint on the active cluster (devnet/mainnet); testnet has none
@@ -102,7 +117,7 @@ Health check: `GET /api/health` → `{ ok, cluster, rpcHost, slot }` (host only 
 - Price chart: swap-implied history from recent pool txs + live spot; dashed overlay is curve shape (not history). Thin history until enough swaps exist; no indexer / no oracle
 - Holders list is mint supply + creator ATA + `getTokenLargestAccounts` (no full indexer)
 - Activity mixes RPC `getSignaturesForAddress` with browser-local rows
-- Explore has no global indexer — browser-local launches only
+- Explore uses an **EquiCurve registry** (not a full chain indexer) plus localStorage; optional filtered `getPoolsByConfig` when `NEXT_PUBLIC_POOL_CONFIG_KEY` is set
 - No mainnet traction / filmed submit assets yet
 
 ## Stack
