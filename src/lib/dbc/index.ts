@@ -1,4 +1,5 @@
 export * from "./client";
+export * from "./claim";
 export * from "./create";
 export * from "./migrate";
 export * from "./presets";

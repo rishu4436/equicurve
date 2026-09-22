@@ -50,3 +50,17 @@ body {
     @apply inline-flex items-center rounded-pill border border-line bg-subtle px-2.5 py-0.5 text-xs text-fg-secondary;
   }
 }
+
+@keyframes ec-grad-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(45, 212, 191, 0.15);
+  }
+  50% {
+    box-shadow: 0 0 48px 4px rgba(52, 211, 153, 0.25);
+  }
+}
+
+.ec-grad-morph {
+  animation: ec-grad-pulse 1.2s ease-in-out infinite;
+}

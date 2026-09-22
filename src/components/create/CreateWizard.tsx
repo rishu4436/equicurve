@@ -11,7 +11,9 @@ import { prepareLaunchTransaction } from "@/lib/dbc/create";
 import { CURVE_PRESETS, getPreset } from "@/lib/dbc/presets";
 import type { PresetId } from "@/lib/dbc/types";
 import { toUserMessage } from "@/lib/errors";
+import { pushActivity, upsertLaunch } from "@/lib/local/launches";
 import { signAndSendTransaction } from "@/lib/send";
+import { EligibilityGate, useEligibilityGate } from "@/components/gate/EligibilityGate";
 import { clsx } from "clsx";
 import { OfferingPreviewCard } from "./OfferingPreviewCard";
 import {
@@ -58,6 +60,7 @@ export function CreateWizard() {
     config: string;
     sig: string;
   } | null>(null);
+  const eligibility = useEligibilityGate();
 
   const idx = stepIndex(step);
 
@@ -81,6 +84,9 @@ export function CreateWizard() {
   function onContinue() {
     if (!canContinue(step, state)) {
       toast.error("Complete required fields before continuing.");
+      return;
+    }
+    if (!eligibility.ok && !eligibility.ensure()) {
       return;
     }
     if (idx >= WIZARD_STEPS.length - 1) return;
@@ -123,6 +129,35 @@ export function CreateWizard() {
         config: prepared.configPubkey,
         sig,
       });
+      upsertLaunch({
+        id: prepared.poolPubkey,
+        pool: prepared.poolPubkey,
+        mint: prepared.baseMintPubkey,
+        config: prepared.configPubkey,
+        name: state.name,
+        ticker: state.ticker,
+        thesis: state.thesis,
+        sector: state.sector,
+        quote: state.quote,
+        raiseTarget: state.raiseTarget,
+        presetId: state.presetId,
+        feeBps: state.totalTradingFeeBps,
+        lockPct: state.lpLockPct,
+        sig,
+        creator: wallet.publicKey.toBase58(),
+        createdAt: new Date().toISOString(),
+        cluster: getCluster(),
+        status: "raising",
+      });
+      pushActivity({
+        id: `${sig}-launch`,
+        pool: prepared.poolPubkey,
+        mint: prepared.baseMintPubkey,
+        kind: "launch",
+        sig,
+        wallet: wallet.publicKey.toBase58(),
+        at: new Date().toISOString(),
+      });
       toast.success("Offering live on curve");
     } catch (err) {
       const msg = toUserMessage(err);
@@ -134,6 +169,10 @@ export function CreateWizard() {
   }
 
   return (
+    <EligibilityGate
+      requireForAction={eligibility.needGate}
+      onAccepted={eligibility.onAccepted}
+    >
     <div className="space-y-6">
       {/* Stepper */}
       <div className="sticky top-16 z-30 -mx-4 border-b border-line bg-base/95 px-4 py-3 backdrop-blur md:top-[4.5rem]">
@@ -224,6 +263,7 @@ export function CreateWizard() {
         </div>
       )}
     </div>
+    </EligibilityGate>
   );
 }
 

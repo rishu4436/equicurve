@@ -12,7 +12,7 @@ export function OfferingCard({ offering }: { offering: DemoOffering }) {
 
   return (
     <Link
-      href={`/o/${offering.id}`}
+      href={`/o/${offering.pool ?? offering.id}`}
       className="ec-card group flex flex-col gap-4 p-4 transition hover:border-accent/40"
     >
       <div className="flex items-start justify-between gap-3">

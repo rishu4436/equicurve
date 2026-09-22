@@ -65,6 +65,18 @@ export function AppHeader() {
         </div>
         <div className="flex items-center gap-3">
           <Link
+            href="/portfolio"
+            className="hidden text-sm text-fg-secondary transition hover:text-fg-primary lg:inline"
+          >
+            Portfolio
+          </Link>
+          <Link
+            href="/issuer"
+            className="hidden text-sm text-fg-secondary transition hover:text-fg-primary lg:inline"
+          >
+            Issuer
+          </Link>
+          <Link
             href="/docs"
             className="hidden text-sm text-fg-secondary transition hover:text-fg-primary sm:inline"
           >

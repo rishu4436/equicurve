@@ -1,9 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { OfferingCard } from "@/components/ui/OfferingCard";
-import { filterOfferings } from "@/lib/demo/offerings";
+import {
+  filterOfferings,
+  type DemoOffering,
+} from "@/lib/demo/offerings";
+import { listLaunches, type StoredLaunch } from "@/lib/local/launches";
 import { clsx } from "clsx";
 
 const TABS = [
@@ -15,26 +19,76 @@ const TABS = [
 
 type TabId = (typeof TABS)[number]["id"];
 
+function launchToOffering(l: StoredLaunch): DemoOffering {
+  return {
+    id: l.pool,
+    name: l.name,
+    ticker: l.ticker,
+    sector: l.sector,
+    thesis: l.thesis,
+    quote: l.quote,
+    raiseTarget: l.raiseTarget,
+    raised: 0,
+    presetId: l.presetId,
+    feeBps: l.feeBps,
+    verified: false,
+    lockPct: l.lockPct,
+    status: l.status,
+    volume24h: 1_000_000, // surface local launches at top of trending
+    createdAt: l.createdAt,
+    pool: l.pool,
+    mint: l.mint,
+  };
+}
+
 export default function ExplorePage() {
   const [tab, setTab] = useState<TabId>("trending");
   const [q, setQ] = useState("");
   const [sector, setSector] = useState<string>("all");
+  const [local, setLocal] = useState<DemoOffering[]>([]);
+
+  useEffect(() => {
+    setLocal(listLaunches().map(launchToOffering));
+  }, []);
 
   const items = useMemo(() => {
-    let list = filterOfferings(tab);
+    const demo = filterOfferings(tab);
+    let merged: DemoOffering[] = [...local, ...demo];
+    // de-dupe by id/pool
+    const seen = new Set<string>();
+    merged = merged.filter((o) => {
+      const key = o.pool ?? o.id;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    if (tab === "raising") {
+      merged = merged.filter((o) => o.status === "raising" || o.status === "new");
+    } else if (tab === "graduated") {
+      merged = merged.filter((o) => o.status === "graduated");
+    } else if (tab === "new") {
+      const cutoff = Date.now() - 48 * 60 * 60 * 1000;
+      merged = merged.filter(
+        (o) => new Date(o.createdAt).getTime() > cutoff || local.some((l) => l.id === o.id),
+      );
+    } else {
+      merged = [...merged].sort((a, b) => b.volume24h - a.volume24h);
+    }
+
     if (sector !== "all") {
-      list = list.filter((o) => o.sector === sector);
+      merged = merged.filter((o) => o.sector === sector);
     }
     if (q.trim()) {
       const s = q.toLowerCase();
-      list = list.filter(
+      merged = merged.filter(
         (o) =>
           o.name.toLowerCase().includes(s) ||
           o.ticker.toLowerCase().includes(s),
       );
     }
-    return list;
-  }, [tab, q, sector]);
+    return merged;
+  }, [tab, q, sector, local]);
 
   return (
     <div className="space-y-6">
@@ -44,8 +98,14 @@ export default function ExplorePage() {
             Explore offerings
           </h1>
           <p className="mt-1 text-sm text-fg-secondary">
-            Equity / RWA discovery without casino chrome. Progress from real
-            raise %, not HOT PnL tickers.
+            Equity / RWA discovery without casino chrome. Local Create launches
+            appear here for the demo path (no indexer).
+            {local.length > 0 && (
+              <span className="text-accent">
+                {" "}
+                · {local.length} from this browser
+              </span>
+            )}
           </p>
         </div>
         <input
@@ -104,6 +164,7 @@ export default function ExplorePage() {
           ))}
         </div>
       )}
+
     </div>
   );
 }
