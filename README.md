@@ -12,7 +12,7 @@ Built for [Superteam Earn · Meteora DBC](https://superteam.fun/earn/listing/met
 | --- | --- |
 | **Explore (default)** | Only **your localStorage launches** + empty state. No unlabeled fake live markets. |
 | **Show examples / `?demo=1`** | Static illustrative cards, badged **Illustrative · not live**. Trade disabled. |
-| **Create → Launch** | Real DBC SDK. Quote is **SOL (WSOL) only**. Fee share, LP lock %, mint authority, optional seed buy map on-chain. |
+| **Create → Launch** | Real DBC SDK. Quote **SOL (WSOL)** default; **USDC** when a known mint exists for the cluster. Fee share, LP lock %, mint authority, optional seed buy, optional partner feeClaimer map on-chain. |
 | **Home stats** | Counts from this browser’s launches — not invented capital figures. |
 | **Docs checklist** | Issuer attestation stored locally — not an upload vault. |
 | **Token-2022 hooks** | Not in create path (Open SPL only; UI says coming soon). |
@@ -33,8 +33,10 @@ Built for [Superteam Earn · Meteora DBC](https://superteam.fun/earn/listing/met
 | `/portfolio` | Local activity / positions |
 | `/issuer` | Fee claim over real claim SDK paths |
 | `/trust` | Program IDs + copy aligned to what Create actually sets |
+| `/settings` | Cluster, RPC host (env), clear local storage |
 | `/docs` | Lifecycle docs |
 | `/api/health` | Cluster + RPC host (no secrets) + slot ping |
+| `/api/metadata/[id]` | Hosted token metadata JSON (no fake domain) |
 
 Eligibility gate (geo / risk self-attest) gates Create + first trade.
 
@@ -42,7 +44,7 @@ Eligibility gate (geo / risk self-attest) gates Create + first trade.
 
 | Wizard control | SDK / config field |
 | --- | --- |
-| Quote | Always `WSOL` (SOL-only MVP) |
+| Quote | `WSOL` default; USDC mint when selected & known for cluster |
 | Issuer fee % | `creatorTradingFeePercentage` (partner gets remainder) |
 | LP lock % | `partnerPermanentLockedLiquidityPercentage` (≥10) |
 | Mint renounce / retain | `TokenAuthorityOption.CreatorUpdateAuthority` / `CreatorUpdateAndMintAuthority` |
@@ -91,11 +93,13 @@ Health check: `GET /api/health` → `{ ok, cluster, rpcHost, slot }` (host only 
 
 ## Known limits
 
-- No USDC quote path yet (SOL/WSOL only)
+- USDC quote requires the known Circle mint on the active cluster (devnet/mainnet); testnet has none
+- Seed buy in USDC needs a funded USDC ATA
 - No Token-2022 transfer-hook create
-- No holder indexer / historical price series (progress chart uses on-chain quote %)
+- Price chart is an approximate bonding path from quote progress — not a historical series
+- Holders list is mint supply + creator ATA + `getTokenLargestAccounts` (no full indexer)
+- Activity mixes RPC `getSignaturesForAddress` with browser-local rows
 - Explore has no global indexer — browser-local launches only
-- Partner fee claimer is the deployer wallet in this MVP
 - No mainnet traction / filmed submit assets yet
 
 ## Stack

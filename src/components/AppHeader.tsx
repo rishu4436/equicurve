@@ -11,6 +11,7 @@ const NAV = [
   { href: "/create", label: "Create" },
   { href: "/presets", label: "Presets" },
   { href: "/trust", label: "Trust" },
+  { href: "/settings", label: "Settings" },
 ];
 
 export function AppHeader() {

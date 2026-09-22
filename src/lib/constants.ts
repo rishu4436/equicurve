@@ -10,6 +10,51 @@ export const DBC_PROGRAM_ID = DYNAMIC_BONDING_CURVE_PROGRAM_ID;
 export const DAMM_V2_PROGRAM = DAMM_V2_PROGRAM_ID;
 export const WSOL_MINT = NATIVE_MINT;
 
+/** Circle USDC (mainnet). */
+export const USDC_MINT_MAINNET = new PublicKey(
+  "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+);
+/** Circle / faucet USDC (devnet). */
+export const USDC_MINT_DEVNET = new PublicKey(
+  "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+);
+
+export type QuoteLabel = "SOL" | "USDC";
+
+/** Known USDC mint for the active cluster, or null if none. */
+export function getUsdcMint(): PublicKey | null {
+  const cluster = getCluster();
+  if (cluster === "mainnet-beta") return USDC_MINT_MAINNET;
+  if (cluster === "devnet") return USDC_MINT_DEVNET;
+  return null;
+}
+
+export function quoteLabelForMint(mint: PublicKey | string): QuoteLabel {
+  const s = typeof mint === "string" ? mint : mint.toBase58();
+  if (s === WSOL_MINT.toBase58()) return "SOL";
+  if (
+    s === USDC_MINT_MAINNET.toBase58() ||
+    s === USDC_MINT_DEVNET.toBase58()
+  ) {
+    return "USDC";
+  }
+  return "SOL";
+}
+
+export function quoteDecimalsForMint(mint: PublicKey | string): number {
+  return quoteLabelForMint(mint) === "USDC" ? 6 : 9;
+}
+
+export function isPlaceholderMetadataUri(uri: string): boolean {
+  const u = uri.trim().toLowerCase();
+  if (!u) return true;
+  // Old create default pointed at a non-existent product domain.
+  return (
+    u.includes("equicurve.dev") ||
+    (u.includes("://") && u.endsWith("/metadata.json") && !u.startsWith("data:") && !u.includes("/api/metadata/"))
+  );
+}
+
 export const DEFAULT_DAMM_V2_CONFIG =
   DAMM_V2_MIGRATION_FEE_ADDRESS?.[2] ??
   new PublicKey("Hv8Lmzmnju6m7kcokVKvwqz7QPmdX9XfKjJsXz8RXcjp");

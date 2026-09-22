@@ -177,6 +177,8 @@ export type BuildPresetOverrides = {
   mintRenounce?: boolean;
   /** When true, enables first-swap min fee on the fee config. */
   antiSniper?: boolean;
+  /** Quote token decimals (9 = SOL/WSOL, 6 = USDC). */
+  quoteDecimals?: 6 | 9;
 };
 
 /**
@@ -212,7 +214,8 @@ export function buildPresetConfig(
     token: {
       tokenType: TokenType.SPLToken,
       tokenBaseDecimal: TokenDecimal.NINE,
-      tokenQuoteDecimal: TokenDecimal.NINE,
+      tokenQuoteDecimal:
+        opts.quoteDecimals === 6 ? TokenDecimal.SIX : TokenDecimal.NINE,
       tokenAuthorityOption,
       totalTokenSupply: opts.totalTokenSupply ?? 1_000_000_000,
       leftover: opts.leftover ?? 0,

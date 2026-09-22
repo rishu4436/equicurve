@@ -50,11 +50,24 @@ export async function fetchPoolSnapshot(
       (virtualPool.raw as { isMigrated?: number | boolean }).isMigrated,
   );
 
+  let quoteMint = WSOL_MINT;
+  try {
+    const configAccount = await client.state.getPoolConfig(virtualPool.config);
+    const raw = (configAccount as { quoteMint?: PublicKey | string } | null)
+      ?.quoteMint;
+    if (raw) {
+      quoteMint =
+        typeof raw === "string" ? new PublicKey(raw) : new PublicKey(raw);
+    }
+  } catch {
+    /* keep WSOL fallback */
+  }
+
   return {
     pool: pool.toBase58(),
     config: virtualPool.config.toBase58(),
     baseMint: virtualPool.baseMint.toBase58(),
-    quoteMint: WSOL_MINT.toBase58(),
+    quoteMint: quoteMint.toBase58(),
     creator: virtualPool.creator.toBase58(),
     quoteProgress,
     baseProgress,
@@ -134,7 +147,7 @@ export async function prepareDammV2Migration(args: {
   const dammPoolAddress = tryDeriveDammV2PoolAddress({
     dammConfig,
     baseMint,
-    quoteMint: WSOL_MINT,
+    quoteMint: new PublicKey(snapshot.quoteMint),
   });
 
   return {

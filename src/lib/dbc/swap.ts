@@ -4,6 +4,7 @@ import BN from "bn.js";
 import { EquiCurveError } from "@/lib/errors";
 import { getDbcClient } from "./client";
 import { normalizePoolAccount } from "./poolAccount";
+import { quoteDecimalsForMint } from "@/lib/constants";
 
 export type SwapDirection = "buy" | "sell";
 
@@ -58,7 +59,14 @@ export async function quoteAndBuildSwap(args: {
     throw new EquiCurveError("Pool config account missing.", "SDK");
   }
 
-  const amountIn = new BN(Math.round(amount * 10 ** decimals));
+    const quoteMintPk =
+    (config as { quoteMint?: PublicKey }).quoteMint ??
+    (normalized as { quoteMint?: PublicKey }).quoteMint;
+  const resolvedDecimals = quoteMintPk
+    ? quoteDecimalsForMint(quoteMintPk)
+    : decimals;
+
+const amountIn = new BN(Math.round(amount * 10 ** resolvedDecimals));
   const currentPoint =
     Number((config as { activationType?: number }).activationType) === 0
       ? new BN(await connection.getSlot("confirmed"))

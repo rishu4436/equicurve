@@ -8,6 +8,9 @@ import { toast } from "sonner";
 import { CurveMiniViz } from "@/components/ui/CurveMiniViz";
 import { explorerAddressUrl, explorerTxUrl, getCluster } from "@/lib/constants";
 import { prepareLaunchTransaction } from "@/lib/dbc/create";
+import { getUsdcMint } from "@/lib/constants";
+import { resolveMetadataUri } from "@/lib/metadata/client";
+import { Keypair } from "@solana/web3.js";
 import { CURVE_PRESETS, getPreset, MIN_LP_LOCK_PCT } from "@/lib/dbc/presets";
 import type { PresetId } from "@/lib/dbc/types";
 import { toUserMessage } from "@/lib/errors";
@@ -110,14 +113,26 @@ export function CreateWizard() {
     setResult(null);
     setLaunchLog(["Preparing DBC createConfigAndPool (SOL quote)…"]);
     try {
-      const { prepared, transactions, signersPerTx } =
+      const launchKeypairs = {
+        config: Keypair.generate(),
+        baseMint: Keypair.generate(),
+      };
+      const metadataUri = await resolveMetadataUri(state.uri, {
+        id: launchKeypairs.baseMint.publicKey.toBase58(),
+        name: state.name,
+        symbol: state.ticker,
+        description: state.thesis,
+        website: state.website,
+      });
+      const { prepared, transactions, signersPerTx, keypairs } =
         await prepareLaunchTransaction({
           connection,
           payer: wallet.publicKey,
+          keypairs: launchKeypairs,
           input: {
             name: state.name,
             symbol: state.ticker,
-            uri: state.uri,
+            uri: metadataUri,
             presetId: state.presetId,
             totalSupply: state.totalSupply,
             creatorTradingFeePercentage: state.feeIssuer,
@@ -125,17 +140,19 @@ export function CreateWizard() {
             mintRenounce: state.mintRenounce,
             seedBuySol: state.seedBuy,
             antiSniper: state.antiSniper,
+            quoteLabel: state.quote,
+            feeClaimer: state.feeClaimer.trim() || undefined,
           },
         });
       setLaunchLog((l) => [
         ...l,
         `Mode: ${prepared.mode}`,
-        `Quote: SOL (WSOL)`,
+        `Quote: ${prepared.quoteLabel}`,
         `Creator fee share: ${prepared.creatorTradingFeePercentage}%`,
         `Partner LP lock: ${prepared.lpLockPct}%`,
         `Mint: ${prepared.mintRenounce ? "renounced (no mint auth)" : "retained"}`,
         prepared.seedBuySol > 0
-          ? `Seed buy: ${prepared.seedBuySol} SOL (in create TX)`
+          ? `Seed buy: ${prepared.seedBuySol} ${prepared.quoteLabel} (in create TX)`
           : "Seed buy: none",
         `Config: ${prepared.configPubkey}`,
         `Mint: ${prepared.baseMintPubkey}`,
@@ -174,7 +191,7 @@ export function CreateWizard() {
         ticker: state.ticker,
         thesis: state.thesis,
         sector: state.sector,
-        quote: "SOL",
+        quote: prepared.quoteLabel,
         raiseTarget: state.raiseTarget,
         presetId: state.presetId,
         feeBps: 0,
@@ -396,6 +413,20 @@ function StepBasics({
           placeholder="https://"
         />
       </label>
+      <label className="block space-y-1.5">
+        <span className="ec-label">Metadata URI (optional override)</span>
+        <input
+          className="ec-input font-mono text-xs"
+          value={state.uri}
+          onChange={(e) => patch({ uri: e.target.value })}
+          placeholder="Leave blank to use /api/metadata/[mint]"
+        />
+        <p className="text-xs text-fg-muted">
+          Blank → EquiCurve hosts JSON at{" "}
+          <code className="text-accent-soft">/api/metadata/[id]</code>. Custom
+          URI overrides (no fake equicurve.dev placeholder).
+        </p>
+      </label>
     </section>
   );
 }
@@ -433,18 +464,41 @@ function StepOffering({
         </label>
         <fieldset className="space-y-2">
           <legend className="ec-label">Quote asset</legend>
-          <p className="rounded-input border border-line bg-subtle px-3 py-2 text-sm text-fg-primary">
-            <strong>SOL (WSOL)</strong> — only quote mint wired on-chain today.
-          </p>
+          <div className="flex flex-wrap gap-2">
+            {(["SOL", "USDC"] as const).map((q) => {
+              const usdcOk = !!getUsdcMint();
+              const disabled = q === "USDC" && !usdcOk;
+              return (
+                <button
+                  key={q}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => patch({ quote: q })}
+                  className={
+                    state.quote === q
+                      ? "rounded-pill border border-accent/50 bg-accent/15 px-3 py-1.5 text-sm text-accent"
+                      : "rounded-pill border border-line bg-subtle px-3 py-1.5 text-sm text-fg-secondary disabled:opacity-40"
+                  }
+                >
+                  {q === "SOL" ? "SOL (WSOL)" : "USDC"}
+                </button>
+              );
+            })}
+          </div>
           <p className="text-xs text-fg-muted">
-            USDC quote is not available in this MVP. Soft raise target is a
-            mental model; on-chain graduation uses the selected curve&apos;s
-            migration market cap (in SOL quote units).
+            {state.quote === "USDC"
+              ? "USDC is the on-chain quote mint for this launch. Seed buy amounts are in USDC. Soft raise target stays display-only."
+              : "SOL (WSOL) is the default on-chain quote mint. Soft raise target is display-only; graduation uses the curve migration market cap."}
+            {!getUsdcMint() && (
+              <> USDC is unavailable on this cluster (no known mint).</>
+            )}
           </p>
         </fieldset>
+
+        
         <label className="block space-y-1.5">
           <span className="ec-label">
-            Seed buy at launch (SOL — wired into create TX when &gt; 0)
+            Seed buy at launch ({state.quote} — wired into create TX when &gt; 0)
           </span>
           <input
             type="number"
@@ -661,9 +715,23 @@ function StepFees({
           />
         </label>
         <p className="text-xs text-fg-muted">
-          Partner share accrues to the deployer’s wallet as feeClaimer in this
-          MVP (same wallet as creator). A separate platform claimer pubkey can
-          be added later.
+          Partner share accrues to feeClaimer. Default: deployer wallet.
+          Optional advanced override below.
+        <label className="block space-y-1.5">
+          <span className="ec-label">
+            Partner fee claimer (optional advanced)
+          </span>
+          <input
+            className="ec-input font-mono text-xs"
+            placeholder="Leave blank to use your wallet"
+            value={state.feeClaimer}
+            onChange={(e) => patch({ feeClaimer: e.target.value.trim() })}
+          />
+          <p className="text-xs text-fg-muted">
+            SDK feeClaimer pubkey. Blank = connected wallet receives partner
+            remainder.
+          </p>
+        </label>
         </p>
       </div>
       <div className="ec-card space-y-3 p-5">
@@ -747,7 +815,7 @@ function StepReview({
         <h1 className="text-2xl font-semibold text-fg-primary">Review</h1>
         <p className="mt-1 text-sm text-fg-secondary">
           Confirm params before signing on {getCluster()}. Bonding price ≠ NAV.
-          Quote is SOL.
+          Quote is {state.quote}.
         </p>
       </header>
       <div className="ec-card divide-y divide-line text-sm">
@@ -761,7 +829,7 @@ function StepReview({
             [
               "offering",
               "Offering",
-              `Target $${state.raiseTarget.toLocaleString()} · quote SOL · seed ${state.seedBuy || 0} SOL`,
+              `Target $${state.raiseTarget.toLocaleString()} · quote ${state.quote} · seed ${state.seedBuy || 0} ${state.quote}`,
             ],
             [
               "curve",
@@ -822,7 +890,7 @@ function StepReview({
       </div>
       <div className="rounded-card border border-line bg-subtle/50 p-4 font-mono text-xs text-fg-muted">
         <p>Network: {getCluster()}</p>
-        <p>Quote mint: WSOL</p>
+        <p>Quote: {state.quote}</p>
         <p>Migration: DAMM v2</p>
         <p>
           Preset MC: {preset.initialMarketCap} → {preset.migrationMarketCap}

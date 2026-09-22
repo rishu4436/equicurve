@@ -18,7 +18,7 @@ export type StoredLaunch = {
   ticker: string;
   thesis: string;
   sector: Sector;
-  quote: "SOL";
+  quote: "SOL" | "USDC";
   raiseTarget: number;
   presetId: PresetId;
   /** Legacy display field; prefer feeIssuerPct. */
@@ -120,3 +120,19 @@ export function launchesForWallet(wallet: string): StoredLaunch[] {
     (l) => l.creator.toLowerCase() === wallet.toLowerCase(),
   );
 }
+
+export function clearLaunches(): void {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(LAUNCHES_KEY);
+}
+
+export function clearActivity(): void {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(ACTIVITY_KEY);
+}
+
+export function clearLocalLaunchData(): void {
+  clearLaunches();
+  clearActivity();
+}
+

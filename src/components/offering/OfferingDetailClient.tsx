@@ -16,6 +16,7 @@ import {
   explorerAddressUrl,
   explorerTxUrl,
   getDammV2ConfigKey,
+  quoteLabelForMint,
 } from "@/lib/constants";
 import { fetchPoolSnapshot } from "@/lib/dbc/migrate";
 import type { PoolSnapshot } from "@/lib/dbc/types";
@@ -46,7 +47,14 @@ type HolderHint = {
   supply: string | null;
   creatorAta: string | null;
   creatorBalance: string | null;
+  largest: { address: string; amount: string }[];
   error: string | null;
+};
+
+type RpcActivity = {
+  signature: string;
+  slot: number;
+  blockTime: number | null;
 };
 
 function short(a: string, n = 4) {
@@ -84,14 +92,14 @@ function ProgressChart({ progress }: { progress: number }) {
         />
         <circle cx={nowX} cy={nowY} r="4" fill="#E8C547" />
         <text x="22" y="16" fill="#6B7A8F" fontSize="10">
-          Quote progress path
+          Approx. bonding path
         </text>
         <text x={w - 70} y="16" fill="#A78BFA" fontSize="10">
           {(p * 100).toFixed(1)}%
         </text>
       </svg>
       <p className="text-[10px] text-fg-muted">
-        Chart from on-chain quote progress (not a historical price series).
+        Approximate path from on-chain quote progress + bonding-curve shape — not a historical price series or oracle.
       </p>
     </div>
   );
@@ -102,12 +110,15 @@ export function OfferingDetailClient({ id, demo }: Props) {
   const [tab, setTab] = useState<TabId>("Overview");
   const [launch, setLaunch] = useState<StoredLaunch | null>(null);
   const [activity, setActivity] = useState<StoredActivity[]>([]);
+  const [rpcActivity, setRpcActivity] = useState<RpcActivity[]>([]);
+  const [rpcActivityError, setRpcActivityError] = useState<string | null>(null);
   const [snapshot, setSnapshot] = useState<PoolSnapshot | null>(null);
   const [snapError, setSnapError] = useState<string | null>(null);
   const [holders, setHolders] = useState<HolderHint>({
     supply: null,
     creatorAta: null,
     creatorBalance: null,
+    largest: [],
     error: null,
   });
   const eligibility = useEligibilityGate();
@@ -152,6 +163,44 @@ export function OfferingDetailClient({ id, demo }: Props) {
 
   useEffect(() => {
     let cancelled = false;
+    async function loadRpcActivity() {
+      if (!poolAddress) {
+        setRpcActivity([]);
+        return;
+      }
+      try {
+        setRpcActivityError(null);
+        const sigs = await connection.getSignaturesForAddress(
+          new PublicKey(poolAddress),
+          { limit: 15 },
+        );
+        if (!cancelled) {
+          setRpcActivity(
+            sigs.map((s) => ({
+              signature: s.signature,
+              slot: s.slot,
+              blockTime: s.blockTime ?? null,
+            })),
+          );
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setRpcActivity([]);
+          setRpcActivityError(
+            e instanceof Error ? e.message : "Signature fetch failed",
+          );
+        }
+      }
+    }
+    void loadRpcActivity();
+    return () => {
+      cancelled = true;
+    };
+  }, [connection, poolAddress]);
+
+
+  useEffect(() => {
+    let cancelled = false;
     async function loadHolders() {
       const mintStr = snapshot?.baseMint ?? launch?.mint ?? demo?.mint;
       const creatorStr = snapshot?.creator ?? launch?.creator;
@@ -160,6 +209,7 @@ export function OfferingDetailClient({ id, demo }: Props) {
           supply: null,
           creatorAta: null,
           creatorBalance: null,
+          largest: [],
           error: null,
         });
         return;
@@ -182,11 +232,22 @@ export function OfferingDetailClient({ id, demo }: Props) {
             creatorBalance = "0 (no ATA yet)";
           }
         }
+        let largest: { address: string; amount: string }[] = [];
+        try {
+          const big = await connection.getTokenLargestAccounts(mint);
+          largest = big.value.slice(0, 8).map((v) => ({
+            address: v.address.toBase58(),
+            amount: v.uiAmountString ?? v.amount,
+          }));
+        } catch {
+          /* optional — some RPCs rate-limit this */
+        }
         if (!cancelled) {
           setHolders({
             supply: `${supply.value.uiAmountString ?? supply.value.amount} (decimals ${supply.value.decimals})`,
             creatorAta,
             creatorBalance,
+            largest,
             error: null,
           });
         }
@@ -196,6 +257,7 @@ export function OfferingDetailClient({ id, demo }: Props) {
             supply: null,
             creatorAta: null,
             creatorBalance: null,
+            largest: [],
             error: e instanceof Error ? e.message : "Holder fetch failed",
           });
         }
@@ -214,7 +276,9 @@ export function OfferingDetailClient({ id, demo }: Props) {
     demo?.thesis ??
     "On-chain pool opened via EquiCurve Create. Trade on-curve; graduate to DAMM v2 when ready.";
   const sector = launch?.sector ?? demo?.sector ?? "Other";
-  const quote = launch?.quote ?? demo?.quote ?? "SOL";
+  const quote = snapshot
+    ? quoteLabelForMint(snapshot.quoteMint)
+    : launch?.quote ?? demo?.quote ?? "SOL";
   const lockPct = launch?.lockPct ?? demo?.lockPct ?? 10;
   const presetId = launch?.presetId ?? demo?.presetId ?? "short";
   const raiseTarget = launch?.raiseTarget ?? demo?.raiseTarget ?? 0;
@@ -586,6 +650,29 @@ export function OfferingDetailClient({ id, demo }: Props) {
                         )}
                       </dl>
                     )}
+                    {holders.largest.length > 0 && (
+                      <div className="space-y-2 pt-2">
+                        <p className="text-xs font-medium text-fg-primary">
+                          Largest accounts (RPC)
+                        </p>
+                        {holders.largest.map((row) => (
+                          <div
+                            key={row.address}
+                            className="flex items-center justify-between gap-3 rounded-input border border-line bg-subtle px-3 py-2 font-mono text-[11px]"
+                          >
+                            <a
+                              href={explorerAddressUrl(row.address)}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-accent hover:underline"
+                            >
+                              {row.address.slice(0, 4)}…{row.address.slice(-4)}
+                            </a>
+                            <span className="text-fg-primary">{row.amount}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     {holders.error && (
                       <p className="text-xs text-signal-warn">{holders.error}</p>
                     )}
@@ -593,42 +680,87 @@ export function OfferingDetailClient({ id, demo }: Props) {
                 )}
 
                 {tab === "Activity" && (
-                  <div className="space-y-2">
-                    {activity.length === 0 ? (
-                      <p className="text-xs text-fg-muted">
-                        No local activity yet. Swaps and launches from this
-                        browser appear here (no indexer).
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium text-fg-primary">
+                        Pool signatures (RPC)
                       </p>
-                    ) : (
-                      activity.map((a) => (
-                        <div
-                          key={a.id}
-                          className="flex items-center justify-between gap-3 rounded-input border border-line bg-subtle px-3 py-2 text-xs"
-                        >
-                          <div>
-                            <span className="capitalize text-fg-primary">
-                              {a.kind}
-                            </span>
-                            {a.amount ? (
-                              <span className="ml-2 font-mono text-fg-muted">
-                                {a.amount}
-                              </span>
-                            ) : null}
-                            <div className="text-[10px] text-fg-muted">
-                              {new Date(a.at).toLocaleString()}
-                            </div>
-                          </div>
-                          <a
-                            href={explorerTxUrl(a.sig)}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="font-mono text-accent hover:underline"
+                      {rpcActivityError && (
+                        <p className="text-xs text-signal-warn">{rpcActivityError}</p>
+                      )}
+                      {rpcActivity.length === 0 && !rpcActivityError ? (
+                        <p className="text-xs text-fg-muted">
+                          {poolAddress
+                            ? "No recent signatures for this pool on the current RPC."
+                            : "Open a live pool to fetch signatures."}
+                        </p>
+                      ) : (
+                        rpcActivity.map((row) => (
+                          <div
+                            key={row.signature}
+                            className="flex items-center justify-between gap-3 rounded-input border border-line bg-subtle px-3 py-2 text-xs"
                           >
-                            {short(a.sig, 6)}
-                          </a>
-                        </div>
-                      ))
-                    )}
+                            <div>
+                              <span className="font-mono text-fg-primary">
+                                {short(row.signature, 6)}
+                              </span>
+                              <div className="text-[10px] text-fg-muted">
+                                {row.blockTime
+                                  ? new Date(row.blockTime * 1000).toLocaleString()
+                                  : `slot ${row.slot}`}
+                              </div>
+                            </div>
+                            <a
+                              href={explorerTxUrl(row.signature)}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-accent hover:underline"
+                            >
+                              Explorer
+                            </a>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium text-fg-primary">
+                        Local (this browser)
+                      </p>
+                      {activity.length === 0 ? (
+                        <p className="text-xs text-fg-muted">
+                          No local swaps/launches stored yet.
+                        </p>
+                      ) : (
+                        activity.map((a) => (
+                          <div
+                            key={a.id}
+                            className="flex items-center justify-between gap-3 rounded-input border border-line bg-subtle px-3 py-2 text-xs"
+                          >
+                            <div>
+                              <span className="capitalize text-fg-primary">
+                                {a.kind}
+                              </span>
+                              {a.amount ? (
+                                <span className="ml-2 font-mono text-fg-muted">
+                                  {a.amount}
+                                </span>
+                              ) : null}
+                              <div className="text-[10px] text-fg-muted">
+                                {new Date(a.at).toLocaleString()}
+                              </div>
+                            </div>
+                            <a
+                              href={explorerTxUrl(a.sig)}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="font-mono text-accent hover:underline"
+                            >
+                              {short(a.sig, 6)}
+                            </a>
+                          </div>
+                        ))
+                      )}
+                    </div>
                   </div>
                 )}
 
@@ -695,7 +827,38 @@ export function OfferingDetailClient({ id, demo }: Props) {
           </div>
 
           <div className="space-y-4">
-            {poolAddress ? (
+            
+            {status === "graduated" && (
+              <div className="ec-card space-y-3 border-signal-grad/30 p-5 text-sm">
+                <h2 className="font-semibold text-signal-grad">
+                  Graduated — trade on DAMM v2
+                </h2>
+                <p className="text-fg-secondary">
+                  The bonding curve ticket is inactive after migration. Liquidity
+                  lives on Meteora DAMM v2.
+                </p>
+                <a
+                  href="https://app.meteora.ag/"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="ec-btn-primary inline-flex"
+                >
+                  Open Meteora DAMM v2
+                </a>
+                {launch?.dammPool && (
+                  <a
+                    href={explorerAddressUrl(launch.dammPool)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block font-mono text-xs text-accent hover:underline"
+                  >
+                    DAMM pool {short(launch.dammPool, 6)}
+                  </a>
+                )}
+              </div>
+            )}
+
+            {poolAddress && status !== "graduated" ? (
               <TradePanel
                 poolAddress={poolAddress}
                 compact

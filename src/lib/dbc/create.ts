@@ -6,7 +6,13 @@ import {
   type Connection,
 } from "@solana/web3.js";
 import BN from "bn.js";
-import { getOptionalPoolConfigKey, WSOL_MINT } from "@/lib/constants";
+import {
+  getOptionalPoolConfigKey,
+  getUsdcMint,
+  isPlaceholderMetadataUri,
+  WSOL_MINT,
+  type QuoteLabel,
+} from "@/lib/constants";
 import { EquiCurveError } from "@/lib/errors";
 import { getDbcClient } from "./client";
 import { buildPresetConfig, getPreset, MIN_LP_LOCK_PCT } from "./presets";
@@ -40,7 +46,8 @@ function clampCreatorFee(pct: number): number {
 
 /**
  * Build real DBC createConfigAndPool (optionally with first buy).
- * Quote is always WSOL — SOL-only MVP; USDC quote is not wired.
+ * Quote defaults to WSOL; USDC when selected and a known mint exists
+ * for the cluster. Optional feeClaimer sets partner fee recipient.
  */
 export async function prepareLaunchTransaction(args: {
   connection: Connection;
@@ -55,7 +62,17 @@ export async function prepareLaunchTransaction(args: {
 
   const name = input.name.trim();
   const symbol = input.symbol.trim().toUpperCase();
-  const uri = input.uri.trim() || "https://equicurve.dev/metadata.json";
+  let uri = input.uri.trim();
+  if (!uri || isPlaceholderMetadataUri(uri)) {
+    uri = `data:application/json,${encodeURIComponent(
+      JSON.stringify({
+        name,
+        symbol,
+        description: `${name} (${symbol}) — EquiCurve DBC offering`,
+        image: "",
+      }),
+    )}`;
+  }
   if (name.length < 2 || symbol.length < 1) {
     throw new EquiCurveError("Name and symbol are required.", "VALIDATION");
   }
@@ -67,6 +84,33 @@ export async function prepareLaunchTransaction(args: {
   const mintRenounce = input.mintRenounce !== false;
   const seedBuySol = Math.max(0, Number(input.seedBuySol) || 0);
   const antiSniper = !!input.antiSniper;
+
+  const quoteLabel: QuoteLabel = input.quoteLabel === "USDC" ? "USDC" : "SOL";
+  let quoteMint = WSOL_MINT;
+  let quoteDecimals = 9;
+  if (quoteLabel === "USDC") {
+    const usdc = getUsdcMint();
+    if (!usdc) {
+      throw new EquiCurveError(
+        "USDC quote is not available on this cluster (no known mint).",
+        "VALIDATION",
+      );
+    }
+    quoteMint = usdc;
+    quoteDecimals = 6;
+  }
+
+  let feeClaimer = payer;
+  if (input.feeClaimer?.trim()) {
+    try {
+      feeClaimer = new PublicKey(input.feeClaimer.trim());
+    } catch {
+      throw new EquiCurveError(
+        "Partner fee claimer is not a valid Solana address.",
+        "VALIDATION",
+      );
+    }
+  }
 
   const client = getDbcClient(connection);
   const existingConfig = getOptionalPoolConfigKey();
@@ -97,7 +141,7 @@ export async function prepareLaunchTransaction(args: {
     };
 
     if (seedBuySol > 0) {
-      const buyAmount = new BN(Math.round(seedBuySol * 1e9));
+      const buyAmount = new BN(Math.round(seedBuySol * 10 ** quoteDecimals));
       const tx = await client.creator.createPoolWithFirstBuy({
         createPoolParam,
         firstBuyParam: {
@@ -123,14 +167,15 @@ export async function prepareLaunchTransaction(args: {
       lpLockPct,
       mintRenounce,
       antiSniper,
+      quoteDecimals: quoteDecimals as 6 | 9,
     });
 
     const baseParams = {
       ...curveConfig,
       config: keypairs.config.publicKey,
-      feeClaimer: payer,
+      feeClaimer,
       leftoverReceiver: payer,
-      quoteMint: WSOL_MINT,
+      quoteMint,
       payer,
       preCreatePoolParam: {
         name,
@@ -142,7 +187,7 @@ export async function prepareLaunchTransaction(args: {
     };
 
     if (seedBuySol > 0) {
-      const buyAmount = new BN(Math.round(seedBuySol * 1e9));
+      const buyAmount = new BN(Math.round(seedBuySol * 10 ** quoteDecimals));
       const { createConfigTx, createPoolWithFirstBuyTx } =
         await client.partner.createConfigAndPoolWithFirstBuy({
           ...baseParams,
@@ -167,7 +212,7 @@ export async function prepareLaunchTransaction(args: {
   }
 
   const pool = deriveDbcPoolAddress(
-    WSOL_MINT,
+    quoteMint,
     keypairs.baseMint.publicKey,
     configPubkey,
   );
@@ -179,12 +224,13 @@ export async function prepareLaunchTransaction(args: {
       configPubkey: configPubkey.toBase58(),
       baseMintPubkey: keypairs.baseMint.publicKey.toBase58(),
       poolPubkey: pool.toBase58(),
-      quoteMint: WSOL_MINT.toBase58(),
-      quoteLabel: "SOL",
+      quoteMint: quoteMint.toBase58(),
+      quoteLabel,
       lpLockPct,
       creatorTradingFeePercentage,
       mintRenounce,
       seedBuySol,
+      feeClaimer: feeClaimer.toBase58(),
       summary: {
         name,
         symbol,
@@ -192,7 +238,7 @@ export async function prepareLaunchTransaction(args: {
         initialMarketCapUsd: preset.initialMarketCap,
         migrationMarketCapUsd: preset.migrationMarketCap,
         feeLabel: preset.feeLabel,
-        migration: `DAMM v2 · partner LP lock ${lpLockPct}%`,
+        migration: `DAMM v2 · partner LP lock ${lpLockPct}% · quote ${quoteLabel}`,
       },
     },
     keypairs,

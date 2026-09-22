@@ -20,8 +20,8 @@ export type WizardState = {
   sector: Sector;
   website: string;
   raiseTarget: number;
-  /** SOL-only MVP — quote mint is always WSOL on-chain. */
-  quote: "SOL";
+  /** Quote mint wired on-chain when known for cluster (SOL default). */
+  quote: "SOL" | "USDC";
   seedBuy: number;
   jurisdictions: string;
   investorType: "Retail-friendly" | "Restricted" | "Accredited-oriented";
@@ -44,6 +44,8 @@ export type WizardState = {
   ackDocs: boolean;
   ackFees: boolean;
   ackClaimer: boolean;
+  /** Optional partner fee claimer pubkey; blank = deployer wallet. */
+  feeClaimer: string;
   uri: string;
   totalSupply: number;
 };
@@ -75,7 +77,8 @@ export const INITIAL_WIZARD: WizardState = {
   ackDocs: false,
   ackFees: false,
   ackClaimer: false,
-  uri: "https://equicurve.dev/metadata.json",
+  feeClaimer: "",
+  uri: "",
   totalSupply: 1_000_000_000,
 };
 

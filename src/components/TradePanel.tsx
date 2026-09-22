@@ -11,7 +11,11 @@ import {
   useEligibilityGate,
 } from "@/components/gate/EligibilityGate";
 import { ProgressRing } from "@/components/ui/ProgressRing";
-import { explorerAddressUrl, explorerTxUrl } from "@/lib/constants";
+import {
+  explorerAddressUrl,
+  explorerTxUrl,
+  quoteLabelForMint,
+} from "@/lib/constants";
 import { fetchPoolSnapshot } from "@/lib/dbc/migrate";
 import { quoteAndBuildSwap, type SwapDirection } from "@/lib/dbc/swap";
 import type { PoolSnapshot } from "@/lib/dbc/types";
@@ -129,6 +133,9 @@ export function TradePanel({
   }
 
   const progressPct = snapshot ? snapshot.quoteProgress * 100 : 0;
+  const quoteSymbol = snapshot
+    ? quoteLabelForMint(snapshot.quoteMint)
+    : "SOL";
   const showLocalGate = !onGateRequired;
 
   const body = (
@@ -236,7 +243,12 @@ export function TradePanel({
 
       <div className="ec-card p-5">
         {compact && (
-          <h2 className="mb-3 font-semibold text-fg-primary">Trade ticket</h2>
+          <h2 className="mb-3 font-semibold text-fg-primary">
+            Trade ticket
+            <span className="ml-2 text-xs font-normal text-fg-muted">
+              Quote · {quoteSymbol}
+            </span>
+          </h2>
         )}
         <div className="mb-4 flex gap-2">
           {(["buy", "sell"] as const).map((d) => (
@@ -262,7 +274,7 @@ export function TradePanel({
         </div>
         <label className="block space-y-1.5">
           <span className="ec-label">
-            Amount ({direction === "buy" ? "SOL" : "base tokens"})
+            Amount ({direction === "buy" ? quoteSymbol : "base tokens"})
           </span>
           <input
             value={amount}
