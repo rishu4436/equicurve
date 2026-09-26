@@ -68,6 +68,9 @@ function launchToOffering(l: StoredLaunch): DemoOffering {
     pool: l.pool,
     mint: l.mint,
     illustrative: false,
+    quoteProgress: null,
+    statusSource: "local",
+    verification: { state: "not_checked", checkedAt: null, cluster: l.cluster },
   };
 }
 
@@ -80,17 +83,20 @@ function remoteToOffering(o: ExploreOffering): DemoOffering {
     thesis: o.thesis,
     quote: o.quote === "USDC" ? "USDC" : "SOL",
     raiseTarget: o.raiseTarget,
-    raised: o.raised,
+    raised: 0,
     presetId: isPresetId(String(o.presetId)) ? (o.presetId as PresetId) : "flat",
-    feeBps: o.feeBps,
+    feeBps: 0,
     verified: false,
-    lockPct: o.lockPct,
+    lockPct: o.lockPct ?? 0,
     status: o.status,
-    volume24h: o.volume24h,
+    volume24h: 0,
     createdAt: o.createdAt,
     pool: o.pool,
     mint: o.mint,
     illustrative: false,
+    quoteProgress: o.quoteProgress,
+    statusSource: o.statusSource,
+    verification: o.verification,
   };
 }
 
@@ -107,13 +113,13 @@ function ExploreInner() {
   const [loading, setLoading] = useState(true);
   const [exploreMeta, setExploreMeta] = useState<Pick<
     ExploreResponse,
-    "label" | "warning" | "error" | "counts" | "cached" | "cacheTtlSec"
+    "label" | "warning" | "error" | "counts" | "cached" | "cacheTtlSec" | "cluster" | "rpcStatus" | "cacheAgeMs"
   > | null>(null);
 
-  const loadRemote = useCallback(async () => {
+  const loadRemote = useCallback(async (refresh = false) => {
     setLoading(true);
     try {
-      const res = await fetchExploreOfferings();
+      const res = await fetchExploreOfferings({ refresh });
       setExploreMeta({
         label: res.label,
         warning: res.warning,
@@ -121,6 +127,9 @@ function ExploreInner() {
         counts: res.counts,
         cached: res.cached,
         cacheTtlSec: res.cacheTtlSec,
+        cacheAgeMs: res.cacheAgeMs,
+        cluster: res.cluster,
+        rpcStatus: res.rpcStatus,
       });
       setRemote((res.offerings ?? []).map(remoteToOffering));
     } catch (e) {
@@ -128,9 +137,12 @@ function ExploreInner() {
         label: "EquiCurve registry (not a full chain indexer)",
         warning: null,
         error: e instanceof Error ? e.message : "Failed to load discovery",
-        counts: { registry: 0, configGpa: 0, enriched: 0 },
+        counts: { registry: 0, configGpa: 0, enriched: 0, verified: 0, notFound: 0, rpcUnavailable: 0, notChecked: 0 },
         cached: false,
         cacheTtlSec: 45,
+        cacheAgeMs: 0,
+        cluster: "unknown",
+        rpcStatus: "unavailable",
       });
       setRemote([]);
     } finally {
@@ -179,7 +191,7 @@ function ExploreInner() {
 
     if (tab === "raising") {
       merged = merged.filter(
-        (o) => o.status === "raising" || o.status === "new",
+        (o) => o.status === "raising" || o.status === "new" || o.status === "complete",
       );
     } else if (tab === "graduated") {
       merged = merged.filter((o) => o.status === "graduated");
@@ -193,8 +205,8 @@ function ExploreInner() {
       );
     } else {
       merged = [...merged].sort((a, b) => {
-        const ap = a.raiseTarget > 0 ? a.raised / a.raiseTarget : 0;
-        const bp = b.raiseTarget > 0 ? b.raised / b.raiseTarget : 0;
+        const ap = a.quoteProgress ?? (a.raiseTarget > 0 ? a.raised / a.raiseTarget : 0);
+        const bp = b.quoteProgress ?? (b.raiseTarget > 0 ? b.raised / b.raiseTarget : 0);
         if (bp !== ap) return bp - ap;
         return (
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
@@ -249,13 +261,33 @@ function ExploreInner() {
               </span>
             )}
           </p>
+          {exploreMeta && (
+            <p className="mt-1 text-xs text-fg-muted">
+              Cluster <span className="font-mono">{exploreMeta.cluster}</span> · RPC{" "}
+              <span
+                className={clsx(
+                  exploreMeta.rpcStatus === "ok" && "text-accent",
+                  exploreMeta.rpcStatus === "degraded" && "text-signal-warn",
+                  exploreMeta.rpcStatus === "unavailable" && "text-signal-danger",
+                )}
+              >
+                {exploreMeta.rpcStatus === "idle" ? "not queried" : exploreMeta.rpcStatus}
+              </span>{" "}
+              · verified {exploreMeta.counts.verified} · not found {exploreMeta.counts.notFound} · RPC
+              unavailable {exploreMeta.counts.rpcUnavailable} · not checked{" "}
+              {exploreMeta.counts.notChecked}
+              {exploreMeta.cached &&
+                ` · cached ${Math.round(exploreMeta.cacheAgeMs / 1000)}s (TTL ${exploreMeta.cacheTtlSec}s)`}
+              . Status is shown as verified only when the pool was read on-chain.
+            </p>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             className="ec-btn-secondary text-xs"
             disabled={loading}
-            onClick={() => void loadRemote()}
+            onClick={() => void loadRemote(true)}
           >
             {loading ? "Refreshing…" : "Refresh"}
           </button>

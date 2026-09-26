@@ -1,3 +1,11 @@
+/**
+ * Self-attestation & risk-disclosure acknowledgement, stored ONLY in this
+ * browser (localStorage / sessionStorage).
+ *
+ * This is NOT KYC: it does not verify identity, residency or location, and it
+ * does not enforce jurisdictional eligibility. It is trivially bypassable by
+ * editing browser storage. Never treat it as verified identity or location.
+ */
 export const ELIGIBILITY_KEY = "equicurve.eligibility.v1";
 export const ELIGIBILITY_SESSION = "equicurve.eligibility.session";
 
@@ -29,10 +37,17 @@ export function getEligibility(): EligibilityRecord | null {
   }
 }
 
-export function isEligible(): boolean {
+/** True when the user ticked every self-attestation box in this browser. */
+export function hasSelfAttested(): boolean {
   const r = getEligibility();
   return !!(r && r.notUsPerson && r.ageOk && r.risksOk && r.transferOk);
 }
+
+/**
+ * @deprecated Misleading name — this is a local self-attestation, not an
+ * eligibility check. Use {@link hasSelfAttested}.
+ */
+export const isEligible = hasSelfAttested;
 
 export function saveEligibility(
   record: EligibilityRecord,

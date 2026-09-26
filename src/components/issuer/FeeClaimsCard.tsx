@@ -17,13 +17,12 @@ import {
 import { toUserMessage } from "@/lib/errors";
 import { pushActivity } from "@/lib/local/launches";
 import { signAndSendTransaction } from "@/lib/send";
+import { formatQuoteAtoms } from "@/lib/amounts";
 
+/** Exact atoms → display (string math; no float precision loss). */
 function formatQuoteAmount(raw: string, quote: "SOL" | "USDC"): string {
   try {
-    const decimals = quote === "USDC" ? 6 : 9;
-    const n = Number(raw) / 10 ** decimals;
-    if (!Number.isFinite(n)) return raw;
-    return `${n.toFixed(quote === "USDC" ? 4 : 6)} ${quote}`;
+    return formatQuoteAtoms(raw, quote);
   } catch {
     return raw;
   }

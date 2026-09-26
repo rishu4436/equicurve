@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  isEligible,
+  hasSelfAttested as isEligible,
   saveEligibility,
 } from "@/lib/local/eligibility";
 
@@ -14,8 +14,9 @@ type Props = {
 };
 
 /**
- * xStocks-style self-attest eligibility / geo / risk gate (MVP, no KYC).
- * Shows on first visit; also blocks trade actions until accepted.
+ * Self-attestation & risk-disclosure prompt (NOT KYC). Stored only in this
+ * browser; does not verify identity or enforce jurisdictional eligibility.
+ * Shows on first visit and before Create / Trade actions.
  */
 export function EligibilityGate({
   requireForAction = false,
@@ -81,11 +82,14 @@ export function EligibilityGate({
               id="eligibility-title"
               className="mt-1 text-xl font-semibold text-fg-primary"
             >
-              Eligibility &amp; risk disclosure
+              Self-attestation &amp; risk disclosure
             </h2>
             <p className="mt-2 text-sm text-fg-secondary">
-              Self-attestation only — no KYC vendor in this MVP. Offering-specific
-              geo rules may still apply on-chain via transfer hooks.
+              This is a self-attestation, <strong>not KYC</strong>. EquiCurve does
+              not verify your identity or location and does not enforce
+              jurisdictional eligibility. Your answers are stored only in this
+              browser. You are responsible for complying with the laws that apply
+              to you.
             </p>
 
             <ul className="mt-5 space-y-3 text-sm text-fg-secondary">
@@ -98,8 +102,9 @@ export function EligibilityGate({
                     onChange={(e) => setNotUsPerson(e.target.checked)}
                   />
                   <span>
-                    I am not a US person and not in a prohibited jurisdiction
-                    (offering-specific overrides may apply).
+                    I confirm I am not a US person and not located in a
+                    jurisdiction where participating is prohibited (self-declared,
+                    not verified).
                   </span>
                 </label>
               </li>
@@ -137,8 +142,8 @@ export function EligibilityGate({
                     onChange={(e) => setTransferOk(e.target.checked)}
                   />
                   <span>
-                    I understand this offering may restrict transfers
-                    (Token-2022 hooks / eligibility tags).
+                    I understand an offering may restrict transfers (e.g.
+                    Token-2022 transfer hooks) independently of this prompt.
                   </span>
                 </label>
               </li>
@@ -174,7 +179,8 @@ export function EligibilityGate({
               </button>
             </div>
             <p className="mt-3 text-[11px] text-fg-muted">
-              Declining keeps browse-only mode. Create / Trade require acceptance.
+              Declining keeps browse-only mode. The app asks for this
+              acknowledgement before Create / Trade; it is not an access control.
             </p>
           </div>
         </div>

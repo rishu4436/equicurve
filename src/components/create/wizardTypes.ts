@@ -1,6 +1,7 @@
 import type { PresetId } from "@/lib/dbc/types";
 import type { Sector } from "@/lib/demo/offerings";
 import { MIN_LP_LOCK_PCT } from "@/lib/dbc/presets";
+import { validateWizard, type FieldErrors } from "@/lib/validation";
 
 export const WIZARD_STEPS = [
   { id: "basics", label: "Basics" },
@@ -22,7 +23,8 @@ export type WizardState = {
   raiseTarget: number;
   /** Quote mint wired on-chain when known for cluster (SOL default). */
   quote: "SOL" | "USDC";
-  seedBuy: number;
+  /** Exact decimal string in quote units (converted to atoms without floats). */
+  seedBuy: string;
   jurisdictions: string;
   investorType: "Retail-friendly" | "Restricted" | "Accredited-oriented";
   /** open-spl | token-2022 | transfer-hook (hook requires env program). */
@@ -58,7 +60,7 @@ export const INITIAL_WIZARD: WizardState = {
   website: "",
   raiseTarget: 100_000,
   quote: "SOL",
-  seedBuy: 0,
+  seedBuy: "0",
   jurisdictions: "",
   investorType: "Retail-friendly",
   transferProfile: "open-spl",
@@ -86,25 +88,40 @@ export function stepIndex(id: WizardStepId): number {
   return WIZARD_STEPS.findIndex((s) => s.id === id);
 }
 
+/** Fields validated on each step (schema-backed via validateWizard). */
+export const STEP_FIELDS: Record<WizardStepId, (keyof FieldErrors)[]> = {
+  basics: ["name", "ticker", "thesis", "sector", "website", "uri"],
+  offering: ["raiseTarget", "quote", "seedBuy"],
+  curve: ["presetId", "totalSupply"],
+  fees: ["feeIssuer", "lpLockPct", "feeClaimer"],
+  review: [],
+  launch: [],
+};
+
+export function wizardErrors(s: WizardState): FieldErrors {
+  return validateWizard(s);
+}
+
+/** Errors relevant to the given step and every step before it. */
+export function stepErrors(step: WizardStepId, s: WizardState): FieldErrors {
+  const all = validateWizard(s);
+  const upto = WIZARD_STEPS.slice(0, stepIndex(step) + 1).flatMap((x) => STEP_FIELDS[x.id]);
+  const out: FieldErrors = {};
+  for (const k of upto) if (all[k]) out[k] = all[k];
+  return out;
+}
+
 export function canContinue(step: WizardStepId, s: WizardState): boolean {
+  if (Object.keys(stepErrors(step, s)).length > 0) return false;
   switch (step) {
     case "basics":
-      return (
-        s.name.trim().length >= 2 &&
-        s.ticker.trim().length >= 2 &&
-        s.ticker.trim().length <= 8 &&
-        s.thesis.trim().length >= 8
-      );
+      return true;
     case "offering":
-      return s.raiseTarget > 0 && s.docMemo && s.docRisk && s.docIssuer;
+      return s.docMemo && s.docRisk && s.docIssuer;
     case "curve":
       return !!s.presetId;
     case "fees":
-      return (
-        s.lpLockPct >= MIN_LP_LOCK_PCT &&
-        s.feeIssuer >= 0 &&
-        s.feeIssuer <= 100
-      );
+      return s.lpLockPct >= MIN_LP_LOCK_PCT;
     case "review":
       return s.ackBonding && s.ackDocs && s.ackFees && s.ackClaimer;
     case "launch":

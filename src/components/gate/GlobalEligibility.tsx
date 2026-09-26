@@ -2,7 +2,7 @@
 
 import { EligibilityGate } from "./EligibilityGate";
 
-/** Soft first-visit gate — does not block browsing until Create/Trade. */
+/** First-visit self-attestation & risk disclosure (not KYC; browser-local). Does not block browsing. */
 export function GlobalEligibility({ children }: { children: React.ReactNode }) {
   return <EligibilityGate>{children}</EligibilityGate>;
 }

@@ -1,18 +1,20 @@
 import Link from "next/link";
 import type { DemoOffering } from "@/lib/demo/offerings";
+import { formatLastChecked, VerificationBadge } from "./VerificationBadge";
 import { ProgressRing } from "./ProgressRing";
 import { StatusPill } from "./StatusPill";
 
 export function OfferingCard({ offering }: { offering: DemoOffering }) {
-  const pct =
-    offering.raiseTarget > 0
-      ? (offering.raised / offering.raiseTarget) * 100
-      : offering.raised > 0
-        ? Math.min(100, offering.raised)
-        : 0;
-  const graduated = offering.status === "graduated";
   const illustrative = offering.illustrative || !offering.pool;
-  const ringValue = illustrative ? pct : pct;
+  // Live pools: progress only from on-chain reads; null = unknown (never 0%).
+  const livePct =
+    offering.quoteProgress == null ? null : offering.quoteProgress * 100;
+  const examplePct =
+    offering.raiseTarget > 0 ? (offering.raised / offering.raiseTarget) * 100 : 0;
+  const pct = illustrative ? examplePct : livePct;
+  const graduated = offering.status === "graduated";
+  const verified = offering.verification?.state === "verified";
+  const statusUnverified = !illustrative && !verified;
 
   return (
     <Link
@@ -29,24 +31,25 @@ export function OfferingCard({ offering }: { offering: DemoOffering }) {
             <p className="font-mono text-xs text-fg-muted">${offering.ticker}</p>
           </div>
         </div>
-        {graduated ? (
+        {graduated && verified ? (
           <div className="text-right text-xs text-signal-grad">
-            DAMM v2
-            <div className="font-mono text-fg-secondary">
-              {offering.raised > 0
-                ? `depth $${(offering.raised / 1000).toFixed(0)}k`
-                : "graduated"}
-            </div>
+            Migrated
+            <div className="font-mono text-fg-secondary">DBC → DAMM v2</div>
+          </div>
+        ) : pct == null ? (
+          <div className="text-right text-[10px] text-fg-muted">
+            progress
+            <div className="font-mono text-sm text-fg-secondary">—</div>
           </div>
         ) : (
-          <ProgressRing value={ringValue} size={48} stroke={4} />
+          <ProgressRing value={pct} size={48} stroke={4} />
         )}
       </div>
 
       <div className="flex flex-wrap gap-1.5">
         <span className="ec-chip">{offering.sector}</span>
         <span className="ec-chip">{offering.quote}</span>
-        <StatusPill status={offering.status} />
+        <StatusPill status={offering.status} unverified={statusUnverified} />
         {illustrative && (
           <span className="rounded-pill border border-signal-warn/40 bg-signal-warn/10 px-2 py-0.5 text-[10px] text-signal-warn">
             Illustrative · not live
@@ -64,18 +67,14 @@ export function OfferingCard({ offering }: { offering: DemoOffering }) {
             / ${offering.raiseTarget.toLocaleString()}
           </p>
         )}
-        {!graduated && !illustrative && (
+        {!illustrative && (
           <p>
-            {offering.raiseTarget > 0 ? (
-              <>
-                Progress{" "}
-                <span className="font-mono text-fg-primary">
-                  {pct.toFixed(1)}%
-                </span>{" "}
-                · target ${offering.raiseTarget.toLocaleString()}
-              </>
-            ) : (
-              <>Live progress on detail</>
+            Curve progress{" "}
+            <span className="font-mono text-fg-primary">
+              {pct == null ? "unknown" : `${pct.toFixed(1)}%`}
+            </span>
+            {offering.raiseTarget > 0 && (
+              <> · soft target ${offering.raiseTarget.toLocaleString()} (display only)</>
             )}
           </p>
         )}
@@ -83,11 +82,23 @@ export function OfferingCard({ offering }: { offering: DemoOffering }) {
           Curve:{" "}
           <span className="capitalize text-fg-primary">{offering.presetId}</span>
         </p>
-        <div className="flex flex-wrap gap-2 pt-1">
-          <span className="rounded-pill border border-line bg-subtle px-2 py-0.5 text-[10px] text-fg-secondary">
-            Lock ≥{offering.lockPct}%
-          </span>
+        <div className="flex flex-wrap items-center gap-2 pt-1">
+          {offering.lockPct != null && offering.lockPct > 0 && (
+            <span className="rounded-pill border border-line bg-subtle px-2 py-0.5 text-[10px] text-fg-secondary">
+              Lock ≥{offering.lockPct}%
+            </span>
+          )}
+          {!illustrative && offering.verification && (
+            <VerificationBadge verification={offering.verification} compact />
+          )}
         </div>
+        {!illustrative && offering.verification && (
+          <p className="text-[10px] text-fg-muted">
+            {offering.verification.cluster} · last checked{" "}
+            {formatLastChecked(offering.verification.checkedAt)}
+            {offering.statusSource === "local" && " · status from this browser"}
+          </p>
+        )}
       </div>
     </Link>
   );

@@ -7,7 +7,7 @@ export type Sector =
   | "Private Co"
   | "Other";
 
-export type OfferingStatus = "raising" | "graduated" | "new";
+export type OfferingStatus = "raising" | "graduated" | "new" | "complete" | "unknown";
 
 export type DemoOffering = {
   id: string;
@@ -30,6 +30,12 @@ export type DemoOffering = {
   mint?: string;
   /** Static fiction for UI examples — not live pools. */
   illustrative?: boolean;
+  /** Live offerings: 0..1 on-chain progress, null = unknown (never 0 by default). */
+  quoteProgress?: number | null;
+  /** Live offerings: on-chain verification state + freshness. */
+  verification?: import("@/lib/explore/types").OfferingVerification;
+  /** "chain" only when verified in this response. */
+  statusSource?: "chain" | "registry" | "local";
 };
 
 /**

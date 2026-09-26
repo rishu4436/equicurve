@@ -210,10 +210,10 @@ export default function SettingsPage() {
             className="ec-btn-secondary"
             onClick={() => {
               clearEligibility();
-              toast.message("Cleared eligibility attestation");
+              toast.message("Cleared self-attestation (this browser)");
             }}
           >
-            Clear eligibility
+            Clear self-attestation
           </button>
         </div>
       </section>

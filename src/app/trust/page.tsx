@@ -264,7 +264,9 @@ export default function TrustPage() {
             congested networks.
           </li>
           <li>
-            Eligibility / geo self-attestations are MVP controls — not full KYC.
+            The self-attestation &amp; risk disclosure is stored only in this
+            browser. It is not KYC, does not verify identity or location, and
+            does not enforce jurisdictional eligibility.
           </li>
           <li>
             Explore defaults to <strong className="text-fg-primary">your local launches only</strong>.

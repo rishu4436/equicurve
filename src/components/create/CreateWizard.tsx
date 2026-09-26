@@ -7,21 +7,24 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { CurveMiniViz } from "@/components/ui/CurveMiniViz";
 import { explorerAddressUrl, explorerTxUrl, getCluster } from "@/lib/constants";
-import { prepareLaunchTransaction } from "@/lib/dbc/create";
+import { planLaunchAddresses, prepareLaunchTransaction } from "@/lib/dbc/create";
+import { signLaunchPayload, type LaunchAuthPayload, type SignedLaunchBody } from "@/lib/auth/launchAuth";
 import { getUsdcMint } from "@/lib/constants";
 import { resolveMetadataUri } from "@/lib/metadata/client";
 import { Keypair } from "@solana/web3.js";
 import { CURVE_PRESETS, getPreset, MIN_LP_LOCK_PCT } from "@/lib/dbc/presets";
 import type { PresetId } from "@/lib/dbc/types";
 import { toUserMessage } from "@/lib/errors";
+import { validateSeedBuy } from "@/lib/validation";
 import { pushActivity, upsertLaunch } from "@/lib/local/launches";
 import { registerLaunchRemote } from "@/lib/registry/client";
-import { signAndSendTransaction } from "@/lib/send";
+import { setFreshBlockhash, signAndSendTransaction } from "@/lib/send";
 import { EligibilityGate, useEligibilityGate } from "@/components/gate/EligibilityGate";
 import { clsx } from "clsx";
 import { OfferingPreviewCard } from "./OfferingPreviewCard";
 import {
   canContinue,
+  stepErrors,
   INITIAL_WIZARD,
   stepIndex,
   WIZARD_STEPS,
@@ -69,6 +72,7 @@ export function CreateWizard() {
     presetId: initialPreset,
   });
   const [busy, setBusy] = useState(false);
+  const [showErrors, setShowErrors] = useState(false);
   const [launchLog, setLaunchLog] = useState<string[]>([]);
   const [result, setResult] = useState<{
     pool: string;
@@ -86,6 +90,7 @@ export function CreateWizard() {
   }
 
   function go(next: WizardStepId) {
+    setShowErrors(false);
     setStep(next);
     const url = new URL(window.location.href);
     url.searchParams.set("step", next);
@@ -100,7 +105,13 @@ export function CreateWizard() {
 
   function onContinue() {
     if (!canContinue(step, state)) {
-      toast.error("Complete required fields before continuing.");
+      setShowErrors(true);
+      const errs = Object.entries(stepErrors(step, state));
+      toast.error(
+        errs.length
+          ? `${errs[0][0]}: ${errs[0][1]}`
+          : "Complete required fields before continuing.",
+      );
       return;
     }
     if (!eligibility.ok && !eligibility.ensure()) {
@@ -123,14 +134,68 @@ export function CreateWizard() {
         config: Keypair.generate(),
         baseMint: Keypair.generate(),
       };
-      const metadataUri = await resolveMetadataUri(state.uri, {
-        id: launchKeypairs.baseMint.publicKey.toBase58(),
-        name: state.name,
-        symbol: state.ticker,
-        description: state.thesis,
-        website: state.website,
+      const planned = planLaunchAddresses({ quoteLabel: state.quote, keypairs: launchKeypairs });
+      const cluster = getCluster();
+      const description = state.thesis.trim();
+      const website = state.website.trim();
+      const payload: LaunchAuthPayload = {
+        v: 1,
+        action: "launch",
+        cluster,
+        pool: planned.pool,
+        mint: planned.mint,
+        profile: {
+          name: state.name.trim(),
+          ticker: state.ticker.trim(),
+          thesis: state.thesis.trim(),
+          sector: state.sector,
+          presetId: state.presetId,
+          raiseTarget: state.raiseTarget,
+          ...(website ? { website } : {}),
+        },
+        metadata: {
+          name: state.name.trim(),
+          symbol: state.ticker.trim(),
+          description,
+          image: "",
+          ...(website ? { external_url: website } : {}),
+        },
+      };
+
+      // Creator signs the registry + metadata payload (binds pool + mint).
+      // Wallets without signMessage (or a declined prompt) → local-only record.
+      let signed: SignedLaunchBody | null = null;
+      if (wallet.signMessage) {
+        try {
+          setLaunchLog((l) => [...l, "Sign the registry / metadata message in your wallet (no fee)…"]);
+          signed = await signLaunchPayload({
+            payload,
+            signer: wallet.publicKey.toBase58(),
+            signMessage: wallet.signMessage,
+          });
+        } catch (e) {
+          setLaunchLog((l) => [
+            ...l,
+            `Message signature skipped (${toUserMessage(e)}) — offering stays local-only, metadata inline.`,
+          ]);
+        }
+      } else {
+        setLaunchLog((l) => [
+          ...l,
+          "Wallet does not support signMessage — offering stays local-only, metadata inline.",
+        ]);
+      }
+
+      const meta = await resolveMetadataUri({
+        customUri: state.uri,
+        signed,
+        fallback: { name: state.name.trim(), symbol: state.ticker.trim(), description },
       });
-      const { prepared, transactions, signersPerTx, keypairs } =
+      setLaunchLog((l) => [
+        ...l,
+        `Metadata: ${meta.source}${meta.note ? ` — ${meta.note}` : ""}`,
+      ]);
+      const { prepared, transactions, signersPerTx } =
         await prepareLaunchTransaction({
           connection,
           payer: wallet.publicKey,
@@ -138,19 +203,22 @@ export function CreateWizard() {
           input: {
             name: state.name,
             symbol: state.ticker,
-            uri: metadataUri,
+            uri: meta.uri,
             presetId: state.presetId,
             totalSupply: state.totalSupply,
             creatorTradingFeePercentage: state.feeIssuer,
             lpLockPct: state.lpLockPct,
             mintRenounce: state.mintRenounce,
-            seedBuySol: state.seedBuy,
+            seedBuyAmount: state.seedBuy,
             antiSniper: state.antiSniper,
             quoteLabel: state.quote,
             feeClaimer: state.feeClaimer.trim() || undefined,
             transferProfile: state.transferProfile,
           },
         });
+      if (prepared.poolPubkey !== planned.pool || prepared.baseMintPubkey !== planned.mint) {
+        throw new Error("Internal error: planned pool/mint does not match the built transaction.");
+      }
       setLaunchLog((l) => [
         ...l,
         `Mode: ${prepared.mode}`,
@@ -159,8 +227,8 @@ export function CreateWizard() {
         `Creator fee share: ${prepared.creatorTradingFeePercentage}%`,
         `Partner LP lock: ${prepared.lpLockPct}%`,
         `Mint: ${prepared.mintRenounce ? "renounced (no mint auth)" : "retained"}`,
-        prepared.seedBuySol > 0
-          ? `Seed buy: ${prepared.seedBuySol} ${prepared.quoteLabel} (in create TX)`
+        prepared.seedBuyAtoms !== "0"
+          ? `Seed buy: ${prepared.seedBuyDisplay} ${prepared.quoteLabel} (exact, in create TX)`
           : "Seed buy: none",
         `Config: ${prepared.configPubkey}`,
         `Mint: ${prepared.baseMintPubkey}`,
@@ -171,9 +239,7 @@ export function CreateWizard() {
       let lastSig = "";
       for (let i = 0; i < transactions.length; i++) {
         const tx = transactions[i];
-        const { blockhash } = await connection.getLatestBlockhash("confirmed");
-        tx.recentBlockhash = blockhash;
-        tx.feePayer = wallet.publicKey;
+        await setFreshBlockhash(connection, tx, wallet.publicKey);
         const partial = signersPerTx[i] ?? [];
         if (partial.length) tx.partialSign(...partial);
         setLaunchLog((l) => [
@@ -217,11 +283,23 @@ export function CreateWizard() {
         creator: wallet.publicKey.toBase58(),
         feeClaimer: prepared.feeClaimer,
         createdAt: new Date().toISOString(),
-        cluster: getCluster(),
+        cluster,
         status: "raising" as const,
       };
       upsertLaunch(launchRecord);
-      void registerLaunchRemote(launchRecord);
+      if (signed) {
+        // Server verifies the signature, re-reads the pool on-chain and checks
+        // the signer is the pool creator before listing it.
+        const reg = await registerLaunchRemote(signed);
+        setLaunchLog((l) => [
+          ...l,
+          reg.ok
+            ? "Registry: listed (signature + on-chain creator verified)"
+            : `Registry: not listed (${reg.error}) — saved in this browser only`,
+        ]);
+      } else {
+        setLaunchLog((l) => [...l, "Registry: skipped (unsigned) — saved in this browser only"]);
+      }
       pushActivity({
         id: `${lastSig}-launch`,
         pool: prepared.poolPubkey,
@@ -280,6 +358,15 @@ export function CreateWizard() {
 
         <div className="grid gap-8 lg:grid-cols-[1.15fr_0.85fr]">
           <div className="space-y-6">
+            {showErrors && Object.keys(stepErrors(step, state)).length > 0 && (
+              <ul className="mb-4 space-y-1 rounded-input border border-signal-danger/30 bg-signal-danger/10 px-3 py-2 text-xs text-signal-danger">
+                {Object.entries(stepErrors(step, state)).map(([k, v]) => (
+                  <li key={k}>
+                    <span className="font-medium">{k}</span>: {v}
+                  </li>
+                ))}
+              </ul>
+            )}
             {step === "basics" && <StepBasics state={state} patch={patch} />}
             {step === "offering" && <StepOffering state={state} patch={patch} />}
             {step === "curve" && <StepCurve state={state} patch={patch} />}
@@ -512,13 +599,17 @@ function StepOffering({
             Seed buy at launch ({state.quote} — wired into create TX when &gt; 0)
           </span>
           <input
-            type="number"
-            min={0}
-            step={0.01}
+            type="text"
+            inputMode="decimal"
             className="ec-input font-mono"
             value={state.seedBuy}
-            onChange={(e) => patch({ seedBuy: Number(e.target.value) })}
+            onChange={(e) => patch({ seedBuy: e.target.value.trim() })}
           />
+          {validateSeedBuy(state.seedBuy, state.quote) && (
+            <p className="text-xs text-signal-danger">
+              {validateSeedBuy(state.seedBuy, state.quote)}
+            </p>
+          )}
           <p className="text-xs text-fg-muted">
             Uses SDK <code className="text-accent-soft">createConfigAndPoolWithFirstBuy</code>.
             Leave 0 to buy manually after launch.
@@ -625,7 +716,7 @@ function StepOffering({
             checked={state.geoBlockUs}
             onChange={(e) => patch({ geoBlockUs: e.target.checked })}
           />
-          Preview geo block: US / OFAC restricted (self-attest)
+          Show a US / OFAC restriction notice (display only — EquiCurve does not geo-block, verify location, or run KYC)
         </label>
       </div>
     </section>
@@ -984,8 +1075,8 @@ function StepLaunch({
         <li>2. Create virtual pool + mint ({state.quote} quote)</li>
         <li>
           3.{" "}
-          {state.seedBuy > 0
-            ? `Seed buy ${state.seedBuy} ${state.quote} in the same flow`
+          {state.seedBuy.trim() !== "" && !/^0*(\.0*)?$/.test(state.seedBuy.trim())
+            ? `Seed buy ${state.seedBuy.trim()} ${state.quote} in the same flow`
             : "Optional seed buy skipped — trade after launch"}
         </li>
       </ol>

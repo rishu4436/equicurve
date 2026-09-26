@@ -16,12 +16,14 @@ import {
   explorerTxUrl,
   quoteLabelForMint,
 } from "@/lib/constants";
+import { tryFormatAtoms } from "@/lib/amounts";
 import { fetchPoolSnapshot } from "@/lib/dbc/migrate";
-import { quoteAndBuildSwap, type SwapDirection } from "@/lib/dbc/swap";
+import { PoolNotFoundError } from "@/lib/dbc/poolAccount";
+import { quoteAndBuildSwap, type SwapDirection, type SwapQuoteView } from "@/lib/dbc/swap";
 import type { PoolSnapshot } from "@/lib/dbc/types";
 import { toUserMessage } from "@/lib/errors";
 import { pushActivity } from "@/lib/local/launches";
-import { isEligible } from "@/lib/local/eligibility";
+import { hasSelfAttested } from "@/lib/local/eligibility";
 import { signAndSendTransaction } from "@/lib/send";
 
 type Props = {
@@ -47,9 +49,10 @@ export function TradePanel({
   const localGate = useEligibilityGate();
   const [snapshot, setSnapshot] = useState<PoolSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [readState, setReadState] = useState<"loading" | "ok" | "not_found" | "rpc_unavailable">("loading");
   const [direction, setDirection] = useState<SwapDirection>("buy");
   const [amount, setAmount] = useState("0.1");
-  const [quoteOut, setQuoteOut] = useState<string | null>(null);
+  const [quoteOut, setQuoteOut] = useState<SwapQuoteView | null>(null);
   const [busy, setBusy] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -58,7 +61,9 @@ export function TradePanel({
       setSnapshot(
         await fetchPoolSnapshot(connection, new PublicKey(poolAddress)),
       );
+      setReadState("ok");
     } catch (e) {
+      setReadState(e instanceof PoolNotFoundError ? "not_found" : "rpc_unavailable");
       setError(toUserMessage(e));
       setSnapshot(null);
     }
@@ -69,7 +74,7 @@ export function TradePanel({
   }, [refresh]);
 
   function checkGate(): boolean {
-    if (gateOk === true || isEligible()) return true;
+    if (gateOk === true || hasSelfAttested()) return true;
     if (onGateRequired) return onGateRequired();
     return localGate.ensure();
   }
@@ -82,15 +87,15 @@ export function TradePanel({
     }
     setBusy(true);
     try {
-      const { minimumAmountOut } = await quoteAndBuildSwap({
+      const q = await quoteAndBuildSwap({
         connection,
         owner: wallet.publicKey,
         pool: new PublicKey(poolAddress),
         direction,
-        amount: Number(amount),
+        amountUi: amount,
       });
-      setQuoteOut(minimumAmountOut);
-      toast.message(`Min out: ${minimumAmountOut}`);
+      setQuoteOut(q);
+      toast.message(`Min out: ${tryFormatAtoms(q.minimumAmountOut, q.outputDecimals)}`);
     } catch (e) {
       toast.error(toUserMessage(e));
     } finally {
@@ -106,14 +111,15 @@ export function TradePanel({
     }
     setBusy(true);
     try {
-      const { tx, minimumAmountOut } = await quoteAndBuildSwap({
+      const q = await quoteAndBuildSwap({
         connection,
         owner: wallet.publicKey,
         pool: new PublicKey(poolAddress),
         direction,
-        amount: Number(amount),
+        amountUi: amount,
       });
-      setQuoteOut(minimumAmountOut);
+      setQuoteOut(q);
+      const tx = q.tx;
       const sig = await signAndSendTransaction({ connection, wallet, tx });
       pushActivity({
         id: `${sig}-${Date.now()}`,
@@ -136,10 +142,13 @@ export function TradePanel({
     }
   }
 
-  const progressPct = snapshot ? snapshot.quoteProgress * 100 : 0;
-  const quoteSymbol = snapshot
+  // Unknown progress stays unknown — never rendered as 0%.
+  const progressPct =
+    snapshot?.quoteProgress == null ? null : snapshot.quoteProgress * 100;
+  const quoteSymbol = snapshot?.quoteMint
     ? quoteLabelForMint(snapshot.quoteMint)
-    : "SOL";
+    : "quote";
+  const curvePhase = snapshot?.curve.phase ?? "unknown";
   const showLocalGate = !onGateRequired;
 
   const body = (
@@ -172,11 +181,16 @@ export function TradePanel({
 
       {error && (
         <div className="rounded-input border border-signal-danger/30 bg-signal-danger/10 p-4 text-sm text-signal-danger">
-          {error}
+          {readState === "not_found" ? "Pool not found on this cluster." : "RPC unavailable — pool state unknown."}{" "}
+          <span className="opacity-80">{error}</span>
           <p className="mt-1 text-xs opacity-80">
-            Pool may not exist on this cluster, or RPC is unavailable. Set
-            NEXT_PUBLIC_RPC_URL.
+            {readState === "not_found"
+              ? "Check the address and that your app/wallet cluster match."
+              : "Nothing is shown as 0% or complete while RPC is down. Retry, or configure a dedicated RPC."}
           </p>
+          <button type="button" onClick={() => void refresh()} className="mt-2 text-xs underline">
+            Retry
+          </button>
         </div>
       )}
 
@@ -188,13 +202,15 @@ export function TradePanel({
           )}
         >
           <div className="ec-card flex items-center gap-3 p-3">
-            <ProgressRing value={progressPct} size={compact ? 40 : 48} stroke={4} />
+            {progressPct != null && (
+              <ProgressRing value={progressPct} size={compact ? 40 : 48} stroke={4} />
+            )}
             <div>
               <div className="text-[10px] uppercase tracking-wider text-fg-muted">
                 Curve
               </div>
               <div className="font-mono text-sm text-fg-primary">
-                {progressPct.toFixed(2)}%
+                {progressPct == null ? "unknown" : `${progressPct.toFixed(2)}%`}
               </div>
             </div>
           </div>
@@ -205,7 +221,7 @@ export function TradePanel({
                   Base progress
                 </div>
                 <div className="mt-1 font-mono text-sm text-fg-primary">
-                  {(snapshot.baseProgress * 100).toFixed(2)}%
+                  {snapshot.baseProgress == null ? "unknown" : `${(snapshot.baseProgress * 100).toFixed(2)}%`}
                 </div>
               </div>
               <div className="ec-card p-3">
@@ -221,9 +237,9 @@ export function TradePanel({
                   Threshold
                 </div>
                 <div className="mt-1 font-mono text-sm text-fg-primary">
-                  {snapshot.migrationThreshold
-                    ? snapshot.migrationThreshold.slice(0, 12) + "…"
-                    : "—"}
+                  {snapshot.migrationQuoteThreshold && snapshot.quoteDecimals != null
+                    ? `${tryFormatAtoms(snapshot.quoteReserve, snapshot.quoteDecimals, 4)} / ${tryFormatAtoms(snapshot.migrationQuoteThreshold, snapshot.quoteDecimals, 4)} ${quoteSymbol}`
+                    : "unknown"}
                 </div>
               </div>
             </>
@@ -234,11 +250,13 @@ export function TradePanel({
                 Status
               </div>
               <div className="mt-1 text-sm text-fg-primary">
-                {snapshot.isMigrated
+                {curvePhase === "migrated"
                   ? "Graduated"
-                  : snapshot.quoteProgress >= 0.999
-                    ? "Ready to migrate"
-                    : "Raising"}
+                  : curvePhase === "complete"
+                    ? "Curve complete"
+                    : curvePhase === "raising"
+                      ? "Raising"
+                      : "Unknown"}
               </div>
             </div>
           )}
@@ -286,17 +304,28 @@ export function TradePanel({
               setAmount(e.target.value);
               setQuoteOut(null);
             }}
+            inputMode="decimal"
             className="ec-input font-mono"
           />
         </label>
 
         {quoteOut && (
           <div className="mt-3 rounded-input border border-accent/30 bg-accent/5 px-3 py-2 text-xs">
-            <p className="text-fg-muted">Quote · min amount out</p>
-            <p className="font-mono text-sm text-accent-soft">{quoteOut}</p>
+            <p className="text-fg-muted">
+              Quote · expected out{" "}
+              <span className="font-mono text-fg-primary">
+                {tryFormatAtoms(quoteOut.expectedOut, quoteOut.outputDecimals)}{" "}
+                {direction === "buy" ? "tokens" : quoteSymbol}
+              </span>
+            </p>
+            <p className="text-fg-muted">Min amount out (after {quoteOut.slippageBps / 100}% slippage)</p>
+            <p className="font-mono text-sm text-accent-soft">
+              {tryFormatAtoms(quoteOut.minimumAmountOut, quoteOut.outputDecimals)}{" "}
+              {direction === "buy" ? "tokens" : quoteSymbol}
+            </p>
             <p className="mt-1 text-[10px] text-fg-muted">
-              Includes slippage buffer · anti-sniper fee schedule may apply on
-              first swaps
+              Exact input: {tryFormatAtoms(quoteOut.amountIn, quoteOut.inputDecimals, quoteOut.inputDecimals)} ·
+              anti-sniper fee schedule may apply on first swaps
             </p>
           </div>
         )}
@@ -316,7 +345,8 @@ export function TradePanel({
           </button>
           <button
             type="button"
-            disabled={busy || !wallet.publicKey}
+            disabled={busy || !wallet.publicKey || curvePhase !== "raising"}
+            title={curvePhase !== "raising" ? "Trading is only enabled when the curve is verified as raising" : undefined}
             onClick={() => void onSwap()}
             className="ec-btn-primary flex-1"
           >

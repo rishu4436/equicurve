@@ -13,7 +13,7 @@ const STEPS = [
     n: "2",
     title: "Trade",
     href: "/explore",
-    body: "Investors open the offering, pass the eligibility gate if required, then buy/sell on the bonding curve. Progress rings track on-chain quote reserves toward the migration threshold.",
+    body: "Investors open the offering, acknowledge the self-attestation & risk disclosure (not KYC; stored in the browser), then buy/sell on the bonding curve. Progress rings track on-chain quote reserves toward the migration threshold.",
   },
   {
     n: "3",
@@ -179,7 +179,9 @@ export default function DocsPage() {
             before signing.
           </li>
           <li>
-            MVP eligibility is self-attest + docs — not a regulated KYC vendor.
+            The prompt is a self-attestation &amp; risk disclosure stored in your
+            browser — not KYC. It does not verify identity or location and does
+            not enforce jurisdictional eligibility.
           </li>
         </ul>
       </section>
@@ -188,7 +190,7 @@ export default function DocsPage() {
         <h2 className="font-semibold text-fg-primary">FAQ</h2>
         <p>
           <strong className="text-fg-primary">Is this a pump.fun clone?</strong>{" "}
-          No — equity/RWA positioning, eligibility, disclosures, and teal
+          No — equity/RWA positioning, a self-attestation &amp; risk disclosure (not KYC), issuer disclosures, and teal
           fintech chrome — same Meteora DBC → DAMM v2 infra as serious launchpads.
         </p>
         <p>

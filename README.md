@@ -42,7 +42,7 @@ Built for [Superteam Earn · Meteora DBC](https://superteam.fun/earn/listing/met
 | `/api/launches` | Shared EquiCurve launch registry (GET / POST / PATCH) |
 | `/api/explore` | Explore discovery: registry + best-effort RPC enrich (~45s cache) |
 
-Eligibility gate (geo / risk self-attest) gates Create + first trade.
+A self-attestation & risk-disclosure prompt is shown before Create / Trade. It is **not KYC**: it does not verify identity or location, does not enforce jurisdictional eligibility, and is stored only in the browser.
 
 ## On-chain Create mapping
 
@@ -73,6 +73,7 @@ npm run dev
 
 ```bash
 npm run typecheck
+npm test        # vitest unit tests (amounts, validation, auth, registry, explore, graduation states, presets, errors, RPC retry)
 npm run build
 ```
 
@@ -82,10 +83,11 @@ Health check: `GET /api/health` → `{ ok, cluster, rpcHost, slot, registry: { b
 
 | Variable | Required | Notes |
 | --- | --- | --- |
-| `NEXT_PUBLIC_RPC_URL` | Recommended | Defaults to public `api.devnet.solana.com` (rate-limited) |
+| `NEXT_PUBLIC_RPC_URL` | Recommended | Browser RPC (wallet txs + client reads). Defaults to public `api.devnet.solana.com` (rate-limited). Visible to users — use a key-restricted/domain-locked URL. |
+| `RPC_URL` | Recommended | **Server-only** dedicated RPC for API routes (registry verification, Explore enrichment, health). Never exposed to the browser. Falls back to `NEXT_PUBLIC_RPC_URL`. |
 | `NEXT_PUBLIC_CLUSTER` | No | `devnet` (default) / `mainnet-beta` / `testnet` |
 | `NEXT_PUBLIC_POOL_CONFIG_KEY` | No | Reuse partner PoolConfig; else each launch creates config+pool |
-| `NEXT_PUBLIC_DAMM_V2_CONFIG` | No | Defaults to published 100 bps DAMM v2 migration fee config |
+| `NEXT_PUBLIC_DAMM_V2_CONFIG` | No | Optional sanity override only. Migration always uses `DAMM_V2_MIGRATION_FEE_ADDRESS[config.migrationFeeOption]`; if this is set and differs, migration is refused with a clear message. |
 | `NEXT_PUBLIC_TRANSFER_HOOK_PROGRAM` | No | Executable Token-2022 transfer-hook program (no fake default) |
 | `UPSTASH_REDIS_REST_URL` | No | With token → durable Upstash Redis registry (recommended on Vercel) |
 | `UPSTASH_REDIS_REST_TOKEN` | No | REST token from Upstash console — never commit |
@@ -117,13 +119,29 @@ If Upstash is empty and a local registry file exists on that instance, the serve
 
 (Also on `/trust`.)
 
+## Registry trust model
+
+- **Register (`POST /api/launches`)** takes only a wallet-signed payload `{ payload: { v, action, cluster, pool, mint, profile, metadata }, auth: { signer, signature, issuedAt } }` (strict schema — unknown keys such as `status` or `creator` are rejected). The server verifies the ed25519 signature (≤20 min old), re-reads the pool on-chain, requires `payload.mint` = on-chain base mint and signer = on-chain pool creator, and derives **every** chain field (creator, config, quote, lock, status, migration) from chain. Older authorizations are rejected (409).
+- **Refresh (`PATCH /api/launches`)** accepts only `{ pool }`; the server re-reads chain state (status / graduation / DAMM v2 pool). Clients can never set status.
+- **Metadata (`PUT /api/metadata/<mint>`)** uses the same signed payload. Before launch (mint not on-chain) the signer becomes the owner; afterwards only the owner / on-chain creator can edit.
+- Wallets without `signMessage` (or a declined prompt) still launch; the offering stays local-only and metadata is inlined as a `data:` URI.
+- Rate limits are in-memory per server instance (best-effort, not a WAF).
+
+## Verification states (Explore / offering page)
+
+Each live offering shows **Verified on-chain**, **Not found on-chain**, **RPC unavailable** or **Not checked**, with the cluster and "last checked" time. Status/progress are shown as verified only when read on-chain in that response; otherwise status is marked *unverified* and progress is **unknown** (never 0%).
+
+## Graduation states
+
+`/o/[id]` and `/o/[id]/graduate` read `isMigrated`, `migrationProgress`, quote reserve and `migrationQuoteThreshold` from the DBC pool/config accounts and show: **Status unknown** (read failed) · **Not eligible** (below threshold, locker pending, or config not DAMM v2 / unknown fee option) · **Eligible** · **Migration submitted** · **Migration confirmed** · **DAMM v2 pool verified**. The migrate transaction is built only after re-checking eligibility on-chain, success is shown only after the tx confirms **and** the DAMM v2 pool account is fetched (and holds this offering's mints). The DAMM ticket treats the pool as live only after that fetch — a derived address is not proof.
+
 ## Explore discovery model
 
 | Piece | Role |
 | --- | --- |
-| **EquiCurve registry** | On successful Create, client `POST /api/launches` upserts pool/mint/config/name. Honest label: *not a full chain indexer*. |
+| **EquiCurve registry** | On successful Create, client `POST /api/launches` with a creator-signed payload (see trust model). Honest label: *not a full chain indexer*. |
 | **Storage backends** | **file** (default): `data/launches/registry.json` for `next dev`. **upstash**: when `UPSTASH_REDIS_REST_*` are set — durable across Vercel deploys. Active backend is exposed as `registry.backend` on `/api/health`, `/api/launches`, `/api/explore` (no tokens). |
-| **`GET /api/explore`** | Returns registry offerings; best-effort on-chain progress via DBC SDK (`getPool` + curve progress helpers), capped + **~45s in-memory cache** to protect RPC. |
+| **`GET /api/explore`** | Returns registry offerings with per-offering verification state; on-chain progress = quote reserve / migration threshold from the pool + config accounts (first 24 offerings, 4 concurrent, 8s timeout each), **~45s in-memory cache**. |
 | **localStorage** | Still kept so a single browser works offline from the registry; Explore merges and dedupes by pool. |
 | **Shared PoolConfig GPA** | If `NEXT_PUBLIC_POOL_CONFIG_KEY` is set, supplemental `getPoolsByConfig` (memcmp filter) — not a full-program scan. |
 | **Meteora DBC Data API** | `https://dbc.datapi.meteora.ag/pools` exists and indexes ~all DBC pools, but **cannot filter EquiCurve-created** offerings. We do **not** dump that feed onto Explore (would be unlabeled meme markets). |

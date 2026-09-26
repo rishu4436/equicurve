@@ -9,7 +9,6 @@ import {
   DOCS,
   explorerAddressUrl,
   explorerTxUrl,
-  getDammV2ConfigKey,
   quoteLabelForMint,
 } from "@/lib/constants";
 import {
@@ -25,6 +24,7 @@ import {
   type DammQuoteResult,
   type DammSwapDirection,
 } from "@/lib/damm";
+import { tryFormatAtoms } from "@/lib/amounts";
 import { toUserMessage } from "@/lib/errors";
 import { pushActivity, updateLaunch } from "@/lib/local/launches";
 import { signAndSendTransaction } from "@/lib/send";
@@ -34,6 +34,8 @@ type Props = {
   baseMint: string;
   quoteMint: string;
   storedDammPool?: string | null;
+  /** DAMM v2 config required by the DBC pool's migrationFeeOption (from chain). */
+  dammConfig?: string | null;
   onGateRequired?: () => boolean;
   gateOk?: boolean;
 };
@@ -43,13 +45,7 @@ function shortAddr(value: string, n = 4) {
 }
 
 function formatRaw(raw: string, decimals: number, maxFrac = 6): string {
-  try {
-    const n = Number(raw) / 10 ** decimals;
-    if (!Number.isFinite(n)) return raw;
-    return n.toLocaleString(undefined, { maximumFractionDigits: maxFrac });
-  } catch {
-    return raw;
-  }
+  return tryFormatAtoms(raw, decimals, maxFrac, raw);
 }
 
 export function DammTicket({
@@ -57,6 +53,7 @@ export function DammTicket({
   baseMint,
   quoteMint,
   storedDammPool,
+  dammConfig: dammConfigProp,
   onGateRequired,
   gateOk,
 }: Props) {
@@ -71,7 +68,7 @@ export function DammTicket({
   const [quote, setQuote] = useState<DammQuoteResult | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const dammConfig = getDammV2ConfigKey().toBase58();
+  const dammConfig = dammConfigProp ?? null;
   const quoteLabel = quoteLabelForMint(quoteMint);
 
   const refresh = useCallback(async () => {
@@ -82,6 +79,7 @@ export function DammTicket({
         baseMint,
         quoteMint,
         storedDammPool,
+        dammConfig,
       });
       if (!resolved.address) {
         setSnap(null);
@@ -91,9 +89,6 @@ export function DammTicket({
         );
         return;
       }
-      if (resolved.exists && resolved.address !== storedDammPool) {
-        updateLaunch(dbcPool, { dammPool: resolved.address });
-      }
       const next = await fetchDammPoolSnapshot({
         connection,
         pool: new PublicKey(resolved.address),
@@ -102,6 +97,10 @@ export function DammTicket({
         source: resolved.source,
       });
       setSnap(next);
+      // Persist only after the pool account was actually fetched + mint-checked.
+      if (next.exists && next.address !== storedDammPool) {
+        updateLaunch(dbcPool, { dammPool: next.address });
+      }
       if (next.exists && wallet.publicKey) {
         setPositions(
           await fetchUserDammPositions({
@@ -123,6 +122,7 @@ export function DammTicket({
     baseMint,
     quoteMint,
     storedDammPool,
+    dammConfig,
     dbcPool,
     wallet.publicKey,
   ]);
@@ -150,7 +150,7 @@ export function DammTicket({
         pool: new PublicKey(snap.address),
         snap,
         direction,
-        amountUi: Number(amount),
+        amountUi: amount,
       });
       setQuote(q);
       toast.message(
@@ -181,7 +181,7 @@ export function DammTicket({
         pool: new PublicKey(snap.address),
         snap,
         direction,
-        amountUi: Number(amount),
+        amountUi: amount,
       });
       setQuote(q);
       const sig = await signAndSendTransaction({ connection, wallet, tx });
@@ -242,12 +242,13 @@ export function DammTicket({
   }
 
   const statusLabel = useMemo(() => {
-    if (!snap) return "Resolving…";
-    if (!snap.exists) return "Address known · account not found yet";
+    if (!snap) return error ? "Unknown · not verified" : "Resolving…";
+    if (!snap.exists) return "Derived address · account not found";
+    // Live only after the pool account was fetched and matched this offering's mints.
     return snap.poolStatus === 0
-      ? "Live on DAMM v2"
-      : `Status code ${snap.poolStatus}`;
-  }, [snap]);
+      ? "Live on DAMM v2 · account verified"
+      : `Account verified · status code ${snap.poolStatus}`;
+  }, [snap, error]);
 
   return (
     <div className="ec-card space-y-4 border-signal-grad/30 p-5 text-sm">
@@ -307,10 +308,11 @@ export function DammTicket({
           <dt className="text-fg-muted">Source</dt>
           <dd className="text-fg-secondary">
             {snap?.source === "launch"
-              ? "Stored from migration"
+              ? "Stored address"
               : snap?.source === "derived"
-                ? "Derived from fee config + mints"
+                ? "Derived from migrationFeeOption config + mints"
                 : "Unresolved"}
+            {snap && (snap.exists ? " · account fetched" : " · not proof of existence")}
           </dd>
         </div>
         <div className="flex justify-between gap-3">
@@ -343,14 +345,18 @@ export function DammTicket({
         <div className="flex justify-between gap-3">
           <dt className="text-fg-muted">DAMM fee config</dt>
           <dd className="font-mono">
-            <a
-              href={explorerAddressUrl(dammConfig)}
-              target="_blank"
-              rel="noreferrer"
-              className="text-accent hover:underline"
-            >
-              {shortAddr(dammConfig, 4)}
-            </a>
+            {dammConfig ? (
+              <a
+                href={explorerAddressUrl(dammConfig)}
+                target="_blank"
+                rel="noreferrer"
+                className="text-accent hover:underline"
+              >
+                {shortAddr(dammConfig, 4)}
+              </a>
+            ) : (
+              "unknown"
+            )}
           </dd>
         </div>
       </dl>
@@ -520,7 +526,9 @@ export function DammTicket({
                   <p className="text-fg-muted">
                     Pending fees A/B:{" "}
                     <span className="font-mono text-fg-secondary">
-                      {p.feeAPending} / {p.feeBPending}
+                      {snap?.exists
+                        ? `${formatRaw(p.feeAPending, snap.tokenADecimals)} / ${formatRaw(p.feeBPending, snap.tokenBDecimals)}`
+                        : `${p.feeAPending} / ${p.feeBPending} (atoms)`}
                     </span>
                   </p>
                   <button

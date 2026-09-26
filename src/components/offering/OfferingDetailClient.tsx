@@ -14,14 +14,21 @@ import { PriceHistoryChart } from "@/components/offering/PriceHistoryChart";
 import { ProgressRing } from "@/components/ui/ProgressRing";
 import { StatusPill } from "@/components/ui/StatusPill";
 import {
+  GraduationStatusCard,
+  useDammDestination,
+  useGraduationView,
+} from "@/components/offering/GraduationStatus";
+import { chainStatusFromCurve } from "@/lib/dbc/curveState";
+import { migrationConfigForSnapshot } from "@/lib/dbc/migrate";
+import { PoolNotFoundError } from "@/lib/dbc/poolAccount";
+import { tryFormatAtoms } from "@/lib/amounts";
+import {
   DBC_PROGRAM_ID,
   DAMM_V2_PROGRAM,
   explorerAddressUrl,
   explorerTxUrl,
-  getDammV2ConfigKey,
+  getCluster,
   quoteLabelForMint,
-  getUsdcMint,
-  WSOL_MINT,
 } from "@/lib/constants";
 import { fetchPoolSnapshot } from "@/lib/dbc/migrate";
 import type { PoolSnapshot } from "@/lib/dbc/types";
@@ -75,6 +82,8 @@ export function OfferingDetailClient({ id, demo }: Props) {
   const [rpcActivityError, setRpcActivityError] = useState<string | null>(null);
   const [snapshot, setSnapshot] = useState<PoolSnapshot | null>(null);
   const [snapError, setSnapError] = useState<string | null>(null);
+  const [snapReadFailed, setSnapReadFailed] = useState(false);
+  const [snapCheckedAt, setSnapCheckedAt] = useState<string | null>(null);
   const [holders, setHolders] = useState<HolderHint>({
     supply: null,
     creatorAta: null,
@@ -113,9 +122,16 @@ export function OfferingDetailClient({ id, demo }: Props) {
         new PublicKey(poolAddress),
       );
       setSnapshot(s);
+      setSnapReadFailed(false);
+      setSnapCheckedAt(s.checkedAt);
     } catch (e) {
-      setSnapError(e instanceof Error ? e.message : "Pool fetch failed");
+      setSnapError(
+        (e instanceof PoolNotFoundError ? "Pool not found on this cluster: " : "RPC unavailable — state unknown: ") +
+          (e instanceof Error ? e.message : "Pool fetch failed"),
+      );
       setSnapshot(null);
+      setSnapReadFailed(true);
+      setSnapCheckedAt(new Date().toISOString());
     }
   }, [connection, poolAddress]);
 
@@ -238,33 +254,47 @@ export function OfferingDetailClient({ id, demo }: Props) {
     demo?.thesis ??
     "On-chain pool opened via EquiCurve Create. Trade on-curve; graduate to DAMM v2 when ready.";
   const sector = launch?.sector ?? demo?.sector ?? "Other";
-  const quote = snapshot
+  const quote = snapshot?.quoteMint
     ? quoteLabelForMint(snapshot.quoteMint)
     : launch?.quote ?? demo?.quote ?? "SOL";
-  const lockPct = launch?.lockPct ?? demo?.lockPct ?? 10;
+  const lockPct = snapshot?.lockPct ?? launch?.lockPct ?? demo?.lockPct ?? 10;
   const presetId = launch?.presetId ?? demo?.presetId ?? "short";
   const raiseTarget = launch?.raiseTarget ?? demo?.raiseTarget ?? 0;
   const raisedDemo = demo?.raised ?? 0;
   const mintRetained = launch?.mintRenounce === false;
 
-  const progressPct = snapshot
-    ? snapshot.quoteProgress * 100
+  // Live pools: progress only from the authoritative on-chain read; null = unknown.
+  const progressPct: number | null = snapshot
+    ? snapshot.quoteProgress == null
+      ? null
+      : snapshot.quoteProgress * 100
     : illustrative && raiseTarget > 0
       ? (raisedDemo / raiseTarget) * 100
-      : 0;
+      : null;
 
-  const status =
-    snapshot?.isMigrated ||
-    launch?.status === "graduated" ||
-    demo?.status === "graduated"
-      ? "graduated"
-      : snapshot && snapshot.quoteProgress >= 0.999
-        ? "complete"
-        : launch?.status ?? demo?.status ?? "raising";
+  const destination = useDammDestination(snapshot);
+  const gradView = useGraduationView({
+    snapshot,
+    readFailed: snapReadFailed || (!snapshot && !illustrative),
+    destination,
+  });
+  const curvePhase = snapshot?.curve.phase ?? "unknown";
+  // Status comes from chain when read; otherwise it is explicitly unverified.
+  const status: string = snapshot
+    ? chainStatusFromCurve(snapshot.curve, snapshot.quoteReserve)
+    : illustrative
+      ? (demo?.status ?? "raising")
+      : poolAddress
+        ? "unknown"
+        : (launch?.status ?? demo?.status ?? "unknown");
+  const statusUnverified = !snapshot && !illustrative;
+  const migratedOnChain = curvePhase === "migrated";
+  const dammLive = migratedOnChain && destination === "exists";
 
   const mint = snapshot?.baseMint ?? launch?.mint ?? demo?.mint;
   const config = snapshot?.config ?? launch?.config;
-  const dammConfig = getDammV2ConfigKey().toBase58();
+  const migrationCfg = snapshot ? migrationConfigForSnapshot(snapshot) : null;
+  const dammConfig = migrationCfg?.expectedDammConfig ?? null;
 
   return (
     <EligibilityGate
@@ -297,7 +327,7 @@ export function OfferingDetailClient({ id, demo }: Props) {
               <div className="mt-1 flex flex-wrap items-center gap-2">
                 <span className="font-mono text-sm text-fg-muted">${ticker}</span>
                 <span className="ec-chip">{sector}</span>
-                <StatusPill status={status} />
+                <StatusPill status={status} unverified={statusUnverified} />
                 {illustrative && (
                   <span className="rounded-pill border border-signal-warn/40 bg-signal-warn/10 px-2 py-0.5 text-[10px] text-signal-warn">
                     Illustrative · not live
@@ -346,22 +376,36 @@ export function OfferingDetailClient({ id, demo }: Props) {
               )}
             </div>
           </div>
-          {status !== "graduated" && (
+          {!migratedOnChain && (
             <div className="flex flex-col items-center gap-1">
-              <ProgressRing value={progressPct} size={72} />
+              {progressPct == null ? (
+                <div className="flex h-[72px] w-[72px] items-center justify-center rounded-full border-2 border-line font-mono text-xs text-fg-muted">
+                  unknown
+                </div>
+              ) : (
+                <ProgressRing value={progressPct} size={72} />
+              )}
               <span className="text-[10px] text-fg-muted">
                 {snapshot
                   ? "On-chain quote progress"
                   : illustrative
                     ? "Example raise %"
-                    : "Awaiting pool"}
+                    : snapReadFailed
+                      ? "Unknown — RPC read failed"
+                      : "Reading pool…"}
               </span>
             </div>
           )}
-          {status === "graduated" && (
+          {migratedOnChain && (
             <div className="text-right text-sm text-signal-grad">
-              DAMM v2 live
-              <div className="text-xs text-fg-muted">Curve → graduated liquidity</div>
+              {dammLive ? "DAMM v2 live · pool verified" : "Migrated on DBC"}
+              <div className="text-xs text-fg-muted">
+                {dammLive
+                  ? "Curve → graduated liquidity"
+                  : destination === "checking" || destination === "unchecked"
+                    ? "Verifying DAMM v2 pool account…"
+                    : "DAMM v2 pool account not verified yet"}
+              </div>
             </div>
           )}
         </header>
@@ -388,23 +432,35 @@ export function OfferingDetailClient({ id, demo }: Props) {
                 key={`${poolAddress ?? "none"}-${historyNonce}`}
                 poolAddress={poolAddress}
                 quoteLabel={quote}
-                progress={progressPct / 100}
+                progress={(progressPct ?? 0) / 100}
                 illustrative={illustrative}
               />
               <div className="mt-4 flex items-center gap-4 border-t border-line pt-4">
-                <ProgressRing value={progressPct} size={72} stroke={5} />
+                {progressPct != null && <ProgressRing value={progressPct} size={72} stroke={5} />}
                 <div className="space-y-1 text-sm text-fg-secondary">
                   <p>
                     Quote progress{" "}
                     <span className="font-mono text-fg-primary">
-                      {progressPct.toFixed(2)}%
+                      {progressPct == null ? "unknown" : `${progressPct.toFixed(2)}%`}
                     </span>
                   </p>
+                  {snapshot && snapshot.quoteDecimals != null && snapshot.migrationQuoteThreshold && (
+                    <p className="text-xs">
+                      Quote reserve{" "}
+                      <span className="font-mono text-fg-primary">
+                        {tryFormatAtoms(snapshot.quoteReserve, snapshot.quoteDecimals, 4)} /{" "}
+                        {tryFormatAtoms(snapshot.migrationQuoteThreshold, snapshot.quoteDecimals, 4)} {quote}
+                      </span>{" "}
+                      (migration threshold)
+                    </p>
+                  )}
                   {snapshot && (
                     <p>
                       Base progress{" "}
                       <span className="font-mono text-fg-primary">
-                        {(snapshot.baseProgress * 100).toFixed(2)}%
+                        {snapshot.baseProgress == null
+                          ? "unknown"
+                          : `${(snapshot.baseProgress * 100).toFixed(2)}%`}
                       </span>
                     </p>
                   )}
@@ -420,18 +476,31 @@ export function OfferingDetailClient({ id, demo }: Props) {
                   {snapError && (
                     <p className="text-xs text-signal-warn">{snapError}</p>
                   )}
+                  {poolAddress && !illustrative && (
+                    <p className="text-[10px] text-fg-muted">
+                      {getCluster()} · last checked{" "}
+                      {snapCheckedAt ? new Date(snapCheckedAt).toLocaleTimeString() : "never"}
+                    </p>
+                  )}
                 </div>
               </div>
-              {(status === "complete" ||
-                (snapshot &&
-                  snapshot.quoteProgress >= 0.999 &&
-                  !snapshot.isMigrated)) &&
-                poolAddress && (
+              {poolAddress && !illustrative && (
+                <div className="mt-4">
+                  <GraduationStatusCard view={gradView} snapshot={snapshot} />
+                </div>
+              )}
+              {poolAddress &&
+                !illustrative &&
+                (gradView.state === "eligible" ||
+                  gradView.state === "confirmed" ||
+                  gradView.state === "failed") && (
                   <Link
                     href={`/o/${poolAddress}/graduate`}
                     className="ec-btn-primary mt-4 inline-flex"
                   >
-                    Open graduation ceremony
+                    {gradView.state === "eligible"
+                      ? "Open graduation ceremony"
+                      : "View graduation status"}
                   </Link>
                 )}
             </div>
@@ -524,7 +593,7 @@ export function OfferingDetailClient({ id, demo }: Props) {
                           <span className="text-fg-muted">
                             {launch
                               ? ok
-                                ? "Attested locally"
+                                ? "Issuer self-attested (unverified)"
                                 : "Not attested"
                               : illustrative
                                 ? "Example only"
@@ -743,21 +812,26 @@ export function OfferingDetailClient({ id, demo }: Props) {
                       { label: "Mint", value: mint },
                       {
                         label: "Migration status",
-                        value: snapshot
-                          ? snapshot.isMigrated
-                            ? "Migrated"
-                            : `${(snapshot.quoteProgress * 100).toFixed(2)}% to threshold`
-                          : "—",
+                        value: `${gradView.label}${
+                          snapshot?.quoteProgress != null && !migratedOnChain
+                            ? ` · ${(snapshot.quoteProgress * 100).toFixed(2)}% to threshold`
+                            : ""
+                        }`,
                         link: false,
                       },
                       {
-                        label: "DAMM v2 fee config",
-                        value: dammConfig,
+                        label: "DAMM v2 config (migrationFeeOption)",
+                        value: dammConfig ?? (migrationCfg && !migrationCfg.ok ? migrationCfg.reason : "unknown"),
+                        link: !!dammConfig,
                       },
                       {
                         label: "DAMM pool (post)",
-                        value: launch?.dammPool ?? "Pending migration",
-                        link: !!launch?.dammPool,
+                        value: dammLive
+                          ? (launch?.dammPool ?? "verified (see DAMM ticket)")
+                          : migratedOnChain
+                            ? "Not verified yet"
+                            : "Pending migration",
+                        link: dammLive && !!launch?.dammPool,
                       },
                       {
                         label: "DBC program",
@@ -799,36 +873,31 @@ export function OfferingDetailClient({ id, demo }: Props) {
 
           <div className="space-y-4">
             
-                        {status === "graduated" && poolAddress && mint ? (
+            {migratedOnChain && poolAddress && snapshot?.baseMint && snapshot.quoteMint ? (
               <DammTicket
                 dbcPool={poolAddress}
-                baseMint={mint}
-                quoteMint={
-                  snapshot?.quoteMint ??
-                  (quote === "USDC"
-                    ? (getUsdcMint()?.toBase58() ?? "")
-                    : WSOL_MINT.toBase58())
-                }
+                baseMint={snapshot.baseMint}
+                quoteMint={snapshot.quoteMint}
                 storedDammPool={launch?.dammPool}
+                dammConfig={dammConfig}
                 onGateRequired={() => eligibility.ensure()}
                 gateOk={eligibility.ok || undefined}
               />
             ) : null}
 
-            {status === "graduated" && !(poolAddress && mint) ? (
+            {migratedOnChain && !(poolAddress && snapshot?.baseMint && snapshot.quoteMint) ? (
               <div className="ec-card space-y-3 border-signal-grad/30 p-5 text-sm">
                 <h2 className="font-semibold text-signal-grad">
-                  Graduated — DAMM v2
+                  Migrated on DBC
                 </h2>
                 <p className="text-fg-secondary">
-                  This offering is marked graduated, but base mint / pool data is
-                  incomplete so the in-app DAMM ticket cannot load yet.
+                  Base / quote mint could not be read, so the DAMM v2 ticket cannot
+                  load yet.
                 </p>
               </div>
             ) : null}
 
-
-            {poolAddress && status !== "graduated" ? (
+            {poolAddress && !migratedOnChain ? (
               <TradePanel
                 poolAddress={poolAddress}
                 compact
@@ -862,7 +931,7 @@ export function OfferingDetailClient({ id, demo }: Props) {
             <div className="ec-card p-4 text-xs text-fg-muted">
               <p className="mb-1 font-medium text-fg-secondary">Trust mini-strip</p>
               <p>
-                Lock ≥{lockPct}% · Local attestations · Program IDs →{" "}
+                Lock ≥{lockPct}% · Issuer disclosures are self-attested (not verified) · Program IDs →{" "}
                 <Link href="/trust" className="text-accent hover:underline">
                   Trust Center
                 </Link>
