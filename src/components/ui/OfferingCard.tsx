@@ -3,6 +3,7 @@ import type { DemoOffering } from "@/lib/demo/offerings";
 import { formatLastChecked, VerificationBadge } from "./VerificationBadge";
 import { ProgressRing } from "./ProgressRing";
 import { StatusPill } from "./StatusPill";
+import { displayStatus } from "@/lib/explore/verification";
 
 export function OfferingCard({ offering }: { offering: DemoOffering }) {
   const illustrative = offering.illustrative || !offering.pool;
@@ -49,7 +50,10 @@ export function OfferingCard({ offering }: { offering: DemoOffering }) {
       <div className="flex flex-wrap gap-1.5">
         <span className="ec-chip">{offering.sector}</span>
         <span className="ec-chip">{offering.quote}</span>
-        <StatusPill status={offering.status} unverified={statusUnverified} />
+        <StatusPill
+          status={illustrative ? offering.status : displayStatus(offering)}
+          unverified={statusUnverified}
+        />
         {illustrative && (
           <span className="rounded-pill border border-signal-warn/40 bg-signal-warn/10 px-2 py-0.5 text-[10px] text-signal-warn">
             Illustrative · not live

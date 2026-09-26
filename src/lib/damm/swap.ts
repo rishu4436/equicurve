@@ -30,7 +30,37 @@ function uiToAmount(ui: string, decimals: number): BN {
   }
 }
 
-function pickMints(
+/** UI slippage percent (1 = 1%) → basis points for the cp-amm SDK. */
+export function slippagePctToBps(pct: number): number {
+  if (!Number.isFinite(pct) || pct <= 0 || pct > 50) {
+    throw new EquiCurveError("Slippage must be between 0.01% and 50%.", "VALIDATION");
+  }
+  return Math.max(1, Math.round(pct * 100));
+}
+
+/**
+ * Map a cp-amm `getQuote2` ExactIn result to (expected out, min out).
+ * SDK semantics: `outputAmount` = expected output after trading fees;
+ * `minimumAmountOut` = outputAmount reduced by slippage. Never label the
+ * minimum as the expected amount.
+ */
+export function dammQuoteAmounts(quote: { outputAmount?: BN; minimumAmountOut?: BN }): {
+  amountOut: BN;
+  minimumAmountOut: BN;
+} {
+  const out = quote.outputAmount;
+  const min = quote.minimumAmountOut;
+  if (!out || !min) {
+    throw new EquiCurveError("DAMM v2 quote is missing output amounts.", "SDK");
+  }
+  if (out.isZero() || min.isZero()) {
+    throw new EquiCurveError("Quote returned zero output — amount too small.", "VALIDATION");
+  }
+  return { amountOut: out, minimumAmountOut: min };
+}
+
+/** Input/output mint + decimals for a direction, for either token order. Exported for tests. */
+export function pickMints(
   snap: DammPoolSnapshot,
   direction: DammSwapDirection,
 ): {
@@ -110,7 +140,9 @@ export async function quoteDammSwap(args: {
 
   const quote = cp.getQuote2({
     inputTokenMint: inputMint,
-    slippage: slippagePct,
+    // cp-amm getQuote2 takes slippage in BASIS POINTS (getAmountWithSlippage);
+    // passing the UI percent directly made 1% act as 0.01%.
+    slippage: slippagePctToBps(slippagePct),
     currentPoint,
     poolState,
     tokenADecimal: snap.tokenADecimals,
@@ -120,21 +152,10 @@ export async function quoteDammSwap(args: {
     amountIn,
   });
 
-  const q = quote as {
-    excludedTransferFeeAmountOut?: BN;
-    includedTransferFeeAmountOut?: BN;
-    minimumAmountOut?: BN;
-    priceImpact?: { toFixed: (n: number) => string } | string | number;
-  };
-
-  const amountOutBn =
-    q.excludedTransferFeeAmountOut ??
-    q.includedTransferFeeAmountOut ??
-    q.minimumAmountOut ??
-    new BN(0);
-  const minOut = q.minimumAmountOut ?? amountOutBn;
+  const { amountOut: amountOutBn, minimumAmountOut: minOut } = dammQuoteAmounts(quote);
 
   let priceImpactPct: string | null = null;
+  const q = quote as { priceImpact?: { toFixed: (n: number) => string } | string | number };
   if (q.priceImpact != null) {
     const impact = q.priceImpact;
     priceImpactPct =

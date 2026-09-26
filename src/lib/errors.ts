@@ -54,6 +54,7 @@ const DBC_PROGRAM = "dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN";
 const DAMM_V2_PROGRAM = "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG";
 const TOKEN_PROGRAM = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
 const TOKEN_2022_PROGRAM = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PeNszS5q5HS1bUsu";
+const SYSTEM_PROGRAM = "11111111111111111111111111111111";
 
 /** Curated DBC program errors (codes from the SDK IDL). */
 const DBC_ERRORS: Record<number, [string, string]> = {
@@ -80,6 +81,11 @@ const DAMM_ERRORS: Record<number, [string, string]> = {
   6002: ["ExceededSlippage", "Price moved beyond your slippage tolerance on DAMM v2. Re-quote and try again."],
   6003: ["PoolDisabled", "This DAMM v2 pool is disabled."],
   6006: ["AmountIsZero", "Amount is zero after fees — enter a larger amount."],
+};
+
+/** System program errors (SystemError enum). 1 = ResultWithNegativeLamports ("Transfer: insufficient lamports"). */
+const SYSTEM_ERRORS: Record<number, [string, string]> = {
+  1: ["InsufficientFunds", "Insufficient funds: your wallet needs more SOL (fees + rent) for this transaction."],
 };
 
 const SPL_TOKEN_ERRORS: Record<number, [string, string]> = {
@@ -182,6 +188,7 @@ export function mapError(err: unknown): MappedError {
     let entry: [string, string] | undefined;
     if (program === DAMM_V2_PROGRAM) entry = DAMM_ERRORS[code];
     else if (program === TOKEN_PROGRAM || program === TOKEN_2022_PROGRAM) entry = SPL_TOKEN_ERRORS[code];
+    else if (program === SYSTEM_PROGRAM) entry = SYSTEM_ERRORS[code];
     else if (program === DBC_PROGRAM || !program) entry = DBC_ERRORS[code] ?? (code < 100 ? SPL_TOKEN_ERRORS[code] : undefined);
     if (entry) {
       const [name, msg] = entry;

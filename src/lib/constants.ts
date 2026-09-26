@@ -21,23 +21,55 @@ export const USDC_MINT_DEVNET = new PublicKey(
 
 export type QuoteLabel = "SOL" | "USDC";
 
+/**
+ * Devnet/testnet only: a 6-decimal SPL mint used as the "USDC" quote instead
+ * of Circle's devnet USDC (which cannot be minted freely). Lets devnet e2e
+ * runs and demos use a self-minted stand-in. Ignored on mainnet-beta.
+ * Env: NEXT_PUBLIC_USDC_MINT_OVERRIDE
+ */
+export function getUsdcMintOverride(): PublicKey | null {
+  if (getCluster() === "mainnet-beta") return null;
+  const raw = process.env.NEXT_PUBLIC_USDC_MINT_OVERRIDE?.trim();
+  if (!raw) return null;
+  try {
+    return new PublicKey(raw);
+  } catch {
+    return null;
+  }
+}
+
 /** Known USDC mint for the active cluster, or null if none. */
 export function getUsdcMint(): PublicKey | null {
   const cluster = getCluster();
   if (cluster === "mainnet-beta") return USDC_MINT_MAINNET;
+  const override = getUsdcMintOverride();
+  if (override) return override;
   if (cluster === "devnet") return USDC_MINT_DEVNET;
   return null;
+}
+
+/** True for Circle USDC (mainnet / devnet) or the non-mainnet stand-in override. */
+export function isUsdcMint(mint: PublicKey | string): boolean {
+  const s = typeof mint === "string" ? mint : mint.toBase58();
+  return (
+    s === USDC_MINT_MAINNET.toBase58() ||
+    s === USDC_MINT_DEVNET.toBase58() ||
+    s === getUsdcMintOverride()?.toBase58()
+  );
+}
+
+/** All mints labelled "USDC" on this deployment (registry / explore labels). */
+export function knownUsdcMints(): string[] {
+  const out = [USDC_MINT_MAINNET.toBase58(), USDC_MINT_DEVNET.toBase58()];
+  const o = getUsdcMintOverride();
+  if (o) out.push(o.toBase58());
+  return out;
 }
 
 export function quoteLabelForMint(mint: PublicKey | string): QuoteLabel {
   const s = typeof mint === "string" ? mint : mint.toBase58();
   if (s === WSOL_MINT.toBase58()) return "SOL";
-  if (
-    s === USDC_MINT_MAINNET.toBase58() ||
-    s === USDC_MINT_DEVNET.toBase58()
-  ) {
-    return "USDC";
-  }
+  if (isUsdcMint(s)) return "USDC";
   return "SOL";
 }
 

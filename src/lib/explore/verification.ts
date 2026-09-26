@@ -42,6 +42,15 @@ export function applyChainLookup(
   };
 }
 
+/**
+ * Status to render for a live offering. When the on-chain read failed because
+ * the RPC is unavailable we must not echo a stored "complete"/"graduated" as if
+ * it were current (same rule as the offering detail page): show "unknown".
+ */
+export function displayStatus(o: { status: string; verification?: ExploreOffering["verification"] }): string {
+  return o.verification?.state === "rpc_unavailable" ? "unknown" : o.status;
+}
+
 export function markNotChecked(o: ExploreOffering, cluster: string): ExploreOffering {
   return {
     ...o,

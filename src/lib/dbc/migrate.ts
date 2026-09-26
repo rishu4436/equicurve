@@ -10,7 +10,7 @@ import {
   type Transaction,
 } from "@solana/web3.js";
 import BN from "bn.js";
-import { getCluster, getDammV2ConfigOverride, USDC_MINT_DEVNET, USDC_MINT_MAINNET, WSOL_MINT } from "@/lib/constants";
+import { getCluster, getDammV2ConfigOverride, WSOL_MINT } from "@/lib/constants";
 import { getCpAmm } from "@/lib/damm/client";
 import { EquiCurveError } from "@/lib/errors";
 import { withRpcRetry } from "@/lib/rpc";
@@ -58,7 +58,8 @@ async function resolveQuoteDecimals(
   quoteMint: PublicKey,
 ): Promise<number | null> {
   if (quoteMint.equals(WSOL_MINT)) return 9;
-  if (quoteMint.equals(USDC_MINT_MAINNET) || quoteMint.equals(USDC_MINT_DEVNET)) return 6;
+  // Always read decimals from the mint account for non-SOL quotes (a USDC
+  // stand-in on devnet is not guaranteed to be 6 decimals).
   try {
     const info = await withRpcRetry(() => connection.getParsedAccountInfo(quoteMint));
     const data = info.value?.data as { parsed?: { info?: { decimals?: number } } } | undefined;

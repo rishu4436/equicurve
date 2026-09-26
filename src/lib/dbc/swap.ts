@@ -7,7 +7,7 @@ import { withRpcRetry } from "@/lib/rpc";
 import { setFreshBlockhash } from "@/lib/send";
 import { getDbcClient } from "./client";
 import { requireDbcPool } from "./poolAccount";
-import { USDC_MINT_DEVNET, USDC_MINT_MAINNET, WSOL_MINT } from "@/lib/constants";
+import { isUsdcMint, WSOL_MINT } from "@/lib/constants";
 
 export type SwapDirection = "buy" | "sell";
 
@@ -15,7 +15,7 @@ export const DEFAULT_SLIPPAGE_BPS = 100;
 
 function knownQuoteDecimals(mint: PublicKey): number | null {
   if (mint.equals(WSOL_MINT)) return 9;
-  if (mint.equals(USDC_MINT_MAINNET) || mint.equals(USDC_MINT_DEVNET)) return 6;
+  if (isUsdcMint(mint)) return 6;
   return null;
 }
 

@@ -1,6 +1,6 @@
 import { PublicKey } from "@solana/web3.js";
 import { getServerConnection } from "@/lib/connection";
-import { USDC_MINT_DEVNET, USDC_MINT_MAINNET } from "@/lib/constants";
+import { knownUsdcMints } from "@/lib/constants";
 import {
   expectedDammDestination,
   lookupPoolOnChain,
@@ -9,10 +9,7 @@ import {
 import type { PoolSnapshot } from "@/lib/dbc/types";
 import type { ChainLookupResult } from "./authorize";
 
-export const USDC_MINTS: readonly string[] = [
-  USDC_MINT_MAINNET.toBase58(),
-  USDC_MINT_DEVNET.toBase58(),
-];
+export const USDC_MINTS: readonly string[] = knownUsdcMints();
 
 export function serverLookup(pool: string): Promise<ChainLookupResult> {
   return lookupPoolOnChain(getServerConnection(), new PublicKey(pool));
