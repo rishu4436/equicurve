@@ -77,6 +77,8 @@ npm test        # vitest unit tests (amounts, validation, auth, registry, explor
 npm run build
 ```
 
+On-chain end-to-end suite (drives the same `src/lib` functions the UI uses, signing with local keypairs): `npm run e2e:devnet`. Needs an app instance for the `/api` routes (`E2E_APP_URL`, default `http://localhost:3011`) and keypairs under `E2E_KEYS_DIR` (default `/workspace/equicurve-e2e/keys`, never committed). `E2E_RPC_URL=http://127.0.0.1:8899` runs it against a local validator with the Meteora programs cloned from devnet. Evidence: [docs/e2e-devnet-evidence.md](docs/e2e-devnet-evidence.md).
+
 Health check: `GET /api/health` → `{ ok, cluster, rpcHost, slot, registry: { backend } }` (host + backend name only — no API keys / tokens).
 
 ## Environment
@@ -151,7 +153,7 @@ Each live offering shows **Verified on-chain**, **Not found on-chain**, **RPC un
 
 ## Known limits
 
-- USDC quote requires the known Circle mint on the active cluster (devnet/mainnet); testnet has none
+- USDC quote requires the known Circle mint on the active cluster (devnet/mainnet); testnet has none. On non-mainnet clusters `NEXT_PUBLIC_USDC_MINT_OVERRIDE` can point at a self-minted 6-decimal stand-in (used by the e2e suite)
 - Seed buy in USDC needs a funded USDC ATA
 - Transfer-hook create needs a real executable `NEXT_PUBLIC_TRANSFER_HOOK_PROGRAM` (no default/fake hook)
 - Mint+update authority retain only on transfer-hook profiles
