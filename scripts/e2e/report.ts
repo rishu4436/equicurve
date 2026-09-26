@@ -48,9 +48,15 @@ async function main() {
     const notes = r.notes.map((n) => n.replace(/\|/g, "\\|")).join("<br>");
     lines.push(`| ${i} | ${r.scenario} | ${r.step.replace(/\|/g, "\\|")} | **${r.status.toUpperCase()}** | ${txCells.join("<br>") || "—"} | ${addr || "—"} | ${notes} |`);
   }
-  fs.writeFileSync(path.join(OUT_DIR, `txs-${NETWORK}.json`), JSON.stringify(dump, null, 1));
+  const total = results.reduce((n, r) => n + r.sigs.length, 0);
+  const found = Object.keys(dump).length;
+  // solana-test-validator keeps a size-limited ledger, so old signatures age out of the RPC.
+  // Never overwrite a complete proof file with a partial one.
+  const target = found === total ? `txs-${NETWORK}.json` : `txs-${NETWORK}.partial.json`;
+  fs.writeFileSync(path.join(OUT_DIR, target), JSON.stringify(dump, null, 1));
   process.stdout.write(lines.join("\n") + "\n");
-  process.stderr.write(`${Object.keys(dump).length} signatures confirmed on ${NETWORK}\n`);
+  process.stderr.write(`${found} of ${total} signatures confirmed on ${NETWORK} (wrote ${target})\n`);
+  if (found !== total) process.exitCode = 2;
 }
 main().catch((e) => {
   console.error(e);

@@ -31,7 +31,7 @@ import { signLaunchPayload, type LaunchAuthPayload, type SignedLaunchBody } from
 import { getCluster, WSOL_MINT } from "@/lib/constants";
 import { getDbcClient } from "@/lib/dbc/client";
 import { planLaunchAddresses, prepareLaunchTransaction } from "@/lib/dbc/create";
-import { buildPresetConfig } from "@/lib/dbc/presets";
+import { buildPresetConfig, presetMigrationThresholdAtoms } from "@/lib/dbc/presets";
 import { quoteAndBuildSwap } from "@/lib/dbc/swap";
 import {
   expectedDammDestination,
@@ -41,7 +41,7 @@ import {
   prepareDammV2Migration,
   verifyDammV2Pool,
 } from "@/lib/dbc/migrate";
-import { deriveGraduationView, type DestinationCheck, type MigrationTxPhase } from "@/lib/dbc/curveState";
+import { deriveGraduationView, graduationNumbers, type DestinationCheck, type MigrationTxPhase } from "@/lib/dbc/curveState";
 import { prepareClaimCreatorFees, prepareClaimPartnerFees, fetchPoolFeeBreakdown } from "@/lib/dbc/claim";
 import { resolveDammPoolAddress, fetchDammPoolSnapshot } from "@/lib/damm/pool";
 import { buildDammSwapTx, quoteDammSwap } from "@/lib/damm/swap";
@@ -94,7 +94,7 @@ async function setup(oldBlockhashBox: { bh?: string }) {
     st.note(`RPC ${RPC_URL} (${NETWORK}); app ${APP_URL}; app cluster label ${getCluster()}`);
     for (const [n, kp, min] of [
       ["creator", creator, NETWORK === "devnet" ? 0.9 : 5],
-      ["trader", trader, NETWORK === "devnet" ? 0.5 : 5],
+      ["trader", trader, NETWORK === "devnet" ? 0.5 : 20],
       ["partner", partner, NETWORK === "devnet" ? 0.05 : 1],
       ["other", other, NETWORK === "devnet" ? 0.15 : 2],
     ] as const) {
@@ -318,7 +318,7 @@ async function verifyLaunch(st: Step, r: LaunchResult) {
 
 async function dbcSwap(st: Step, args: {
   label: string; pool: string; kp: Keypair; direction: "buy" | "sell"; amountUi: string; slippageBps: number; quote: "SOL" | "USDC"; baseProgram: PublicKey; baseMint: string;
-}): Promise<{ sig: string; received: bigint; expected: bigint; min: bigint }> {
+}): Promise<{ sig: string; received: bigint; expected: bigint; min: bigint; q: Awaited<ReturnType<typeof quoteAndBuildSwap>>; quoteSpent: bigint | null }> {
   const q = await quoteAndBuildSwap({ connection, owner: args.kp.publicKey, pool: new PublicKey(args.pool), direction: args.direction, amountUi: args.amountUi, slippageBps: args.slippageBps });
   const sig = await signAndSendTransaction({ connection, wallet: walletFor(args.kp), tx: q.tx });
   st.sig(args.label, sig);
@@ -326,6 +326,7 @@ async function dbcSwap(st: Step, args: {
   const base = new PublicKey(args.baseMint);
   const baseD = tokenDelta(t, args.kp.publicKey, base);
   let received: bigint;
+  const quoteSpent = args.direction === "buy" && args.quote === "USDC" ? -tokenDelta(t, args.kp.publicKey, QUOTE6) : null;
   if (args.direction === "buy") {
     received = baseD;
   } else if (args.quote === "USDC") {
@@ -345,7 +346,7 @@ async function dbcSwap(st: Step, args: {
   } else {
     st.check(q.inputDecimals === (args.quote === "USDC" ? 6 : 9), `buy input uses QUOTE decimals (${q.inputDecimals})`);
   }
-  return { sig, received, expected, min };
+  return { sig, received, expected, min, q, quoteSpent };
 }
 
 /** Connection that forces skipPreflight so a failing tx actually lands (tests confirm-path value.err handling). */
@@ -586,13 +587,22 @@ async function main() {
         let guard = 0;
         while (snap.curve.phase === "raising" && guard++ < 8) {
           const remaining = threshold - BigInt(snap.quoteReserve);
-          let amt = remaining > 400_000_000n ? 300_000_000n : (remaining * 10_200n) / 10_000n + 1n; // last: +2% for fees
+          // Final chunk deliberately OVERSHOOTS (remaining × 1.5): planBuy must switch to PartialFill,
+          // take only the fillable part and complete the curve (pre-pass-3 this failed with DBC 6033).
+          const overshoot = remaining <= 400_000_000n;
+          let amt = overshoot ? (remaining * 3n) / 2n : 300_000_000n;
           let sig: string | null = null;
           for (let attempt = 0; attempt < 6 && !sig; attempt++) {
             try {
               const ui = formatAtomsExact(amt.toString(), 6);
               const r = await dbcSwap(st, { label: `buy ${ui} (reserve ${formatAtomsExact(snap.quoteReserve, 6)}/${formatAtomsExact(threshold.toString(), 6)})`, pool: L.prepared.poolPubkey, kp: trader, direction: "buy", amountUi: ui, slippageBps: 200, quote: "USDC", baseProgram, baseMint: L.prepared.baseMintPubkey });
               sig = r.sig;
+              if (overshoot) {
+                st.note(`overshoot buy: input ${formatAtomsExact(r.q.amountIn, 6)} vs remaining ${formatAtomsExact(remaining.toString(), 6)} → mode ${r.q.mode}, fillable ${formatAtomsExact(r.q.fillableIn, 6)}, unused ${formatAtomsExact(r.q.unusedIn, 6)}, spent ${r.quoteSpent == null ? "?" : formatAtomsExact(r.quoteSpent.toString(), 6)}`);
+                st.check(r.q.mode === "partial_fill" && r.q.completesCurve, `buy > remaining curve is planned as partial_fill (mode ${r.q.mode}, completesCurve ${r.q.completesCurve})`);
+                st.check(r.quoteSpent != null && r.quoteSpent < BigInt(r.q.amountIn), `partial fill spent less than the requested input (${r.quoteSpent} < ${r.q.amountIn}); no DBC 6033`);
+                st.check(r.quoteSpent != null && r.quoteSpent <= BigInt(r.q.fillableIn), `spent ≤ quoted fillable input (${r.quoteSpent} ≤ ${r.q.fillableIn})`);
+              }
             } catch (e) {
               st.note(`buy ${amt} atoms failed: ${mapError(e).message.slice(0, 160)} — retrying smaller/larger`);
               amt = attempt % 2 === 0 ? (amt * 9_950n) / 10_000n : (amt * 10_100n) / 10_000n;
@@ -646,6 +656,38 @@ async function main() {
       } catch (e) {
         st.fail(e);
       }
+    }
+  }
+
+  /* ---- S8 (SOL): quote-aware short preset + buy larger than the remaining curve */
+  if (want("S8") && NETWORK !== "devnet") {
+    const spec: LaunchSpec = { key: "SC", name: "E2E Short C SOL", symbol: "EQSC", presetId: "short", quote: "SOL", profile: "open-spl", seed: "", fee: 50, lock: 100, register: "sign" };
+    const st = new Step("S8", "Short-raise SC (SOL quote): quote-aware threshold (~3.09 SOL, was 772.5) + buy 1.5× remaining → partial fill completes the curve (no DBC 6033)");
+    try {
+      const L = await launch(st, spec);
+      launches[spec.key] = L;
+      const pool = new PublicKey(L.prepared.poolPubkey);
+      let snap = await fetchPoolSnapshot(connection, pool);
+      const threshold = BigInt(snap.migrationQuoteThreshold!);
+      st.check(threshold.toString() === presetMigrationThresholdAtoms("short", "SOL"), `on-chain threshold ${formatAtomsExact(threshold.toString(), 9)} SOL = preset/wizard value ${formatAtomsExact(presetMigrationThresholdAtoms("short", "SOL"), 9)} SOL`);
+      st.check(threshold < 10_000_000_000n, `SOL short threshold is sane (< 10 SOL): ${formatAtomsExact(threshold.toString(), 9)} SOL`);
+      const g0 = graduationNumbers(snap);
+      st.check(g0.known && g0.remaining === threshold - BigInt(snap.quoteReserve), `graduationNumbers remaining (exact) = ${g0.known ? formatAtomsExact(g0.remaining.toString(), 9) : "unknown"} SOL`);
+      const remaining = g0.known ? g0.remaining : threshold;
+      const ask = (remaining * 3n) / 2n;
+      const reserveBefore = BigInt(snap.quoteReserve);
+      const r = await dbcSwap(st, { label: `overshoot buy ${formatAtomsExact(ask.toString(), 9)} SOL (remaining ${formatAtomsExact(remaining.toString(), 9)})`, pool: L.prepared.poolPubkey, kp: trader, direction: "buy", amountUi: formatAtomsExact(ask.toString(), 9), slippageBps: 200, quote: "SOL", baseProgram: TOKEN_PROGRAM_ID, baseMint: L.prepared.baseMintPubkey });
+      st.note(`mode ${r.q.mode}, fillable ${formatAtomsExact(r.q.fillableIn, 9)}, unused ${formatAtomsExact(r.q.unusedIn, 9)}, fee ${formatAtomsExact(r.q.feeAtoms, r.q.feeDecimals)}`);
+      st.check(r.q.mode === "partial_fill" && r.q.completesCurve && BigInt(r.q.unusedIn) > 0n, `planned as partial_fill with unused input ${formatAtomsExact(r.q.unusedIn, 9)} SOL`);
+      snap = await fetchPoolSnapshot(connection, pool);
+      const added = BigInt(snap.quoteReserve) - reserveBefore;
+      st.check(added <= BigInt(r.q.fillableIn), `curve took ${formatAtomsExact(added.toString(), 9)} SOL ≤ fillable ${formatAtomsExact(r.q.fillableIn, 9)} (not the full ${formatAtomsExact(ask.toString(), 9)})`);
+      st.check(snap.curve.phase === "complete", `curve phase after one overshoot buy = ${snap.curve.phase} (reserve ${snap.quoteReserve} ≥ ${threshold})`);
+      const g1 = graduationNumbers(snap);
+      st.check(g1.known && g1.complete && g1.remaining === 0n, `graduationNumbers after: complete=${g1.known && g1.complete}, remaining 0`);
+      st.done();
+    } catch (e) {
+      st.fail(e);
     }
   }
 

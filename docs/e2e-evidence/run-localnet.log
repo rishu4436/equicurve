@@ -1,7 +1,11 @@
+
+> equicurve@0.1.0 e2e:devnet
+> tsx scripts/e2e-devnet.ts
+
 bigint: Failed to load bindings, pure JS will be used (try npm run rebuild?)
 
 
-######## EquiCurve e2e @ 2026-09-26T12:52:50.742Z network=localnet rpc=http://127.0.0.1:8899
+######## EquiCurve e2e @ 2026-09-26T13:19:49.252Z network=localnet rpc=http://127.0.0.1:8899
 
 === [setup] Fund keypairs + localnet 6-dec quote stand-in mint
   • RPC http://127.0.0.1:8899 (localnet); app http://localhost:3011; app cluster label devnet
@@ -9,22 +13,20 @@ bigint: Failed to load bindings, pure JS will be used (try npm run rebuild?)
   trader: 3oTDwjdSjF9xQwYynCSa7fYgHYGumGuwL9hbfzTZh4a1
   partner: 2gBgZtNa78cAXocQsLM3zLyJuobW1oxQ12jiuyUuCw4T
   other: ABirgQjZEeFmyLzgesDy4jbKGFa1BGJGUxCY7U5HMfdB
-  tx create 6-dec quote stand-in mint: 3s1TSTyVttCb4QUZYpgCrJzoXPbmMjac2J9XARjBX5MbNZZ4gsTDFota88SigmJSYeXR3g4cFpyFD6JXfWSD48XZ 
-     https://explorer.solana.com/tx/3s1TSTyVttCb4QUZYpgCrJzoXPbmMjac2J9XARjBX5MbNZZ4gsTDFota88SigmJSYeXR3g4cFpyFD6JXfWSD48XZ?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
   • OK: stand-in quote mint decimals = 6
   quote6Mint: Entdo3TrjdeCCVAMXHeNKBEfyuSnLVdeCKqeo7fdpUfh
-  tx mint stand-in quote to test wallets: 5EhJmZc2TBtWDdmw3WVKfaWovo79wdYkCXpe8XYKJqSfWAtwJK1mtuRLRBoGSu5RygJPgVqjSF9mnwDUt4vvjnim 
-     https://explorer.solana.com/tx/5EhJmZc2TBtWDdmw3WVKfaWovo79wdYkCXpe8XYKJqSfWAtwJK1mtuRLRBoGSu5RygJPgVqjSF9mnwDUt4vvjnim?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
+  tx mint stand-in quote to test wallets: 2FgdYxztU5TyXWg27YVudfUD4qfQGVQDxLqJNwosr7yEYFRxZYnzy9xYnhRJyZTUbbtU4SL1gvkDfwUe4to3v3nY 
+     https://explorer.solana.com/tx/2FgdYxztU5TyXWg27YVudfUD4qfQGVQDxLqJNwosr7yEYFRxZYnzy9xYnhRJyZTUbbtU4SL1gvkDfwUe4to3v3nY?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
   → PASS
 
 === [S1] Create L1: SOL quote, open-spl, preset flat, seed none, creator fee 30%, LP lock 60%
   • metadata source: hosted
   • mode=config-and-pool txs=1 seedBuyAtoms=0
-  pool: 6ETJ4A8z2o9wrQDCyNPfMf3ZKTfah9t6MAP65qB9BQb9
-  baseMint: 7SvMQ9zDsDNfWcttib8a3KPKnM76kvSCcvbwjNakohZ7
-  config: GpHiEFhoPUAD56WXMu6x2z8T8MpTAwdr95NLnmaCmMRQ
-  tx create 1/1 (config + pool): qwyJfgWQjE91u1HmxSueoXD37BKpv6dbFN4KfX3PoZwMt1iMAUhVpMk5VExawgwbvj5zeY4ofWQvhY3qZRRyPMZ 
-     https://explorer.solana.com/tx/qwyJfgWQjE91u1HmxSueoXD37BKpv6dbFN4KfX3PoZwMt1iMAUhVpMk5VExawgwbvj5zeY4ofWQvhY3qZRRyPMZ?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
+  pool: GebVi7hXEUiyDL5m3LWyWmJ9458eEnSz3rbnoJZwgsh5
+  baseMint: HweCr6iBjKYXXxgz5NYq5eeT5nnCt3jJFHD4WB5m9yzD
+  config: 3p8c1FT8KuvYqRngWgXdcTx1dM47ZtgZTHQZ1VdkmWAC
+  tx create 1/1 (config + pool): 5MSFxJ6PYQgtsmSr73puYAerhA5uH77mCdTkNmGaFjhUZjoM2miufgAyXqxUgmpDqdZ9qxSvcFJmrA5HFzir8zgc 
+     https://explorer.solana.com/tx/5MSFxJ6PYQgtsmSr73puYAerhA5uH77mCdTkNmGaFjhUZjoM2miufgAyXqxUgmpDqdZ9qxSvcFJmrA5HFzir8zgc?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
   • registry POST (creator-signed): listed
   → PASS
 
@@ -43,7 +45,7 @@ bigint: Failed to load bindings, pure JS will be used (try npm run rebuild?)
   • OK: migrationOption = 1 (DAMM v2)
   • OK: migrationFeeOption = 2
   • OK: poolCreationFee = 1000000 lamports (0.001 SOL, not 1,000,000 SOL)
-  • OK: migrationQuoteThreshold = 15390982211825 (built 15390982211825)
+  • OK: migrationQuoteThreshold = 92345893270 (built 92345893270)
   • OK: sqrtStartPrice matches built curve
   • OK: curve points (2) match preset flat
   • OK: base fee cliffFeeNumerator = 20000000 (built 20000000)
@@ -60,13 +62,13 @@ bigint: Failed to load bindings, pure JS will be used (try npm run rebuild?)
 === [S2] Create L2: SOL quote, token-2022, preset flat, seed 0.05, creator fee 50%, LP lock 100%
   • metadata source: hosted
   • mode=config-and-pool txs=2 seedBuyAtoms=50000000
-  pool: 83RmhWssBy4tUf2rhSQfMZUqhVmKEh4TcwPXy8E3PmxG
-  baseMint: DFkxrxbDAQEgtZ9ccH514p6WGwF4kVrjsgMFofgHRgn6
-  config: 2c6hYm7oaFQJTQa2XKiEvtonwyhqk5k2NDoHM68JKu6K
-  tx create 1/2 (config): 52MV8buoxXCsBZksjPkp7mtzUPSTkFZUrxf12ELBtbzEraTcKsFpmv3DYnMLLVHUeUpe4F4yNVB72Es7k964dQ2f 
-     https://explorer.solana.com/tx/52MV8buoxXCsBZksjPkp7mtzUPSTkFZUrxf12ELBtbzEraTcKsFpmv3DYnMLLVHUeUpe4F4yNVB72Es7k964dQ2f?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
-  tx create 2/2 (pool + first buy): 53Rcqpv5ZxvH8p4Cxn2tDdGsXaPjdj9pBVf6yXXHhv8a6ejDHPjUCkG4Svn8pTkZB2vtB7V8eQTUK9omdo5LfgLe 
-     https://explorer.solana.com/tx/53Rcqpv5ZxvH8p4Cxn2tDdGsXaPjdj9pBVf6yXXHhv8a6ejDHPjUCkG4Svn8pTkZB2vtB7V8eQTUK9omdo5LfgLe?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
+  pool: BSBCb6Do58hJNoMAiYrsTy1FtzwYGvUHfeJANnkLcNdp
+  baseMint: 8aasJiQUWTmmBBDxLHgLuKveKPmfht8nkr8CtDUUrEBm
+  config: 9iKVAmaygdkSBr8aH2wwFdXGDcRWjqhU18WUzUCbWnf2
+  tx create 1/2 (config): 2Fc1Mk1X2unDuEY5yhSzCfmsouEgsRbbThmJo8V5ze4irgDWWXEqeEUHp6YEqiPYtu6MEurMJvaRGb7PGQxQA2ny 
+     https://explorer.solana.com/tx/2Fc1Mk1X2unDuEY5yhSzCfmsouEgsRbbThmJo8V5ze4irgDWWXEqeEUHp6YEqiPYtu6MEurMJvaRGb7PGQxQA2ny?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
+  tx create 2/2 (pool + first buy): 2B2C7R19jXtutBgX3tzHP8EjhAi5Zr9EABn9or5g4rWpfTmtrZe9MJfXWk8VASYhJbEKY7tzvf7TDVNFmFgc8NDs 
+     https://explorer.solana.com/tx/2B2C7R19jXtutBgX3tzHP8EjhAi5Zr9EABn9or5g4rWpfTmtrZe9MJfXWk8VASYhJbEKY7tzvf7TDVNFmFgc8NDs?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
   • registry POST (creator-signed): listed
   → PASS
 
@@ -85,7 +87,7 @@ bigint: Failed to load bindings, pure JS will be used (try npm run rebuild?)
   • OK: migrationOption = 1 (DAMM v2)
   • OK: migrationFeeOption = 2
   • OK: poolCreationFee = 1000000 lamports (0.001 SOL, not 1,000,000 SOL)
-  • OK: migrationQuoteThreshold = 15390982211825 (built 15390982211825)
+  • OK: migrationQuoteThreshold = 92345893270 (built 92345893270)
   • OK: sqrtStartPrice matches built curve
   • OK: curve points (2) match preset flat
   • OK: base fee cliffFeeNumerator = 20000000 (built 20000000)
@@ -95,22 +97,22 @@ bigint: Failed to load bindings, pure JS will be used (try npm run rebuild?)
   • OK: mint authority renounced (null)
   • OK: mint supply = 1000000000000000000
   • OK: config account owned by DBC
-  • OK: seed buy delivered 9799.909700511 base to creator
+  • OK: seed buy delivered 1630845.774479389 base to creator
   • OK: quoteReserve after seed = 49000000 (≤ seed 50000000, fee deducted)
-  • OK: curve phase = raising, progress 0.000003
+  • OK: curve phase = raising, progress 0.00053
   → PASS
 
 === [S2] Create L3: USDC quote, open-spl, preset equity, seed 25.5, creator fee 40%, LP lock 80%
   • signMessage declined → local-only (user_rejected: You rejected the request in your wallet. Nothing was sent.)
   • metadata source: data-uri (No wallet signature — using inline data: URI metadata.)
   • mode=config-and-pool txs=2 seedBuyAtoms=25500000
-  pool: GnBDYdi2uVkNAPzcLgu7kkXUiiSVMZke5AAgymhfNCTT
-  baseMint: DmjmHwazf9vkDvJkkkvmMce4o5Fv3KhXCSZRaDx7fjB3
-  config: 8JrEj8TfuysadbwHEK2TiVpYZ3pUK9QTYA1pku4MmJRK
-  tx create 1/2 (config): 3oL7cLq5xjFhfnustKK1U1rHw2Z51ejXXkK2iriegKExZzgt2FXqXLG9on8XAVnzHB9EUERD9HuJTSmCnt6a1gPg 
-     https://explorer.solana.com/tx/3oL7cLq5xjFhfnustKK1U1rHw2Z51ejXXkK2iriegKExZzgt2FXqXLG9on8XAVnzHB9EUERD9HuJTSmCnt6a1gPg?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
-  tx create 2/2 (pool + first buy): zKiU1kN9q5kRMxeW7AbSFbhSLKbtTCpcuP287qNuuwegpf3PiQm7RCZg1v8vHzdoiFsggwxwu9QJqtgDeAEvmSu 
-     https://explorer.solana.com/tx/zKiU1kN9q5kRMxeW7AbSFbhSLKbtTCpcuP287qNuuwegpf3PiQm7RCZg1v8vHzdoiFsggwxwu9QJqtgDeAEvmSu?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
+  pool: 3B887LZMbf14sipsYqe35JJq4GpvGTrKSL3SHR4VKHpG
+  baseMint: Ej7UZ6YKCX4z8sjKt4vHUbDtAQjJDfjZxBL8oVC25Sym
+  config: 5GqjzWKabGVXpCkD81Mpt4uVtFU5vLeDdtjpuBf4KiFP
+  tx create 1/2 (config): 5NiLEtaCK9iaQrrPWYCzGsM8SMRbX4zrJqTRicUNSG82Dm8JToHR1yzR7Z2AcrMSBzj2NoGXW3QaUDg2EiC6nSj8 
+     https://explorer.solana.com/tx/5NiLEtaCK9iaQrrPWYCzGsM8SMRbX4zrJqTRicUNSG82Dm8JToHR1yzR7Z2AcrMSBzj2NoGXW3QaUDg2EiC6nSj8?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
+  tx create 2/2 (pool + first buy): 2A5QJ7kzCMmRmBngHioBoD2beFBUAFQ616uuWTWB4xYv9K3B3QpGW7wReYMAQF3CueVJk7qP9JBBLrZk1whwMKeP 
+     https://explorer.solana.com/tx/2A5QJ7kzCMmRmBngHioBoD2beFBUAFQ616uuWTWB4xYv9K3B3QpGW7wReYMAQF3CueVJk7qP9JBBLrZk1whwMKeP?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
   → PASS
 
 === [S4] Verify L3 on-chain (pool, mint, config fields vs inputs)
@@ -164,46 +166,46 @@ bigint: Failed to load bindings, pure JS will be used (try npm run rebuild?)
   → PASS
 
 === [S6] DBC buy → sell on L1 (SOL, open-spl)
-  tx buy 0.0234 SOL: 2U1deckY5Ffh3wDS7XmxMPyQBw33oNzWMkYKND2eYfiYKgHRfQrsKowKE9or4kkewqKiA9JU7oJjuvDuma1wggND 
-     https://explorer.solana.com/tx/2U1deckY5Ffh3wDS7XmxMPyQBw33oNzWMkYKND2eYfiYKgHRfQrsKowKE9or4kkewqKiA9JU7oJjuvDuma1wggND?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
-  • buy 0.0234 SOL: in 0.0234 (inputDecimals 9) → quoted 4586.380057085, min 4540.516256514, actual 4586.380057085
+  tx buy 0.0234 SOL: aqJxULxKJnBNUc4EScK8TqG2CyowRoysvrMHVKYBVbnPDGpSGYb64LLvehzjiJjtAHv9SFNaLv69bRo4XvnkcVY 
+     https://explorer.solana.com/tx/aqJxULxKJnBNUc4EScK8TqG2CyowRoysvrMHVKYBVbnPDGpSGYb64LLvehzjiJjtAHv9SFNaLv69bRo4XvnkcVY?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
+  • buy 0.0234 SOL: in 0.0234 (inputDecimals 9) → quoted 763854.368440979, min 756215.824756569, actual 763854.368440979
   • OK: buy 0.0234 SOL: actual ≥ minimumAmountOut (slippage 100 bps)
   • OK: buy 0.0234 SOL: actual within 100 bps of quote (diff 0 bps)
   • OK: buy input uses QUOTE decimals (9)
-  tx sell 2293.190028542 base: uuvp2x7ptjdDCURCBrqngsni1m8xynKjLX4kQuR5k4Mf9YwEfsLivedqSjr5PVhPYJPpXcpdeybffZEJewmRii1 
-     https://explorer.solana.com/tx/uuvp2x7ptjdDCURCBrqngsni1m8xynKjLX4kQuR5k4Mf9YwEfsLivedqSjr5PVhPYJPpXcpdeybffZEJewmRii1?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
-  • sell 2293.190028542 base: in 2293.190028542 (inputDecimals 9) → quoted 0.011236703, min 0.011124335, actual 0.011236703
-  • OK: sell 2293.190028542 base: actual ≥ minimumAmountOut (slippage 100 bps)
-  • OK: sell 2293.190028542 base: actual within 100 bps of quote (diff 0 bps)
+  tx sell 381927.184220489 base: 5f6Gd2whWFNn4pRhQg1dNibe6oVCqQpg2jtmCpYVR1pedXmThFGNSoRMv7u6aZaJW7tZDQAs1doVFCWuswEjYXSM 
+     https://explorer.solana.com/tx/5f6Gd2whWFNn4pRhQg1dNibe6oVCqQpg2jtmCpYVR1pedXmThFGNSoRMv7u6aZaJW7tZDQAs1doVFCWuswEjYXSM?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
+  • sell 381927.184220489 base: in 381927.184220489 (inputDecimals 9) → quoted 0.011240686, min 0.011128279, actual 0.011240686
+  • OK: sell 381927.184220489 base: actual ≥ minimumAmountOut (slippage 100 bps)
+  • OK: sell 381927.184220489 base: actual within 100 bps of quote (diff 0 bps)
   • OK: sell input uses BASE decimals (9)
-  • OK: sold exactly 2293190028542 base atoms (Δ -2293190028542)
+  • OK: sold exactly 381927184220489 base atoms (Δ -381927184220489)
   → PASS
 
 === [S6] DBC buy → sell on L2 (SOL, token-2022)
-  tx buy 0.0234 SOL: 3HgS34QQvi1m7b511f2XwzZbzzoRiyXBePoEboRrHi8j2f9PJVjxgoF2LYsJtrEF8L6c1cb8BmkcYRxXvbDBsSM9 
-     https://explorer.solana.com/tx/3HgS34QQvi1m7b511f2XwzZbzzoRiyXBePoEboRrHi8j2f9PJVjxgoF2LYsJtrEF8L6c1cb8BmkcYRxXvbDBsSM9?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
-  • buy 0.0234 SOL: in 0.0234 (inputDecimals 9) → quoted 4586.29615824, min 4540.433196657, actual 4586.29615824
+  tx buy 0.0234 SOL: 4WURxKqLHE7PCy2FVc23A86Uz1Auppz6mnKhYcyFAkZh6ZNvZ3sq4YmozvRz2pp1nfzgnTbmoRMy8shbGzbuYn3i 
+     https://explorer.solana.com/tx/4WURxKqLHE7PCy2FVc23A86Uz1Auppz6mnKhYcyFAkZh6ZNvZ3sq4YmozvRz2pp1nfzgnTbmoRMy8shbGzbuYn3i?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
+  • buy 0.0234 SOL: in 0.0234 (inputDecimals 9) → quoted 761531.603729694, min 753916.287692397, actual 761531.603729694
   • OK: buy 0.0234 SOL: actual ≥ minimumAmountOut (slippage 100 bps)
   • OK: buy 0.0234 SOL: actual within 100 bps of quote (diff 0 bps)
   • OK: buy input uses QUOTE decimals (9)
-  tx sell 2293.14807912 base: 45BCjSH6Ws6VXY7mLnLokpfZ8uGwyKX8A9oxmLmi1yqe1RrWo7B3tZBC9SVucYBLwWn94woVKVrA6QkyxtCoDZ8P 
-     https://explorer.solana.com/tx/45BCjSH6Ws6VXY7mLnLokpfZ8uGwyKX8A9oxmLmi1yqe1RrWo7B3tZBC9SVucYBLwWn94woVKVrA6QkyxtCoDZ8P?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
-  • sell 2293.14807912 base: in 2293.14807912 (inputDecimals 9) → quoted 0.011236703, min 0.011124335, actual 0.011236703
-  • OK: sell 2293.14807912 base: actual ≥ minimumAmountOut (slippage 100 bps)
-  • OK: sell 2293.14807912 base: actual within 100 bps of quote (diff 0 bps)
+  tx sell 380765.801864847 base: 5k6UJvYVoi23VQ5Zp4izX8NUm4LL32mRkZ2Rc7bn2nySJMQXNh6TtCxRHFFwqbq4JjxCjF2FSFcsh7KpDDPnKPW4 
+     https://explorer.solana.com/tx/5k6UJvYVoi23VQ5Zp4izX8NUm4LL32mRkZ2Rc7bn2nySJMQXNh6TtCxRHFFwqbq4JjxCjF2FSFcsh7KpDDPnKPW4?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
+  • sell 380765.801864847 base: in 380765.801864847 (inputDecimals 9) → quoted 0.01124068, min 0.011128273, actual 0.01124068
+  • OK: sell 380765.801864847 base: actual ≥ minimumAmountOut (slippage 100 bps)
+  • OK: sell 380765.801864847 base: actual within 100 bps of quote (diff 0 bps)
   • OK: sell input uses BASE decimals (9)
-  • OK: sold exactly 2293148079120 base atoms (Δ -2293148079120)
+  • OK: sold exactly 380765801864847 base atoms (Δ -380765801864847)
   → PASS
 
 === [S6] DBC buy → sell on L3 (USDC, open-spl)
-  tx buy 12.345678 USDC: 23FWqdTF82cGa4wp9DfWd6xKQhgXoHX55MG53igpYe14KTkanEGZ5quHhWjHK8zuYULGb8H9Pu3n7mDr3vghyWEU 
-     https://explorer.solana.com/tx/23FWqdTF82cGa4wp9DfWd6xKQhgXoHX55MG53igpYe14KTkanEGZ5quHhWjHK8zuYULGb8H9Pu3n7mDr3vghyWEU?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
+  tx buy 12.345678 USDC: 3HcMpYrvTZtSNcwXViqrQiomnb7KJDpfMdU2ARgQAf7DqUhLk9PopfFTUuhnwJSdxJY35YFEhTaVg2JoNFo8xwf9 
+     https://explorer.solana.com/tx/3HcMpYrvTZtSNcwXViqrQiomnb7KJDpfMdU2ARgQAf7DqUhLk9PopfFTUuhnwJSdxJY35YFEhTaVg2JoNFo8xwf9?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
   • buy 12.345678 USDC: in 12.345678 (inputDecimals 6) → quoted 1212656.800010331, min 1200530.232010227, actual 1212656.800010331
   • OK: buy 12.345678 USDC: actual ≥ minimumAmountOut (slippage 100 bps)
   • OK: buy 12.345678 USDC: actual within 100 bps of quote (diff 0 bps)
   • OK: buy input uses QUOTE decimals (6)
-  tx sell 606328.400005165 base: 59qw3NdAUPfa5YXaej5jJrwRyMqp8UtoZuzuVRXnxrNdg9gBRZ7HjS2GRVRuKxjGTMt3LDC5AUDRmKxbepABwPY2 
-     https://explorer.solana.com/tx/59qw3NdAUPfa5YXaej5jJrwRyMqp8UtoZuzuVRXnxrNdg9gBRZ7HjS2GRVRuKxjGTMt3LDC5AUDRmKxbepABwPY2?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
+  tx sell 606328.400005165 base: 5hzpZFuP3bx71BYM2DtzmTZYffY4qetk8sKqH8QpiMoCAKhF5xyNi4fuzy46kxETFe5ybbik6nf7A36h5Aazzie 
+     https://explorer.solana.com/tx/5hzpZFuP3bx71BYM2DtzmTZYffY4qetk8sKqH8QpiMoCAKhF5xyNi4fuzy46kxETFe5ybbik6nf7A36h5Aazzie?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
   • sell 606328.400005165 base: in 606328.400005165 (inputDecimals 9) → quoted 6.028984, min 5.968694, actual 6.028984
   • OK: sell 606328.400005165 base: actual ≥ minimumAmountOut (slippage 100 bps)
   • OK: sell 606328.400005165 base: actual within 100 bps of quote (diff 0 bps)
@@ -212,16 +214,16 @@ bigint: Failed to load bindings, pure JS will be used (try npm run rebuild?)
   → PASS
 
 === [S7] Fee claims on L1 (SOL): creator, partner, wrong wallet
-  • unclaimed before: creator quote 167357, partner quote 390500
+  • unclaimed before: creator quote 167376, partner quote 390546
   • OK: other wallet as creator: refused (Connected wallet is not this pool's creator. Creator is BQoE…ft18.)
   • OK: creator wallet as partner: refused (Connected wallet is not this pool's partner feeClaimer. feeClaimer is 2gBg…Cw4T.)
   • OK: program refuses non-feeClaimer partner claim (sim err {"InstructionError":[2,{"Custom":6053}]}; mapped: This wallet is not authorized for this action.)
-  tx claimCreatorTradingFee (creator): 3xyhd9BELAnm6pAZVvc37N2ybdqv5kZH5yjr3NRkQQLrDWYv678S1doWRxhuTcWmuwqibbGSPL6H5smBnKsqftWN 
-     https://explorer.solana.com/tx/3xyhd9BELAnm6pAZVvc37N2ybdqv5kZH5yjr3NRkQQLrDWYv678S1doWRxhuTcWmuwqibbGSPL6H5smBnKsqftWN?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
-  • OK: creator received 167357 quote atoms = unclaimed 167357
-  tx claimPartnerTradingFee (partner feeClaimer): 4Xbxk9gdHRExQAKPH5ZFDqGeCRZZrDrtUe5X4bmaebQx68WaPyggF58P9ywyRf1QDjMRoXVJwTb1Nfmomggfq5VX 
-     https://explorer.solana.com/tx/4Xbxk9gdHRExQAKPH5ZFDqGeCRZZrDrtUe5X4bmaebQx68WaPyggF58P9ywyRf1QDjMRoXVJwTb1Nfmomggfq5VX?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
-  • OK: partner received 390500 quote atoms = unclaimed 390500
+  tx claimCreatorTradingFee (creator): 247TDeWE5rHPEmgpaGUFLMwB42GYdynxpRabGoAZ3Na2N4k8qmPumtCj4xRP1XoHpnfZ71GiEEih6NJoHg4cXqkG 
+     https://explorer.solana.com/tx/247TDeWE5rHPEmgpaGUFLMwB42GYdynxpRabGoAZ3Na2N4k8qmPumtCj4xRP1XoHpnfZ71GiEEih6NJoHg4cXqkG?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
+  • OK: creator received 167376 quote atoms = unclaimed 167376
+  tx claimPartnerTradingFee (partner feeClaimer): 3UmCEjAGufP3rTv3iWFqy4886XeQ9cqsDqoPqmNjnVAXNqzqq6dJuJoFpX8sV1tJoGDFdWvsaLFo7cUS6ZWkyD6g 
+     https://explorer.solana.com/tx/3UmCEjAGufP3rTv3iWFqy4886XeQ9cqsDqoPqmNjnVAXNqzqq6dJuJoFpX8sV1tJoGDFdWvsaLFo7cUS6ZWkyD6g?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
+  • OK: partner received 390546 quote atoms = unclaimed 390546
   • OK: unclaimed after: creator 0, partner 0
   → PASS
 
@@ -230,11 +232,11 @@ bigint: Failed to load bindings, pure JS will be used (try npm run rebuild?)
   • OK: other wallet as creator: refused (Connected wallet is not this pool's creator. Creator is BQoE…ft18.)
   • OK: creator wallet as partner: refused (Connected wallet is not this pool's partner feeClaimer. feeClaimer is 2gBg…Cw4T.)
   • OK: program refuses non-feeClaimer partner claim (sim err {"InstructionError":[1,{"Custom":6053}]}; mapped: This wallet is not authorized for this action.)
-  tx claimCreatorTradingFee (creator): 2wuCbkhreJNRtxdDSF2BXy8VJFVU8NVw65gb6mfpfTBGoKvHqsdRrx2D3yERyEJq1WU1BJZrTxbMoutGFHdKuuzG 
-     https://explorer.solana.com/tx/2wuCbkhreJNRtxdDSF2BXy8VJFVU8NVw65gb6mfpfTBGoKvHqsdRrx2D3yERyEJq1WU1BJZrTxbMoutGFHdKuuzG?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
+  tx claimCreatorTradingFee (creator): 29UTrqyhkTHvQ74T1biQnCtPMeYMsZXYUx9RbqrgixRz74a4RtE33ckmdbSedJ2577gFV6oaz6QRNNErHR9fWmqC 
+     https://explorer.solana.com/tx/29UTrqyhkTHvQ74T1biQnCtPMeYMsZXYUx9RbqrgixRz74a4RtE33ckmdbSedJ2577gFV6oaz6QRNNErHR9fWmqC?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
   • OK: creator received 168766 quote atoms = unclaimed 168766
-  tx claimPartnerTradingFee (partner feeClaimer): 3BMTBvY5dHh3HEyjrjMoz613Ft6LSWXfTrhisULzDtVjr5BZ1a8Ni5LQ1SXWNmwn8CjG5T3uWLmRTxmAdHD3HqPj 
-     https://explorer.solana.com/tx/3BMTBvY5dHh3HEyjrjMoz613Ft6LSWXfTrhisULzDtVjr5BZ1a8Ni5LQ1SXWNmwn8CjG5T3uWLmRTxmAdHD3HqPj?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
+  tx claimPartnerTradingFee (partner feeClaimer): 5h242CGRwUTnJYY5DW2mZUKrYJthwoejxJ2TLvusByCjU3VNHE3YrtiJctjRhVWdKmcu6rcfKyCX5KbetVzrkKCS 
+     https://explorer.solana.com/tx/5h242CGRwUTnJYY5DW2mZUKrYJthwoejxJ2TLvusByCjU3VNHE3YrtiJctjRhVWdKmcu6rcfKyCX5KbetVzrkKCS?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
   • OK: partner received 253150 quote atoms = unclaimed 253150
   • OK: unclaimed after: creator 0, partner 0
   → PASS
@@ -242,145 +244,150 @@ bigint: Failed to load bindings, pure JS will be used (try npm run rebuild?)
 === [S8] Short-raise SA (open-spl, 6-dec stand-in quote, base < quote): create → buy to completion → migrate
   • metadata source: hosted
   • mode=config-and-pool txs=1 seedBuyAtoms=0
-  pool: EypWwp49GWHJLDNoiJZxkGt92rXa6h48T9GvHW4dUPUu
-  baseMint: 2uaozstf8RmbJvuwV3urYMZSo9t1pB1K52xSDVzKiWzq
-  config: GcdqyUW9quF8S5djc2vhWX32FyHByzhxHQWPNgcuRKGW
-  tx create 1/1 (config + pool): 3VBfvpaSh321VUCVDWzYCAEwEjXaYVPvu7TgJZGmiegGANyXWJnUM2c2TZZd892RvQL6KbhUt48Cn3hzxXcU8Cfy 
-     https://explorer.solana.com/tx/3VBfvpaSh321VUCVDWzYCAEwEjXaYVPvu7TgJZGmiegGANyXWJnUM2c2TZZd892RvQL6KbhUt48Cn3hzxXcU8Cfy?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
+  pool: 4sQNvbRrU87UGAt2YtRCNT1EBnfpX8qy1UMbU5QjGDzz
+  baseMint: 4FAg1mDThLLR9uiwdprjYuf8uNtjdUWpcw8C7ut3F433
+  config: 9sXzGDbfFHt8bnePmqRBv5yu1vyQt2rFUFYZpMPndaBh
+  tx create 1/1 (config + pool): 2CGzCo1VV8gxxgHigKw79pa8BTv9scu3GVssg6WYm38ynTZcGk581bKw8bEqCzMfmKqgEgtaFPFNHUk2vXaJBiP7 
+     https://explorer.solana.com/tx/2CGzCo1VV8gxxgHigKw79pa8BTv9scu3GVssg6WYm38ynTZcGk581bKw8bEqCzMfmKqgEgtaFPFNHUk2vXaJBiP7?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
   • registry POST (creator-signed): listed
   • migrationQuoteThreshold = 772.542485 quote
   • OK: before buys: graduation view = not_eligible (Not eligible yet)
 
 === [S6] Slippage exceeded (SA, stand-in quote): preflight rejection → mapped error
-  tx price-moving buy (other wallet): 49QSuJE2U818fa2WMsDGL7DzjLKJ1NZqTD77ncY1dv2xiHwrUX3bCra1LxukDEm9iwm5qN9PixRE8PtnM1r4bNNw 
-     https://explorer.solana.com/tx/49QSuJE2U818fa2WMsDGL7DzjLKJ1NZqTD77ncY1dv2xiHwrUX3bCra1LxukDEm9iwm5qN9PixRE8PtnM1r4bNNw?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
+  tx price-moving buy (other wallet): 2zDzAMpqMV4aq2zJvgWEYXMGGGJScgjt5htPbb4rAfECGBiA1GcXpynAXZLe9DtJnuU4aqSEB9nrcwuJgM4fA2yH 
+     https://explorer.solana.com/tx/2zDzAMpqMV4aq2zJvgWEYXMGGGJScgjt5htPbb4rAfECGBiA1GcXpynAXZLe9DtJnuU4aqSEB9nrcwuJgM4fA2yH?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
   • surfaced as failure: code=SDK kind=slippage message="Price moved beyond your slippage tolerance. Re-quote and try again, or raise slippage."
   • OK: mapped to slippage error (kind=slippage)
   • OK: rejected at preflight — nothing submitted
   → PASS
 
 === [S6/S10] Slippage exceeded (SA) with preflight bypassed: tx lands and fails → TX_FAILED, never success
-  tx price-moving buy (other wallet): 4sQVrU8HJyPHn8Wj55WmcGZ2QFWHjpncoFv49fJUAdww7Z27zon6nvMgKrmUXSovmJJiNPpBkJMqaz8DfA71NaYT 
-     https://explorer.solana.com/tx/4sQVrU8HJyPHn8Wj55WmcGZ2QFWHjpncoFv49fJUAdww7Z27zon6nvMgKrmUXSovmJJiNPpBkJMqaz8DfA71NaYT?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
+  tx price-moving buy (other wallet): 2cewPrJ11EHrK1pzCcGm1wACoj2yTKqaKtgxkoNcYrgrgYAxEeY47GH4XRnTazG7vYbs4uYy58A2KbDV7rMhkdJa 
+     https://explorer.solana.com/tx/2cewPrJ11EHrK1pzCcGm1wACoj2yTKqaKtgxkoNcYrgrgYAxEeY47GH4XRnTazG7vYbs4uYy58A2KbDV7rMhkdJa?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
   • surfaced as failure: code=TX_FAILED kind=slippage message="Price moved beyond your slippage tolerance. Re-quote and try again, or raise slippage."
   • OK: mapped to slippage error (kind=slippage)
   • OK: tx was submitted and landed (preflight bypassed)
   • OK: on-chain meta.err = {"InstructionError":[1,{"Custom":6002}]}
   • OK: send.ts reports TX_FAILED, not success
-  tx stale 1-bps buy (landed, failed): 5CTsokRuzWQneMiHjtKeV8mdRfLfFbYsN9vJpm54X6WRrWKmtpAh9WgtvBKx7prdeUSMjeTYA4Eh7GdKuqvXd7Gm (FAILED ON-CHAIN, expected)
-     https://explorer.solana.com/tx/5CTsokRuzWQneMiHjtKeV8mdRfLfFbYsN9vJpm54X6WRrWKmtpAh9WgtvBKx7prdeUSMjeTYA4Eh7GdKuqvXd7Gm?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
+  tx stale 1-bps buy (landed, failed): 3Z3DQxFVFFpaYRrxbsrMpc5XBF6ET3xnRrZTwu5145ZXG3nbnrJM7H7TMDRGUvcXaui1SCDi4sYsu9yTGqabUmj (FAILED ON-CHAIN, expected)
+     https://explorer.solana.com/tx/3Z3DQxFVFFpaYRrxbsrMpc5XBF6ET3xnRrZTwu5145ZXG3nbnrJM7H7TMDRGUvcXaui1SCDi4sYsu9yTGqabUmj?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
   → PASS
-  tx buy 300 (reserve 49.25/772.542485): 3D1aacaUGGTeGNUyE4ACTrNnYjpn5YVMFe4nWwSbDUUz7rb4cgsTX1eiLCiZbTMgHSH2C72CkZhiN75pKj8Uz83c 
-     https://explorer.solana.com/tx/3D1aacaUGGTeGNUyE4ACTrNnYjpn5YVMFe4nWwSbDUUz7rb4cgsTX1eiLCiZbTMgHSH2C72CkZhiN75pKj8Uz83c?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
+  tx buy 300 (reserve 49.25/772.542485): 2zyzagCyosaoPfzbg3hFJh5FXkbGzYFPaHPaCZqhqgSTEsCD4jFH3D5GR2itsB6VHZ6aKK2Qp38dmPu9R56fobjE 
+     https://explorer.solana.com/tx/2zyzagCyosaoPfzbg3hFJh5FXkbGzYFPaHPaCZqhqgSTEsCD4jFH3D5GR2itsB6VHZ6aKK2Qp38dmPu9R56fobjE?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
   • buy 300 (reserve 49.25/772.542485): in 300 (inputDecimals 6) → quoted 353071927.307633896, min 346010488.761481218, actual 353071927.307633896
   • OK: buy 300 (reserve 49.25/772.542485): actual ≥ minimumAmountOut (slippage 200 bps)
   • OK: buy 300 (reserve 49.25/772.542485): actual within 200 bps of quote (diff 0 bps)
   • OK: buy input uses QUOTE decimals (6)
-  tx buy 300 (reserve 344.75/772.542485): 5DfLt6Tunmz6QqH5FvL8LxP92qapwKC9Sm2sCPLmaGt4E9VCXTMx4Wm6UubatqgpsZYqZG4Tts3pQ5Qyf7CBH9Bd 
-     https://explorer.solana.com/tx/5DfLt6Tunmz6QqH5FvL8LxP92qapwKC9Sm2sCPLmaGt4E9VCXTMx4Wm6UubatqgpsZYqZG4Tts3pQ5Qyf7CBH9Bd?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
+  tx buy 300 (reserve 344.75/772.542485): 2QikGa45myFZtghXayYYgKk7swUGh3DBA5xu6NDtzTnWx8Sausp9mJFohwYoLsjNJ6FPmiyx3s74DREPkpMmrJBw 
+     https://explorer.solana.com/tx/2QikGa45myFZtghXayYYgKk7swUGh3DBA5xu6NDtzTnWx8Sausp9mJFohwYoLsjNJ6FPmiyx3s74DREPkpMmrJBw?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
   • buy 300 (reserve 344.75/772.542485): in 300 (inputDecimals 6) → quoted 188152541.532386658, min 184389490.701738924, actual 188152541.532386658
   • OK: buy 300 (reserve 344.75/772.542485): actual ≥ minimumAmountOut (slippage 200 bps)
   • OK: buy 300 (reserve 344.75/772.542485): actual within 200 bps of quote (diff 0 bps)
   • OK: buy input uses QUOTE decimals (6)
-  • buy 134938335 atoms failed: Insufficient Liquidity — retrying smaller/larger
-  tx buy 134.263643 (reserve 640.25/772.542485): 3FcXhM7DTnyVY1RS9hWgKwBMTjhRcoDUCAWdwbi1VXA6roJBJJVXCawGNWHvfDRMmHQL7qXciNsYyeUYman1L8Mr 
-     https://explorer.solana.com/tx/3FcXhM7DTnyVY1RS9hWgKwBMTjhRcoDUCAWdwbi1VXA6roJBJJVXCawGNWHvfDRMmHQL7qXciNsYyeUYman1L8Mr?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
-  • buy 134.263643 (reserve 640.25/772.542485): in 134.263643 (inputDecimals 6) → quoted 58432756.312725911, min 57264101.186471392, actual 58432756.312725911
-  • OK: buy 134.263643 (reserve 640.25/772.542485): actual ≥ minimumAmountOut (slippage 200 bps)
-  • OK: buy 134.263643 (reserve 640.25/772.542485): actual within 200 bps of quote (diff 0 bps)
+  tx buy 198.438727 (reserve 640.25/772.542485): 5kxsEEiFtfyuyDJWznLbtDFdwa7mfC5RuuyXv7rRK4zxPGRkzmdgAzCqMTtcvJTW1SzV6X29oqTox62WA2zoWUir 
+     https://explorer.solana.com/tx/5kxsEEiFtfyuyDJWznLbtDFdwa7mfC5RuuyXv7rRK4zxPGRkzmdgAzCqMTtcvJTW1SzV6X29oqTox62WA2zoWUir?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
+  • buy 198.438727 (reserve 640.25/772.542485): in 198.438727 (inputDecimals 6) → quoted 58449875.636970481, min 57280878.124231071, actual 58449875.636970481
+  • OK: buy 198.438727 (reserve 640.25/772.542485): actual ≥ minimumAmountOut (slippage 200 bps)
+  • OK: buy 198.438727 (reserve 640.25/772.542485): actual within 200 bps of quote (diff 0 bps)
   • OK: buy input uses QUOTE decimals (6)
-  • buy 43653 atoms failed: Insufficient Liquidity — retrying smaller/larger
-  tx buy 0.043434 (reserve 772.499688/772.542485): 5wJAfo2etuDZKUZZq2LM5g8WE36CHNicRqHDpEFYpwd34N9goy9Qc2GZooDRv7qxgYscc4xXw3TkYDb8fWFPW2un 
-     https://explorer.solana.com/tx/5wJAfo2etuDZKUZZq2LM5g8WE36CHNicRqHDpEFYpwd34N9goy9Qc2GZooDRv7qxgYscc4xXw3TkYDb8fWFPW2un?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
-  • buy 0.043434 (reserve 772.499688/772.542485): in 0.043434 (inputDecimals 6) → quoted 17113.324242531, min 16771.05775768, actual 17113.324242531
-  • OK: buy 0.043434 (reserve 772.499688/772.542485): actual ≥ minimumAmountOut (slippage 200 bps)
-  • OK: buy 0.043434 (reserve 772.499688/772.542485): actual within 200 bps of quote (diff 0 bps)
-  • OK: buy input uses QUOTE decimals (6)
-  tx buy 0.000016 (reserve 772.54247/772.542485): 4SqaAAKVXs5gfTUT5tRr84ScfE66yxHvJR2JfBCNuHCajvfnPtKUybxa7j6UYryCNXUXWfMU4FwSvs3YghDcDHMr 
-     https://explorer.solana.com/tx/4SqaAAKVXs5gfTUT5tRr84ScfE66yxHvJR2JfBCNuHCajvfnPtKUybxa7j6UYryCNXUXWfMU4FwSvs3YghDcDHMr?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
-  • buy 0.000016 (reserve 772.54247/772.542485): in 0.000016 (inputDecimals 6) → quoted 5.999999614, min 5.879999621, actual 5.999999614
-  • OK: buy 0.000016 (reserve 772.54247/772.542485): actual ≥ minimumAmountOut (slippage 200 bps)
-  • OK: buy 0.000016 (reserve 772.54247/772.542485): actual within 200 bps of quote (diff 0 bps)
-  • OK: buy input uses QUOTE decimals (6)
-  • OK: curve phase after buys = complete (reserve 772542485 ≥ 772542485, migrationProgress 2)
+  • overshoot buy: input 198.438727 vs remaining 132.292485 → mode partial_fill, fillable 134.307093, unused 64.131634, spent 134.307093
+  • OK: buy > remaining curve is planned as partial_fill (mode partial_fill, completesCurve true)
+  • OK: partial fill spent less than the requested input (134307093 < 198438727); no DBC 6033
+  • OK: spent ≤ quoted fillable input (134307093 ≤ 134307093)
+  • OK: curve phase after buys = complete (reserve 772542486 ≥ 772542485, migrationProgress 2)
   • OK: eligibility check → eligible (Eligible to migrate)
   expectedDammConfig: Hv8Lmzmnju6m7kcokVKvwqz7QPmdX9XfKjJsXz8RXcjp
-  expectedDammPool: GAGp62EbJ7MPUcMw7LFQT7exQL9PX78HdF156N8u8JvV
-  tx migrateToDammV2: 37H5qpdGB2XDee1X84BFPm4VG9621WQMe9PnzoQqQw9LCMTRHiXyEr44z6TG9rTM5EmBHepDKWFQY1RZytRMEyPe 
-     https://explorer.solana.com/tx/37H5qpdGB2XDee1X84BFPm4VG9621WQMe9PnzoQqQw9LCMTRHiXyEr44z6TG9rTM5EmBHepDKWFQY1RZytRMEyPe?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
+  expectedDammPool: nz9Q5b47DnwcQ98AdmNtiRGPmvWMhxbdRBhJhreDnv2
+  tx migrateToDammV2: 4evBRBqu8TUhZxMxiEPokGX25vJc3okkbmgLNNhq4D7pG6tk6uiosuhD2v8upw97amVZKS8JRpdeevfgZbe2afbc 
+     https://explorer.solana.com/tx/4evBRBqu8TUhZxMxiEPokGX25vJc3okkbmgLNNhq4D7pG6tk6uiosuhD2v8upw97amVZKS8JRpdeevfgZbe2afbc?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
   • graduation states: Preparing migration → submitted → confirmed → destination_verified
   • OK: states went submitted → confirmed → destination_verified
-  • OK: migrated DAMM v2 pool = expected (GAGp62EbJ7MPUcMw7LFQT7exQL9PX78HdF156N8u8JvV)
+  • OK: migrated DAMM v2 pool = expected (nz9Q5b47DnwcQ98AdmNtiRGPmvWMhxbdRBhJhreDnv2)
   • OK: DBC pool isMigrated=true, phase migrated
-  • OK: registry refresh → status graduated, dammPool GAGp62EbJ7MPUcMw7LFQT7exQL9PX78HdF156N8u8JvV
+  • OK: registry refresh → status graduated, dammPool nz9Q5b47DnwcQ98AdmNtiRGPmvWMhxbdRBhJhreDnv2
   → PASS
 
 === [S8] Short-raise SB (token-2022, 6-dec stand-in quote, base > quote): create → buy to completion → migrate
   • metadata source: hosted
   • mode=config-and-pool txs=1 seedBuyAtoms=0
-  pool: 3nv8jBWuHD6KFqXuZvQhNyqHbyphqTMHcoQzQJTiFdxm
-  baseMint: F8CxsmMMVPeCK89R7Q925JNn9bEgFPmpDb6eBr4nzwHT
-  config: DkXPpwG5JmTiTLCLjt9XQtrkodSWbgUWhNArHLEzjEe7
-  tx create 1/1 (config + pool): 4FXrwCwsnc8PfnCY3AqWsR3kfKMSKhmmrG9QahLC4Ndg24ePgMMmLV2QwqT6DE2tpJKAXqyCr324enKBC5QcRFhi 
-     https://explorer.solana.com/tx/4FXrwCwsnc8PfnCY3AqWsR3kfKMSKhmmrG9QahLC4Ndg24ePgMMmLV2QwqT6DE2tpJKAXqyCr324enKBC5QcRFhi?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
+  pool: 6VPr3wqWPxEiJxq4J6PVDjZJ4JGLq3hUm8qAQz9LuLJZ
+  baseMint: J1B9SMAZGiZtHEuZvU8T6SU98gyncg6pKYhBwtVPrpeF
+  config: EzMf2mKdQLm1YFUDwukLJxHD3z5zfPzNd1iRis4Jap1Z
+  tx create 1/1 (config + pool): 4Lehr8p6UBard5QEAGjPdu812D6nUMixGQhqTuSgscbtkzPstSJNKNnKt44wHm9RLeVGThnQEtQcnQJQEeHTnBrT 
+     https://explorer.solana.com/tx/4Lehr8p6UBard5QEAGjPdu812D6nUMixGQhqTuSgscbtkzPstSJNKNnKt44wHm9RLeVGThnQEtQcnQJQEeHTnBrT?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
   • registry POST (creator-signed): listed
   • migrationQuoteThreshold = 772.542485 quote
   • OK: before buys: graduation view = not_eligible (Not eligible yet)
-  tx buy 300 (reserve 0/772.542485): 5U8YccsGF6JUqmx8ghq1dB37r2xxDWJ6Lpmt6rPhTtkfRkm97keTrgWNJxHUPZNCYn2iYsEssKx7Wd4WBcDMcVvX 
-     https://explorer.solana.com/tx/5U8YccsGF6JUqmx8ghq1dB37r2xxDWJ6Lpmt6rPhTtkfRkm97keTrgWNJxHUPZNCYn2iYsEssKx7Wd4WBcDMcVvX?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
+  tx buy 300 (reserve 0/772.542485): 4D7gUzL5bQxpX6Gnqj1wdhDw99vrVrSgzsmXhCJnusQFvWSFsoTndKpGvbRewVskxcW8Cq3pHdHjJUPMBi3Gr3tQ 
+     https://explorer.solana.com/tx/4D7gUzL5bQxpX6Gnqj1wdhDw99vrVrSgzsmXhCJnusQFvWSFsoTndKpGvbRewVskxcW8Cq3pHdHjJUPMBi3Gr3tQ?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
   • buy 300 (reserve 0/772.542485): in 300 (inputDecimals 6) → quoted 401272642.898496017, min 393247190.040526096, actual 401272642.898496017
   • OK: buy 300 (reserve 0/772.542485): actual ≥ minimumAmountOut (slippage 200 bps)
   • OK: buy 300 (reserve 0/772.542485): actual within 200 bps of quote (diff 0 bps)
   • OK: buy input uses QUOTE decimals (6)
-  tx buy 300 (reserve 295.5/772.542485): 2eHqSCq6D796UBUdccyLzJCt2My56eGkah1aBmYgjBsXgjzFJYxu7sssokZcY4LQCscfGoApnDuoCZPGsEaowDcw 
-     https://explorer.solana.com/tx/2eHqSCq6D796UBUdccyLzJCt2My56eGkah1aBmYgjBsXgjzFJYxu7sssokZcY4LQCscfGoApnDuoCZPGsEaowDcw?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
+  tx buy 300 (reserve 295.5/772.542485): 3GpaaYpMAuE8xNY9uZ4FK1vGfRJtT5YpyPkD1rj8cMSbFAucmSRXYZak5kCwAs95hCBVSqmBD8p1AucnvaSZaJEk 
+     https://explorer.solana.com/tx/3GpaaYpMAuE8xNY9uZ4FK1vGfRJtT5YpyPkD1rj8cMSbFAucmSRXYZak5kCwAs95hCBVSqmBD8p1AucnvaSZaJEk?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
   • buy 300 (reserve 295.5/772.542485): in 300 (inputDecimals 6) → quoted 206247440.224889864, min 202122491.420392066, actual 206247440.224889864
   • OK: buy 300 (reserve 295.5/772.542485): actual ≥ minimumAmountOut (slippage 200 bps)
   • OK: buy 300 (reserve 295.5/772.542485): actual within 200 bps of quote (diff 0 bps)
   • OK: buy input uses QUOTE decimals (6)
-  • buy 185173335 atoms failed: Insufficient Liquidity — retrying smaller/larger
-  tx buy 184.247468 (reserve 591/772.542485): 4vyXfbwfze3dd3XB1NF5sXHZ7ePKoki2CL9Uc6ZvpxSyKkeqMsBhcgSTu8fsJFydynHn14v1ruDbEwm6tncGj5rx 
-     https://explorer.solana.com/tx/4vyXfbwfze3dd3XB1NF5sXHZ7ePKoki2CL9Uc6ZvpxSyKkeqMsBhcgSTu8fsJFydynHn14v1ruDbEwm6tncGj5rx?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
-  • buy 184.247468 (reserve 591/772.542485): in 184.247468 (inputDecimals 6) → quoted 83434773.188976212, min 81766077.725196687, actual 83434773.188976212
-  • OK: buy 184.247468 (reserve 591/772.542485): actual ≥ minimumAmountOut (slippage 200 bps)
-  • OK: buy 184.247468 (reserve 591/772.542485): actual within 200 bps of quote (diff 0 bps)
+  tx buy 272.313727 (reserve 591/772.542485): 2Rrxy5rHidRR6PnCG6dKEkUBoiECqPdep33L8MFqPMr6Smy65uPvhWLg455qYTHoeJsHD4DSZoafNEppwK7MAcF 
+     https://explorer.solana.com/tx/2Rrxy5rHidRR6PnCG6dKEkUBoiECqPdep33L8MFqPMr6Smy65uPvhWLg455qYTHoeJsHD4DSZoafNEppwK7MAcF?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
+  • buy 272.313727 (reserve 591/772.542485): in 272.313727 (inputDecimals 6) → quoted 83458266.176236157, min 81789100.852711433, actual 83458266.176236157
+  • OK: buy 272.313727 (reserve 591/772.542485): actual ≥ minimumAmountOut (slippage 200 bps)
+  • OK: buy 272.313727 (reserve 591/772.542485): actual within 200 bps of quote (diff 0 bps)
   • OK: buy input uses QUOTE decimals (6)
-  • buy 59905 atoms failed: Insufficient Liquidity — retrying smaller/larger
-  tx buy 0.059605 (reserve 772.483755/772.542485): ynwoUJNNf4UWotX1g3znGuPLezLKJxgZSEYoFnCUHT8bpXnpT2yVXHcF5R4PKmkDjKs3mCTvxf8B67DcJagsTMu 
-     https://explorer.solana.com/tx/ynwoUJNNf4UWotX1g3znGuPLezLKJxgZSEYoFnCUHT8bpXnpT2yVXHcF5R4PKmkDjKs3mCTvxf8B67DcJagsTMu?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
-  • buy 0.059605 (reserve 772.483755/772.542485): in 0.059605 (inputDecimals 6) → quoted 23484.987257804, min 23015.287512647, actual 23484.987257804
-  • OK: buy 0.059605 (reserve 772.483755/772.542485): actual ≥ minimumAmountOut (slippage 200 bps)
-  • OK: buy 0.059605 (reserve 772.483755/772.542485): actual within 200 bps of quote (diff 0 bps)
-  • OK: buy input uses QUOTE decimals (6)
-  tx buy 0.000021 (reserve 772.542465/772.542485): 3c9w5EByQDkrnajiJkvmXi6JJygmwJMgKRBFrXG8YZc3vfwRbhgAGwVsZvdP2Cwgghk4gmrfiSjeN9XAr14FqBSz 
-     https://explorer.solana.com/tx/3c9w5EByQDkrnajiJkvmXi6JJygmwJMgKRBFrXG8YZc3vfwRbhgAGwVsZvdP2Cwgghk4gmrfiSjeN9XAr14FqBSz?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
-  • buy 0.000021 (reserve 772.542465/772.542485): in 0.000021 (inputDecimals 6) → quoted 7.999999716, min 7.839999721, actual 7.999999716
-  • OK: buy 0.000021 (reserve 772.542465/772.542485): actual ≥ minimumAmountOut (slippage 200 bps)
-  • OK: buy 0.000021 (reserve 772.542465/772.542485): actual within 200 bps of quote (diff 0 bps)
-  • OK: buy input uses QUOTE decimals (6)
-  • OK: curve phase after buys = complete (reserve 772542485 ≥ 772542485, migrationProgress 2)
+  • overshoot buy: input 272.313727 vs remaining 181.542485 → mode partial_fill, fillable 184.307093, unused 88.006634, spent 184.307093
+  • OK: buy > remaining curve is planned as partial_fill (mode partial_fill, completesCurve true)
+  • OK: partial fill spent less than the requested input (184307093 < 272313727); no DBC 6033
+  • OK: spent ≤ quoted fillable input (184307093 ≤ 184307093)
+  • OK: curve phase after buys = complete (reserve 772542486 ≥ 772542485, migrationProgress 2)
   • OK: eligibility check → eligible (Eligible to migrate)
   expectedDammConfig: Hv8Lmzmnju6m7kcokVKvwqz7QPmdX9XfKjJsXz8RXcjp
-  expectedDammPool: Gj3eRhvm7k6AYyqitgrsiaQkiMsyEq64LjjUWae2gfu2
-  tx migrateToDammV2: 3ztadic3baesz8rnbJoRYevFNLUh2kzsRe82jKKFJXfrmq8unVaBkQ9aFgUvBvsTxbdWvjoS89DU3v2dzUkj2qV2 
-     https://explorer.solana.com/tx/3ztadic3baesz8rnbJoRYevFNLUh2kzsRe82jKKFJXfrmq8unVaBkQ9aFgUvBvsTxbdWvjoS89DU3v2dzUkj2qV2?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
+  expectedDammPool: J5v6otwDKwbPyZGEJUFwChRTq3WRSFhQQwekbXtCfr8
+  tx migrateToDammV2: 21i1pJHV1Pkn8FrfWrnEsAsmtqLTnt33rwFbgCafB2wFo7NrXWcpKCveJhiDukYEsoNdEaY83Xne8DSUtXdM1FBA 
+     https://explorer.solana.com/tx/21i1pJHV1Pkn8FrfWrnEsAsmtqLTnt33rwFbgCafB2wFo7NrXWcpKCveJhiDukYEsoNdEaY83Xne8DSUtXdM1FBA?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
   • graduation states: Preparing migration → submitted → confirmed → destination_verified
   • OK: states went submitted → confirmed → destination_verified
-  • OK: migrated DAMM v2 pool = expected (Gj3eRhvm7k6AYyqitgrsiaQkiMsyEq64LjjUWae2gfu2)
+  • OK: migrated DAMM v2 pool = expected (J5v6otwDKwbPyZGEJUFwChRTq3WRSFhQQwekbXtCfr8)
   • OK: DBC pool isMigrated=true, phase migrated
-  • OK: registry refresh → status graduated, dammPool Gj3eRhvm7k6AYyqitgrsiaQkiMsyEq64LjjUWae2gfu2
+  • OK: registry refresh → status graduated, dammPool J5v6otwDKwbPyZGEJUFwChRTq3WRSFhQQwekbXtCfr8
+  → PASS
+
+=== [S8] Short-raise SC (SOL quote): quote-aware threshold (~3.09 SOL, was 772.5) + buy 1.5× remaining → partial fill completes the curve (no DBC 6033)
+  • metadata source: hosted
+  • mode=config-and-pool txs=1 seedBuyAtoms=0
+  pool: 2zVZivJVoPk3sLCtRd4M3ZNFho14Rd1xPmkdyFH8PBaQ
+  baseMint: 3F6CmEogktZRsdEVoXvEGqViseNMschjpY24RrASHys8
+  config: ED2STBaG1SQ6jy92mAN4562NB8harEpa5m8SvnVBtSep
+  tx create 1/1 (config + pool): 4AvB61epa1RXQ9esGzWrKKpfiZApAfrfuY7podgRW7VrMKzuUyEndxwkr9FHwrUz8U9XrgQGpsdU6HCU9cx7tWeX 
+     https://explorer.solana.com/tx/4AvB61epa1RXQ9esGzWrKKpfiZApAfrfuY7podgRW7VrMKzuUyEndxwkr9FHwrUz8U9XrgQGpsdU6HCU9cx7tWeX?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
+  • registry POST (creator-signed): listed
+  • OK: on-chain threshold 3.090169943 SOL = preset/wizard value 3.090169943 SOL
+  • OK: SOL short threshold is sane (< 10 SOL): 3.090169943 SOL
+  • OK: graduationNumbers remaining (exact) = 3.090169943 SOL
+  tx overshoot buy 4.635254914 SOL (remaining 3.090169943): 4wR2mKTYSqMcLFryvZRdtPYfb6sRtsTPfaYhsCPaJArrCmMmht5PyGLfo4oK5MAzf34ngUtiUijU1aB8D92J1Yge 
+     https://explorer.solana.com/tx/4wR2mKTYSqMcLFryvZRdtPYfb6sRtsTPfaYhsCPaJArrCmMmht5PyGLfo4oK5MAzf34ngUtiUijU1aB8D92J1Yge?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
+  • overshoot buy 4.635254914 SOL (remaining 3.090169943): in 4.635254914 (inputDecimals 9) → quoted 690980677.349828434, min 677161063.802831865, actual 690980677.349828434
+  • OK: overshoot buy 4.635254914 SOL (remaining 3.090169943): actual ≥ minimumAmountOut (slippage 200 bps)
+  • OK: overshoot buy 4.635254914 SOL (remaining 3.090169943): actual within 200 bps of quote (diff 0 bps)
+  • OK: buy input uses QUOTE decimals (9)
+  • mode partial_fill, fillable 3.137228369, unused 1.498026545, fee 0.047058426
+  • OK: planned as partial_fill with unused input 1.498026545 SOL
+  • OK: curve took 3.090169943 SOL ≤ fillable 3.137228369 (not the full 4.635254914)
+  • OK: curve phase after one overshoot buy = complete (reserve 3090169943 ≥ 3090169943)
+  • OK: graduationNumbers after: complete=true, remaining 0
   → PASS
 
 === [S9] DAMM v2 on SA (open-spl base): resolve, quote + swap both directions, position fee claim
-  • OK: resolveDammPoolAddress → GAGp62EbJ7MPUcMw7LFQT7exQL9PX78HdF156N8u8JvV exists=true (derived)
+  • OK: resolveDammPoolAddress → nz9Q5b47DnwcQ98AdmNtiRGPmvWMhxbdRBhJhreDnv2 exists=true (derived)
   • mint sort: base < quote; pool tokenA=base (9 dec), tokenB=quote (6 dec)
-  tokenA: 2uaozstf8RmbJvuwV3urYMZSo9t1pB1K52xSDVzKiWzq
+  tokenA: 4FAg1mDThLLR9uiwdprjYuf8uNtjdUWpcw8C7ut3F433
   tokenB: Entdo3TrjdeCCVAMXHeNKBEfyuSnLVdeCKqeo7fdpUfh
   • OK: quote_to_base quote: amountOut 6018221160863377 > minimumAmountOut 5958038949254743 (expected vs min are distinct)
   • OK: quote_to_base: min = amountOut × (1 − 1%) = 5958038949254743 (slippage applied as 100 bps)
   • OK: quote_to_base: input mint is quote; inputDecimals 6
-  tx DAMM swap quote_to_base 15.5: 37JvxgECKmkyWjX4U1sFqkB1U19coMxqRURaMThq3vMKKyif2gMJSUfWVbARGFzrBFBrbCvdUJUiFRpSNypgchot 
-     https://explorer.solana.com/tx/37JvxgECKmkyWjX4U1sFqkB1U19coMxqRURaMThq3vMKKyif2gMJSUfWVbARGFzrBFBrbCvdUJUiFRpSNypgchot?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
+  tx DAMM swap quote_to_base 15.5: 3nJsFmSUfswCie7nC1CaYzy6gGHDGk2Wrz7JdjkXW65g1XpFqRvGw7VF2ZCsbwfJLKEyUBAzwSQ9UBE4MHSN1BCw 
+     https://explorer.solana.com/tx/3nJsFmSUfswCie7nC1CaYzy6gGHDGk2Wrz7JdjkXW65g1XpFqRvGw7VF2ZCsbwfJLKEyUBAzwSQ9UBE4MHSN1BCw?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
   • quote_to_base: in 15.5 → out 6018221.160863377 (quoted 6018221.160863377, min 5958038.949254743)
   • OK: quote_to_base: spent exactly amountIn 15500000
   • OK: quote_to_base: received ≥ minimumAmountOut
@@ -388,32 +395,32 @@ bigint: Failed to load bindings, pure JS will be used (try npm run rebuild?)
   • OK: base_to_quote quote: amountOut 642993 > minimumAmountOut 636563 (expected vs min are distinct)
   • OK: base_to_quote: min = amountOut × (1 − 1%) = 636563 (slippage applied as 100 bps)
   • OK: base_to_quote: input mint is base; inputDecimals 9
-  tx DAMM swap base_to_quote 250000: 3kTmzHNPHr935viwqZUtUiv9JRaL4LG3xaYgkgAqEhEdzq2LD44Qrv2WetbsFHeNcS7sCNohmAi88CnsytjbyiFx 
-     https://explorer.solana.com/tx/3kTmzHNPHr935viwqZUtUiv9JRaL4LG3xaYgkgAqEhEdzq2LD44Qrv2WetbsFHeNcS7sCNohmAi88CnsytjbyiFx?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
+  tx DAMM swap base_to_quote 250000: 44193rvBEDpCxrmBinSrapnf2wU8ubqktu76PFBfQTc9pBLKUMBBivwKoAg8e21h3378g3k7bMhQxUzERFDR6wvc 
+     https://explorer.solana.com/tx/44193rvBEDpCxrmBinSrapnf2wU8ubqktu76PFBfQTc9pBLKUMBBivwKoAg8e21h3378g3k7bMhQxUzERFDR6wvc?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
   • base_to_quote: in 250000 → out 0.642993 (quoted 0.642993, min 0.636563)
   • OK: base_to_quote: spent exactly amountIn 250000000000000
   • OK: base_to_quote: received ≥ minimumAmountOut
   • OK: base_to_quote: received within 1% of quoted amountOut (diff 0 bps)
-  • partner DAMM positions: 1 (EUrEdy… feeA 0 feeB 129275)
+  • partner DAMM positions: 1 (6Y5mMm… feeA 0 feeB 129275)
   • creator DAMM positions: 0
   • OK: partner holds migration position(s)
-  tx claimPositionFee2 (partner position EUrEdy…): 5nK1kSrNyyANnbeLqUcCV5AVg1XDWLy3vawYhbThJ4Y4F1RswiNgCNU9Pviy5LfZYGJ7pZRGB8anKhQbBU8wYvYr 
-     https://explorer.solana.com/tx/5nK1kSrNyyANnbeLqUcCV5AVg1XDWLy3vawYhbThJ4Y4F1RswiNgCNU9Pviy5LfZYGJ7pZRGB8anKhQbBU8wYvYr?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
+  tx claimPositionFee2 (partner position 6Y5mMm…): 5ZmBgMbXDqtW3Ruq1bvRHV4oUB7NydGh5m5CjWx7q7M2sQsVR1A4NXau8SNdtNumkC28znShq6xSQWodG4F7WotL 
+     https://explorer.solana.com/tx/5ZmBgMbXDqtW3Ruq1bvRHV4oUB7NydGh5m5CjWx7q7M2sQsVR1A4NXau8SNdtNumkC28znShq6xSQWodG4F7WotL?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
   • claimed: quote 0.129275, base 0
   • OK: position fee claim transferred fees to holder
   • OK: UI "pending fees" before claim (quote 129275, base 0) = amounts actually claimed
   → PASS
 
 === [S9] DAMM v2 on SB (token-2022 base): resolve, quote + swap both directions, position fee claim
-  • OK: resolveDammPoolAddress → Gj3eRhvm7k6AYyqitgrsiaQkiMsyEq64LjjUWae2gfu2 exists=true (derived)
+  • OK: resolveDammPoolAddress → J5v6otwDKwbPyZGEJUFwChRTq3WRSFhQQwekbXtCfr8 exists=true (derived)
   • mint sort: base > quote; pool tokenA=base (9 dec), tokenB=quote (6 dec)
-  tokenA: F8CxsmMMVPeCK89R7Q925JNn9bEgFPmpDb6eBr4nzwHT
+  tokenA: J1B9SMAZGiZtHEuZvU8T6SU98gyncg6pKYhBwtVPrpeF
   tokenB: Entdo3TrjdeCCVAMXHeNKBEfyuSnLVdeCKqeo7fdpUfh
   • OK: quote_to_base quote: amountOut 6018221160863377 > minimumAmountOut 5958038949254743 (expected vs min are distinct)
   • OK: quote_to_base: min = amountOut × (1 − 1%) = 5958038949254743 (slippage applied as 100 bps)
   • OK: quote_to_base: input mint is quote; inputDecimals 6
-  tx DAMM swap quote_to_base 15.5: 4KEJY2g4X4mHqih35aVEENL4Grx6yC1ZmquCQAFvWpd1ujgcyxnqa41y2hwETE7ig7d5HjzrYAfsKVvKW2PGQ47r 
-     https://explorer.solana.com/tx/4KEJY2g4X4mHqih35aVEENL4Grx6yC1ZmquCQAFvWpd1ujgcyxnqa41y2hwETE7ig7d5HjzrYAfsKVvKW2PGQ47r?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
+  tx DAMM swap quote_to_base 15.5: 5egPKDPwLM7mtnLLm12GH8HhcA2wLH6TM2FHuT7tp9Tac52qHKuzQx4k8k1VRuuEuZfPffQhJ1KEx34aCt2CBEAE 
+     https://explorer.solana.com/tx/5egPKDPwLM7mtnLLm12GH8HhcA2wLH6TM2FHuT7tp9Tac52qHKuzQx4k8k1VRuuEuZfPffQhJ1KEx34aCt2CBEAE?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
   • quote_to_base: in 15.5 → out 6018221.160863377 (quoted 6018221.160863377, min 5958038.949254743)
   • OK: quote_to_base: spent exactly amountIn 15500000
   • OK: quote_to_base: received ≥ minimumAmountOut
@@ -421,43 +428,43 @@ bigint: Failed to load bindings, pure JS will be used (try npm run rebuild?)
   • OK: base_to_quote quote: amountOut 642993 > minimumAmountOut 636563 (expected vs min are distinct)
   • OK: base_to_quote: min = amountOut × (1 − 1%) = 636563 (slippage applied as 100 bps)
   • OK: base_to_quote: input mint is base; inputDecimals 9
-  tx DAMM swap base_to_quote 250000: 5ZAPJ9SJEG9cbnwKup62hvvBcqWDVgKhitPwWciwvXxgyiCBZmhfUPKeASdmK6CChGAMpdWBiP8nmmkbV25SuoPV 
-     https://explorer.solana.com/tx/5ZAPJ9SJEG9cbnwKup62hvvBcqWDVgKhitPwWciwvXxgyiCBZmhfUPKeASdmK6CChGAMpdWBiP8nmmkbV25SuoPV?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
+  tx DAMM swap base_to_quote 250000: 3YsrAZ5ZsJXbgwF1NeZWSYMutQsCQ14XHwFJGAywyEucKxKV1ozGU1BR6k5EKnBMkFwn7emvAq8WKRotQL4C1QNz 
+     https://explorer.solana.com/tx/3YsrAZ5ZsJXbgwF1NeZWSYMutQsCQ14XHwFJGAywyEucKxKV1ozGU1BR6k5EKnBMkFwn7emvAq8WKRotQL4C1QNz?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
   • base_to_quote: in 250000 → out 0.642993 (quoted 0.642993, min 0.636563)
   • OK: base_to_quote: spent exactly amountIn 250000000000000
   • OK: base_to_quote: received ≥ minimumAmountOut
   • OK: base_to_quote: received within 1% of quoted amountOut (diff 0 bps)
-  • partner DAMM positions: 1 (Gf3442… feeA 0 feeB 129275)
+  • partner DAMM positions: 1 (9JTfhZ… feeA 0 feeB 129275)
   • creator DAMM positions: 0
   • OK: partner holds migration position(s)
-  tx claimPositionFee2 (partner position Gf3442…): 3PjJGr5q8gZr6nsWCMRfU88pEirgGMQ4F7QSGP1q5xVbrEUisUJHL2s6tLQMKu5tgvwiyri8xtTNv78bcLad2Bdn 
-     https://explorer.solana.com/tx/3PjJGr5q8gZr6nsWCMRfU88pEirgGMQ4F7QSGP1q5xVbrEUisUJHL2s6tLQMKu5tgvwiyri8xtTNv78bcLad2Bdn?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
+  tx claimPositionFee2 (partner position 9JTfhZ…): X4TzRAJfSdpUmpK6ecFVib2cQAcGmpgapP5aSdNJF7TSLp6yu2VaLUExZiFfqYLG7wi86dhqsMrvrMT6KwyMhEG 
+     https://explorer.solana.com/tx/X4TzRAJfSdpUmpK6ecFVib2cQAcGmpgapP5aSdNJF7TSLp6yu2VaLUExZiFfqYLG7wi86dhqsMrvrMT6KwyMhEG?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
   • claimed: quote 0.129275, base 0
   • OK: position fee claim transferred fees to holder
   • OK: UI "pending fees" before claim (quote 129275, base 0) = amounts actually claimed
   → PASS
 
 === [S9] DAMM v2 custom pool with tokenA = quote, tokenB = base (reverse token order): app quote + swap both directions
-  tx fixture: createCustomPool (tokenA = stand-in quote) — test setup, not an app path: 3a4FToL4G4BHxR3FZTEjocnvrtwgcoRF3MJhcphFZj99d9BfEdWTLn3SiA3LUcX6JzU7rnv6NuDgPpiqwMiRUMJ6 
-     https://explorer.solana.com/tx/3a4FToL4G4BHxR3FZTEjocnvrtwgcoRF3MJhcphFZj99d9BfEdWTLn3SiA3LUcX6JzU7rnv6NuDgPpiqwMiRUMJ6?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
-  customDammPool: 5sQteacQBEsAgp7TrMVTkQARUyQjHWsaG9ZT6GedBbvB
+  tx fixture: createCustomPool (tokenA = stand-in quote) — test setup, not an app path: FKFDAKgGZRibBia423HT3wek4Pq3deBQoP5SE8afGugvFmo3jErRq2TBQMDax8C3LWCijSKQP2mFdoqKPCMwhwZ 
+     https://explorer.solana.com/tx/FKFDAKgGZRibBia423HT3wek4Pq3deBQoP5SE8afGugvFmo3jErRq2TBQMDax8C3LWCijSKQP2mFdoqKPCMwhwZ?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
+  customDammPool: A71we7oueFVU5by1LDo49wwtuv5sgwNrJ2P8nfcLjUEA
   • OK: pool tokenA = quote (6 dec), tokenB = base (9 dec)
   • OK: quote_to_base: input = quote (inputDecimals 6, outputDecimals 9)
-  tx DAMM swap quote_to_base 1.25 (tokenA=quote pool): woMWr5LwPTfM4yuRx6fUJuN4eRDx3tZh1ytWcZfKFJhZojdEa43fZ9M2kP8msuYoxtCSKpcEF9gakxunS7Y1W3N 
-     https://explorer.solana.com/tx/woMWr5LwPTfM4yuRx6fUJuN4eRDx3tZh1ytWcZfKFJhZojdEa43fZ9M2kP8msuYoxtCSKpcEF9gakxunS7Y1W3N?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
+  tx DAMM swap quote_to_base 1.25 (tokenA=quote pool): 5E5ehhsimd9gxraNXu3KciM1AD4hbMXV7zNP1QcSD1f1CC1WyCroCRvc8YVNGirdc9sVFWyo4ARapDdYf4uj35d 
+     https://explorer.solana.com/tx/5E5ehhsimd9gxraNXu3KciM1AD4hbMXV7zNP1QcSD1f1CC1WyCroCRvc8YVNGirdc9sVFWyo4ARapDdYf4uj35d?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
   • quote_to_base: in 1.25 → out 582350.087599186 (quoted 582350.087599186, min 576526.586723194)
   • OK: quote_to_base: spent exactly amountIn
   • OK: quote_to_base: minimumAmountOut ≤ received ≤ amountOut
   • OK: base_to_quote: input = base (inputDecimals 9, outputDecimals 6)
-  tx DAMM swap base_to_quote 100000 (tokenA=quote pool): 2RPWiB8eJnXjuLL7km29mGwePnrNtVxnCTQGinYifbpN9txspkuYLQuLcmT3tmsQ4FTpkMj7T8S5bKzdxuyhvpYb 
-     https://explorer.solana.com/tx/2RPWiB8eJnXjuLL7km29mGwePnrNtVxnCTQGinYifbpN9txspkuYLQuLcmT3tmsQ4FTpkMj7T8S5bKzdxuyhvpYb?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
+  tx DAMM swap base_to_quote 100000 (tokenA=quote pool): 2m5geyRua7AWfs8toJh8B8wVYLXRa9LLT6x1aSBWHBGazdHGRVTU4C1uH15JC7BVM8787HY7FLtoXadNTNTqHjU3 
+     https://explorer.solana.com/tx/2m5geyRua7AWfs8toJh8B8wVYLXRa9LLT6x1aSBWHBGazdHGRVTU4C1uH15JC7BVM8787HY7FLtoXadNTNTqHjU3?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899
   • base_to_quote: in 100000 → out 0.221173 (quoted 0.221173, min 0.218961)
   • OK: base_to_quote: spent exactly amountIn
   • OK: base_to_quote: minimumAmountOut ≤ received ≤ amountOut
   → PASS
 
 === [S10] Expired blockhash → mapped failure (never success)
-  • blockhash DFZCZ1T3ec5HMLtd3bLXPxQAGj3d5NNPTs3XmqduF9Qr (captured at setup) is no longer valid
+  • blockhash EU7fvERhLZ37RgAHB3Mqs9pLbNNcjotoMyznXMomNTJX (captured at setup) is no longer valid
   • surfaced: kind=blockhash_expired "Transaction expired before it confirmed (blockhash too old). Nothing was charged if it didn't land — check your wallet activity, then retry."
   • OK: mapped as blockhash_expired (blockhash_expired)
   • dropped tx after 64s: code=TX_EXPIRED "Transaction 11111111… was not confirmed before its blockhash expired. It may not have landed — check the explorer before retrying."
@@ -465,7 +472,7 @@ bigint: Failed to load bindings, pure JS will be used (try npm run rebuild?)
   → PASS
 
 === [S10] Insufficient funds → mapped failure
-  brokeWallet: 9RSzXYX51tWDKtgeJQSCuQLtrqXfmdFrxXRRtvkGvuvX
+  brokeWallet: AE2PMonR46tV9DWnprMo2JMnNm1Dr5wtaMxNLCiXXfuq
   • surfaced: kind=insufficient_funds "Insufficient funds: your wallet needs more SOL (fees + rent) for this transaction."
   • OK: mapped as insufficient_funds (insufficient_funds)
   → PASS
@@ -489,7 +496,7 @@ S3: skipped
 S5: pass
 S6: pass, pass, pass, pass
 S7: pass, pass
-S8: pass, pass
+S8: pass, pass, pass
 S6/S10: pass
 S9: pass, pass, pass
 S10: pass, pass, pass

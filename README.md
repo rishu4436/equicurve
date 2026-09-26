@@ -1,45 +1,75 @@
 # EquiCurve
 
-**Fair on-chain discovery for tokenized equity / RWA on Solana** — Meteora Dynamic Bonding Curve (DBC) → graduate into DAMM v2.
+**EquiCurve is an issuer-controlled launch and price-discovery interface for equity-inspired and RWA-related tokens on Solana.** It launches a token on a Meteora Dynamic Bonding Curve (DBC), lets the market trade it on the curve, and graduates liquidity into a Meteora DAMM v2 pool when the raise threshold is reached.
 
-Built for [Superteam Earn · Meteora DBC](https://superteam.fun/earn/listing/meteora-dbc) + Colosseum Crypto World's Fair sidetrack.
+> EquiCurve is software for launching tokens on Meteora's bonding curve. It is **not** a broker, exchange, transfer agent or securities platform, makes **no claim of securities-law compliance**, and does **not** create shareholder rights.
 
-**Deadline:** 2026-10-13 · **Design approved:** 2026-09-22 · See [DESIGN.md](./DESIGN.md)
+Built for [Superteam Earn · Meteora DBC](https://superteam.fun/earn/listing/meteora-dbc) + Colosseum Crypto World's Fair sidetrack. **Deadline:** 2026-10-13 · Design: [DESIGN.md](./DESIGN.md)
 
-## Honesty (read this)
+**For judges:** [Architecture + lifecycle diagram](docs/ARCHITECTURE.md) · [Reproducible walkthrough](docs/WALKTHROUGH.md) · [On-chain e2e evidence](docs/e2e-devnet-evidence.md) (localnet with Meteora programs cloned from devnet, **not public devnet**; see [below](#e2e-evidence)).
 
-| Surface | Reality |
-| --- | --- |
-| **Explore (default)** | **EquiCurve registry** (`GET /api/explore`) + this browser’s localStorage, deduped by pool. No unlabeled fake live markets. |
-| **Show examples / `?demo=1`** | Static illustrative cards, badged **Illustrative · not live**. Trade disabled. |
-| **Create → Launch** | Real DBC SDK. Quote **SOL (WSOL)** default; **USDC** when a known mint exists for the cluster. Fee share, LP lock %, mint authority, optional seed buy, optional partner feeClaimer map on-chain. |
-| **Home stats** | Counts from this browser’s launches — not invented capital figures. |
-| **Docs checklist** | Issuer attestation stored locally — not an upload vault. |
-| **Token-2022 / hooks** | Create supports Open SPL, Token-2022 (no hook), and Token-2022 + transfer hook when `NEXT_PUBLIC_TRANSFER_HOOK_PROGRAM` is set. Swap uses `swap2WithTransferHook` for hook pools. |
-| **Offering price chart** | Live pools: swap-implied points from confirmed txs (`getSignaturesForAddress` + EvtSwap / balance deltas) + live spot from pool `sqrtPrice`. Points accumulate in localStorage. Dashed series = bonding **curve shape (not history)**. Demo/empty: curve shape only — no invented history. |
+## What EquiCurve is (and is not): three separate layers
 
-**Create → Launch** and **Trade / Graduate** call `@meteora-ag/dynamic-bonding-curve-sdk`. No mock on-chain success.
+| Layer | Who is responsible | What it means |
+| --- | --- | --- |
+| **1. Token launch** | EquiCurve + Meteora programs (on-chain) | Creates a DBC config + pool, mints a fixed supply into the curve, runs curve trades, migrates to DAMM v2 at the threshold. Every step is a transaction you can check on an explorer. |
+| **2. Equity representation** | The issuer's legal framework | Whether the token represents any economic or governance interest depends entirely on the issuer's own structure (SPV, note, membership agreement…) and applicable law. EquiCurve does not create, register or enforce shareholder rights. Holding the token ≠ owning shares unless the issuer's documents say so. |
+| **3. RWA verification** | Issuer, custodians, auditors (off-chain) | Disclosures, custody, audits and redemption must be verified through the issuer. The curve prices demand for the token; it says nothing about the asset's existence, value or NAV. |
+
+The same explainer is on Home, `/trust` and `/docs` (`src/lib/positioning.ts` is the single source of the copy).
+
+## Live vs illustrative
+
+| Surface | Live (on-chain / real API) | Illustrative or local only |
+| --- | --- | --- |
+| **Create → Launch** | Real DBC transactions (`createConfigAndPool` / `…WithFirstBuy`). Review screen lists every on-chain setting before signing; the receipt marks each item **confirmed / pending / estimate**. | — |
+| **Presets** | Real `buildCurveWithMarketCap` configs. Market caps are in **quote units** (separate SOL and USDC values), and the wizard shows the resulting migration threshold. | The preset shape chart is a normalized illustration. |
+| **Trade on curve** (`/o/[id]`, `/trade/[pool]`) | Real DBC quote + swap. Pre-sign summary: exact input, estimated and minimum output, fee, slippage; re-quoted if older than 15s or the pool changed. Buys larger than the remaining curve become a partial fill. | — |
+| **Graduation** | Threshold, raised, remaining (exact, quote units) read from chain; `migrateToDammV2`; DAMM v2 pool shown as *verified* only after its account is fetched. | Before verification the DAMM pool address is labelled *expected (derived)*. |
+| **DAMM v2 ticket** | Real cp-amm quote + swap + position-fee claim, same pre-sign summary. | Add/remove liquidity not built. |
+| **Explore** | Registry rows carry `verified: true` only after a creator signature **and** an on-chain read succeeded. | Browser-local launches and the **Show examples / `?demo=1`** cards (badged *Illustrative · not live*, trade disabled). |
+| **Price chart** | Swap-derived points from confirmed txs; live spot from pool `sqrtPrice`. | The theoretical curve line (x-axis = raise progress, not time). |
+| **Portfolio** | Wallet token balances read from chain (SPL + Token-2022), exact atoms. | Launches and activity recorded in this browser (labelled local). |
+| **Issuer attestation / docs checklist** | — | Self-reported, stored in the browser, not reviewed, **not KYC**. |
+| **Home stats** | — | Counts from this browser's launches, not invented capital figures. |
+
+## Trust assumptions
+
+- **Meteora programs** (DBC `dbcij3LW…`, DAMM v2 `cpamdpZC…`) execute curve trades, fee accounting, LP locks and migration. EquiCurve does not deploy its own on-chain program.
+- **Your RPC** is trusted for reads. A failed read is shown as *unknown*, never as 0% or complete.
+- **The EquiCurve server** hosts the registry and metadata JSON. It lists a pool only after verifying the creator's wallet signature and re-reading the pool on-chain, and derives every chain field itself. It could still go offline or withhold rows; it cannot mark a pool as verified without a successful chain read.
+- **Token identity** (name, symbol, mint) is fixed at launch. After launch the creator may edit only description, image and links, with a signed request; image URLs must be https, png/jpeg/gif/webp/avif, ≤ 2 MB.
+- **The issuer** is trusted for everything off-chain (legal structure, disclosures, custody, redemption).
+- **This browser** stores local launches, activity and the attestation; they are labelled local and prove nothing.
+
+### Issuer answers (short)
+
+- **Fees:** Meteora takes a 20% protocol share of trading fees; the remaining 80% is split creator / partner by the creator % you choose (e.g. 50% → 40% of fees to the creator wallet, 40% to the partner feeClaimer). The partner feeClaimer defaults to your own wallet.
+- **LP lock:** at graduation, all migrated DAMM v2 LP goes to the partner (feeClaimer). The lock % you choose (minimum 10%) is permanently locked; the rest is unlocked LP for the partner. Creator LP is 0%.
+- **After graduation:** the curve stops trading, liquidity moves to a DAMM v2 pool (1% base pool fee, dynamic fee enabled), and holders trade there. Tokens stay in holders' wallets.
+- **Presets:** see `/presets` for each preset's price path, raise size before graduation and early-buyer advantage.
 
 ## Status
 
 | Route | Status |
 | --- | --- |
-| `/` Home | Equity positioning + How it works + local launch strip |
+| `/` Home | Positioning + 3-layer explainer + How it works + local launch strip |
 | `/explore` | Tabs + shared registry + local launches; examples behind toggle / `?demo=1` |
-| `/create` | 6-step wizard; fee / lock / mint / seed buy wired to SDK |
-| `/presets` | Short raise · Flat · Exponential · Long (+ Equity-tuned) |
+| `/create` | 6-step wizard; quote-aware presets + threshold; full on-chain review before signing; launch receipt |
+| `/presets` | Short raise · Flat · Exponential · Long (+ Equity-tuned); SOL + USDC thresholds, price multiple, tradeoffs, issuer FAQ |
 | `/o/[id]` | Offering detail + **in-app DAMM v2 post-grad ticket** (quote/swap2 + position fee claim) when graduated |
-| `/o/[id]` (legacy note) | Historical price chart (swap txs + spot), holders, trade |
+| `/o/[id]` (more) | Graduation card (exact remaining), labelled price chart, holders, trade with pre-sign summary, creator metadata editor |
 | `/o/[id]/graduate`, `/graduate/[pool]` | Real `migrateToDammV2` |
-| `/trade/[pool]` | Quote & swap on curve (SOL) |
-| `/portfolio` | Local activity / positions |
+| `/trade/[pool]` | Quote & swap on curve (SOL or USDC) |
+| `/portfolio` | Verified on-chain wallet positions, separate from locally recorded launches / activity |
 | `/issuer` | Fee claim over real claim SDK paths |
 | `/trust` | Program IDs + copy aligned to what Create actually sets |
 | `/settings` | Cluster, RPC host (env), registry backend (file/upstash), clear local storage |
 | `/docs` | Lifecycle docs |
 | `/api/health` | Cluster + RPC host (no secrets) + slot ping |
-| `/api/metadata/[id]` | Hosted token metadata JSON (no fake domain) |
-| `/api/launches` | Shared EquiCurve launch registry (GET / POST / PATCH) |
+| `/api/metadata/[id]` | Hosted token metadata JSON; signed edits; identity fields immutable after launch |
+| `/api/image-check` | https image URL check (type + size via HEAD / ranged GET, SSRF-guarded) |
+| `/api/launches` | Shared EquiCurve launch registry (GET / POST / PATCH); every row has `verified: boolean` |
 | `/api/explore` | Explore discovery: registry + best-effort RPC enrich (~45s cache) |
 
 A self-attestation & risk-disclosure prompt is shown before Create / Trade. It is **not KYC**: it does not verify identity or location, does not enforce jurisdictional eligibility, and is stored only in the browser.
@@ -55,7 +85,7 @@ A self-attestation & risk-disclosure prompt is shown before Create / Trade. It i
 | Anti-sniper | `enableFirstSwapWithMinFee` |
 | Seed buy (SOL &gt; 0) | `createConfigAndPoolWithFirstBuy` |
 | Transfer profile | `open-spl` → SPL `createConfigAndPool`; `token-2022` → Token2022 same builders; `transfer-hook` → `createConfigAndPoolWithTransferHook` (+ env program) |
-| Curve preset | `buildCurveWithMarketCap` (incl. **Short raise** for fast graduate demos) |
+| Curve preset | `buildCurveWithMarketCap` with quote-unit market caps for the chosen quote (SOL short raise ≈ 3.09 SOL threshold, USDC ≈ 772.54) |
 
 
 ### Post-grad DAMM v2 ticket
@@ -73,11 +103,15 @@ npm run dev
 
 ```bash
 npm run typecheck
-npm test        # vitest unit tests (amounts, validation, auth, registry, explore, graduation states, presets, errors, RPC retry)
+npm test        # vitest unit tests (amounts, validation, auth, registry, explore, graduation, presets, launch review, buy planning, metadata policy, price math, portfolio)
 npm run build
 ```
 
 On-chain end-to-end suite (drives the same `src/lib` functions the UI uses, signing with local keypairs): `npm run e2e:devnet`. Needs an app instance for the `/api` routes (`E2E_APP_URL`, default `http://localhost:3011`) and keypairs under `E2E_KEYS_DIR` (default `/workspace/equicurve-e2e/keys`, never committed). `E2E_RPC_URL=http://127.0.0.1:8899` runs it against a local validator with the Meteora programs cloned from devnet. Evidence: [docs/e2e-devnet-evidence.md](docs/e2e-devnet-evidence.md).
+
+### E2E evidence
+
+The committed evidence ran on a **local `solana-test-validator` with the Meteora DBC / DAMM v2 programs and configs cloned from devnet** (identical program binaries), because the public devnet faucet was rate-limited for the whole session. It is **not** a public-devnet run and its explorer links only resolve against that local ledger; the raw logs of every transaction are committed in `docs/e2e-evidence/`. Latest run: 25 steps, 24 PASS, 1 SKIPPED (transfer-hook: no hook program available), 40 of 40 signatures re-fetched. See [docs/WALKTHROUGH.md](docs/WALKTHROUGH.md) to reproduce.
 
 Health check: `GET /api/health` → `{ ok, cluster, rpcHost, slot, registry: { backend } }` (host + backend name only — no API keys / tokens).
 
@@ -157,9 +191,9 @@ Each live offering shows **Verified on-chain**, **Not found on-chain**, **RPC un
 - Seed buy in USDC needs a funded USDC ATA
 - Transfer-hook create needs a real executable `NEXT_PUBLIC_TRANSFER_HOOK_PROGRAM` (no default/fake hook)
 - Mint+update authority retain only on transfer-hook profiles
-- Price chart: swap-implied history from recent pool txs + live spot; dashed overlay is curve shape (not history). Thin history until enough swaps exist; no indexer / no oracle
+- Price chart: swap-derived history from recent pool txs + live spot; the theoretical curve uses the preset's price multiple (defaults to the short preset when the preset is unknown), not the exact on-chain curve points. Thin history until enough swaps exist; no indexer / no oracle
 - Holders list is mint supply + creator ATA + `getTokenLargestAccounts` (no full indexer)
-- Activity mixes RPC `getSignaturesForAddress` with browser-local rows
+- Offering activity mixes RPC `getSignaturesForAddress` with browser-local rows (labelled)
 - Explore uses an **EquiCurve registry** (file or Upstash; not a full chain indexer) plus localStorage; optional filtered `getPoolsByConfig` when `NEXT_PUBLIC_POOL_CONFIG_KEY` is set
 - No mainnet traction / filmed submit assets yet
 
@@ -169,4 +203,4 @@ Next.js 15 · TypeScript · Tailwind · Solana wallet adapter · `@meteora-ag/dy
 
 ## License
 
-ISC — hackathon MVP for Rishu (@rishu4436).
+ISC — hackathon MVP for Rishu (@rishu4436). Nothing here is investment, legal or tax advice.
