@@ -67,7 +67,10 @@ const DBC_ERRORS: Record<number, [string, string]> = {
   6021: ["InvalidCurve", "Invalid curve parameters in config."],
   6022: ["NotPermitToDoThisAction", "This wallet is not permitted to perform this action on the pool."],
   6029: ["InsufficientLiquidityForMigration", "Insufficient liquidity to migrate this pool."],
-  6033: ["InsufficientLiquidity", "Insufficient liquidity for this trade."],
+  6033: [
+    "InsufficientLiquidity",
+    "Buy is larger than what is left on the bonding curve (DBC 6033). Reduce the amount to at most the remaining quote shown under Graduation, or re-quote: EquiCurve caps oversized buys to the fillable amount (partial fill) before signing.",
+  ],
   6035: ["InvalidCreatorTradingFeePercentage", "Creator trading fee percentage is invalid."],
   6053: ["Unauthorized", "This wallet is not authorized for this action."],
   6055: ["InvalidMigrationLockedLiquidity", "Locked liquidity is below the protocol minimum (10%)."],

@@ -108,9 +108,29 @@ export function pickMints(
   };
 }
 
+/** Deterministic key of the DAMM v2 pool state a quote depends on. */
+export function dammPoolStateKey(state: { sqrtPrice?: unknown; liquidity?: unknown }): string {
+  const s = (v: unknown) => (v == null ? "?" : String((v as { toString(): string }).toString()));
+  return `${s(state.sqrtPrice)}:${s(state.liquidity)}`;
+}
+
+/** Re-read the pool and return its state key (null when the read fails). */
+export async function fetchDammPoolStateKey(connection: Connection, pool: PublicKey): Promise<string | null> {
+  try {
+    const st = await withRpcRetry(() => getCpAmm(connection).fetchPoolState(pool));
+    return dammPoolStateKey(st as never);
+  } catch {
+    return null;
+  }
+}
+
+type CpPoolState = Awaited<ReturnType<ReturnType<typeof getCpAmm>["fetchPoolState"]>>;
+
 export async function quoteDammSwap(args: {
   connection: Connection;
   pool: PublicKey;
+  /** Optional pre-fetched pool state so quote and tx use the same state. */
+  poolState?: CpPoolState;
   snap: DammPoolSnapshot;
   direction: DammSwapDirection;
   /** Exact decimal string in input-token units. */
@@ -127,12 +147,13 @@ export async function quoteDammSwap(args: {
   }
 
   const cp = getCpAmm(connection);
-  const poolState = await withRpcRetry(() => cp.fetchPoolState(pool));
+  const poolState = args.poolState ?? (await withRpcRetry(() => cp.fetchPoolState(pool)));
   const { inputMint, outputMint, inputDecimals, outputDecimals } = pickMints(
     snap,
     direction,
   );
   const amountIn = uiToAmount(amountUi, inputDecimals);
+  const slippageBps = slippagePctToBps(slippagePct);
   const currentPoint = await getCurrentPoint(
     connection,
     Number(poolState.activationType) as ActivationType,
@@ -142,7 +163,7 @@ export async function quoteDammSwap(args: {
     inputTokenMint: inputMint,
     // cp-amm getQuote2 takes slippage in BASIS POINTS (getAmountWithSlippage);
     // passing the UI percent directly made 1% act as 0.01%.
-    slippage: slippagePctToBps(slippagePct),
+    slippage: slippageBps,
     currentPoint,
     poolState,
     tokenADecimal: snap.tokenADecimals,
@@ -164,7 +185,23 @@ export async function quoteDammSwap(args: {
         : String(impact);
   }
 
+  const fq = quote as unknown as Record<string, BN | undefined>;
+  const feeTotal = ["claimingFee", "protocolFee", "compoundingFee", "referralFee"].reduce(
+    (acc, k) => acc + BigInt(fq[k] ? fq[k]!.toString(10) : "0"),
+    0n,
+  );
+  // DAMM v2 collectFeeMode: 1 = OnlyB (fee always in token B); otherwise the fee is taken from the output token.
+  const onlyB = Number((poolState as { collectFeeMode?: number }).collectFeeMode) === 1;
+  const feeMint = onlyB ? new PublicKey(snap.tokenBMint) : outputMint;
+  const feeDecimals = onlyB ? snap.tokenBDecimals : outputDecimals;
+
   return {
+    feeAtoms: feeTotal.toString(10),
+    feeMint: feeMint.toBase58(),
+    feeDecimals,
+    slippageBps,
+    quotedAt: Date.now(),
+    poolStateKey: dammPoolStateKey(poolState as never),
     amountIn: amountIn.toString(),
     amountOut: amountOutBn.toString(),
     minimumAmountOut: minOut.toString(),
@@ -195,17 +232,19 @@ export async function buildDammSwapTx(args: {
     );
   }
 
+  const cp = getCpAmm(connection);
+  const poolState = await withRpcRetry(() => cp.fetchPoolState(pool));
+  // Quote and tx are built from the same pool state; the minimum output the
+  // user reviews is exactly the one enforced on-chain.
   const quote = await quoteDammSwap({
     connection,
     pool,
+    poolState,
     snap,
     direction,
     amountUi,
     slippagePct,
   });
-
-  const cp = getCpAmm(connection);
-  const poolState = await withRpcRetry(() => cp.fetchPoolState(pool));
 
   const tx = await cp.swap2({
     payer,

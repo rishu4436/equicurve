@@ -6,6 +6,10 @@
  * - new record + mint NOT yet on-chain (pre-launch): allowed; owner = signer
  * - new record + mint already on-chain: signer must be the on-chain creator of payload.pool
  *   (whose baseMint must equal the id)
+ * - identity (id = mint, name, symbol) is immutable once a record exists;
+ *   description / image / external_url are editable (see ./policy.ts)
+ * - a non-empty image must pass the injected server-side check (https,
+ *   image content-type, ≤ 2 MB) — see ./imageCheck.ts
  * - existing record: signer must equal stored owner (legacy owner-less rows
  *   require the on-chain creator) and issuedAt must be newer (anti-replay);
  *   identical content from the owner is an idempotent no-op
@@ -13,6 +17,8 @@
 import { canonicalJson, signedLaunchBodySchema, verifyLaunchAuth } from "@/lib/auth/launchAuth";
 import { firstIssue } from "@/lib/validation";
 import type { ChainLookupResult } from "@/lib/registry/authorize";
+import type { ImageCheckResult } from "./imageCheck";
+import { checkMetadataEdit } from "./policy";
 import type { MetadataRecord, TokenMetadataJson } from "./store";
 
 export type MintExistence = "exists" | "missing" | "unknown";
@@ -36,6 +42,8 @@ export async function authorizeMetadataWrite(args: {
   existing: MetadataRecord | null;
   mintExists: (mint: string) => Promise<MintExistence>;
   lookup: (pool: string) => Promise<ChainLookupResult>;
+  /** Server-side image URL check (https, type, size). Skipped when omitted. */
+  checkImage?: (url: string) => Promise<ImageCheckResult>;
 }): Promise<MetadataWriteResult> {
   const parsed = signedLaunchBodySchema.safeParse(args.body);
   if (!parsed.success) return fail(400, "invalid_body", firstIssue(parsed.error));
@@ -82,11 +90,27 @@ export async function authorizeMetadataWrite(args: {
     return null;
   };
 
+  const imageOk = async (): Promise<MetadataWriteResult | null> => {
+    if (!meta.image || !args.checkImage) return null;
+    // Unchanged image on an existing record is not re-fetched.
+    if (args.existing?.meta.image === meta.image) return null;
+    const r = await args.checkImage(meta.image);
+    return r.ok ? null : fail(422, `image_${r.code}`, r.error);
+  };
+
   const ex = args.existing;
+  const policy = checkMetadataEdit({
+    action: payload.action,
+    existing: ex?.meta ?? null,
+    existingPool: ex?.pool ?? null,
+    next: meta,
+    pool: payload.pool,
+  });
   if (ex) {
     if (ex.owner && ex.owner !== v.signer) {
       return fail(403, "not_owner", "Metadata is owned by another wallet");
     }
+    if (!policy.ok) return fail(409, policy.code, policy.error);
     if (ex.owner === v.signer && canonicalJson(ex.meta) === canonicalJson(meta)) {
       return { ok: true, record: ex, unchanged: true };
     }
@@ -97,8 +121,11 @@ export async function authorizeMetadataWrite(args: {
       const denied = await requireOnChainCreator();
       if (denied) return denied;
     }
+    const img = await imageOk();
+    if (img) return img;
     return { ok: true, record, unchanged: false };
   }
+  if (!policy.ok) return fail(409, policy.code, policy.error);
 
   const mint = await args.mintExists(args.id);
   if (mint === "unknown") {
@@ -108,5 +135,7 @@ export async function authorizeMetadataWrite(args: {
     const denied = await requireOnChainCreator();
     if (denied) return denied;
   }
+  const img = await imageOk();
+  if (img) return img;
   return { ok: true, record, unchanged: false };
 }

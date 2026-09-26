@@ -9,7 +9,7 @@ import {
   type ParsedTransactionWithMeta,
 } from "@solana/web3.js";
 import type { PricePoint } from "@/lib/local/priceHistory";
-import { quoteDecimalsForMint } from "@/lib/constants";
+import { atomsRatioToPrice } from "@/lib/amounts";
 import { fetchSpotPrice } from "./spotPrice";
 
 const DBC = DYNAMIC_BONDING_CURVE_PROGRAM_ID;
@@ -29,29 +29,30 @@ type SwapEventLike = {
   };
 };
 
-function asNum(v: unknown): number | null {
+/** u64 event field → exact bigint (never via float). */
+function asAtoms(v: unknown): bigint | null {
   if (v == null) return null;
-  if (typeof v === "number" && Number.isFinite(v)) return v;
-  if (typeof v === "string") {
-    const n = Number(v);
-    return Number.isFinite(n) ? n : null;
+  try {
+    if (typeof v === "bigint") return v;
+    if (typeof v === "number") return Number.isSafeInteger(v) ? BigInt(v) : null;
+    const str = typeof v === "string" ? v : (v as { toString: () => string }).toString();
+    return /^\d+$/.test(str) ? BigInt(str) : null;
+  } catch {
+    return null;
   }
-  if (typeof v === "object" && v !== null && "toString" in v) {
-    const n = Number((v as { toString: () => string }).toString());
-    return Number.isFinite(n) ? n : null;
-  }
-  return null;
 }
 
-function uiAmount(raw: number, decimals: number): number {
-  return raw / 10 ** decimals;
+function asSeconds(v: unknown): number | null {
+  const a = asAtoms(v);
+  return a == null ? null : Number(a);
 }
 
 /**
  * Implied execution price (quote per base) from EvtSwap / EvtSwap2 fields.
  * TradeDirection: 0 = BaseToQuote (sell), 1 = QuoteToBase (buy).
+ * Amounts stay bigint until the final ratio (see atomsRatioToPrice).
  */
-function priceFromSwapEvent(
+export function priceFromSwapEvent(
   ev: SwapEventLike,
   baseDecimals: number,
   quoteDecimals: number,
@@ -60,33 +61,25 @@ function priceFromSwapEvent(
   const result = ev.data.swapResult;
   if (!result) return null;
 
-  const outRaw = asNum(result.outputAmount);
+  const outRaw = asAtoms(result.outputAmount);
   const inRaw =
-    asNum(result.includedFeeInputAmount) ??
-    asNum(result.actualInputAmount) ??
-    asNum(ev.data.amountIn);
-  if (outRaw == null || inRaw == null || outRaw <= 0 || inRaw <= 0) return null;
+    asAtoms(result.includedFeeInputAmount) ??
+    asAtoms(result.actualInputAmount) ??
+    asAtoms(ev.data.amountIn);
+  if (outRaw == null || inRaw == null || outRaw <= 0n || inRaw <= 0n) return null;
 
-  let price: number;
+  let price: number | null;
   if (dir === 1) {
     // Buy: quote in → base out
-    const quoteIn = uiAmount(inRaw, quoteDecimals);
-    const baseOut = uiAmount(outRaw, baseDecimals);
-    if (!(baseOut > 0)) return null;
-    price = quoteIn / baseOut;
+    price = atomsRatioToPrice(inRaw, outRaw, quoteDecimals, baseDecimals);
   } else if (dir === 0) {
     // Sell: base in → quote out
-    const baseIn = uiAmount(inRaw, baseDecimals);
-    const quoteOut = uiAmount(outRaw, quoteDecimals);
-    if (!(baseIn > 0)) return null;
-    price = quoteOut / baseIn;
+    price = atomsRatioToPrice(outRaw, inRaw, quoteDecimals, baseDecimals);
   } else {
     return null;
   }
-
-  if (!(price > 0) || !Number.isFinite(price)) return null;
-  const tsSec = asNum(ev.data.currentTimestamp);
-  return { price, tsSec };
+  if (price == null) return null;
+  return { price, tsSec: asSeconds(ev.data.currentTimestamp) };
 }
 
 function parseSwapEventsFromLogs(logs: string[] | null | undefined): SwapEventLike[] {
@@ -124,47 +117,37 @@ function priceFromTokenBalances(
   const pre = meta.preTokenBalances ?? [];
   const post = meta.postTokenBalances ?? [];
 
-  type Bal = { mint: string; amount: number; decimals: number };
+  type Bal = { mint: string; amount: bigint };
   const preMap = new Map<string, Bal>();
   for (const b of pre) {
     if (b.mint !== baseMint && b.mint !== quoteMint) continue;
-    const amt = Number(b.uiTokenAmount.amount);
-    if (!Number.isFinite(amt)) continue;
-    preMap.set(`${b.accountIndex}:${b.mint}`, {
-      mint: b.mint,
-      amount: amt,
-      decimals: b.uiTokenAmount.decimals,
-    });
+    const amt = asAtoms(b.uiTokenAmount.amount);
+    if (amt == null) continue;
+    preMap.set(`${b.accountIndex}:${b.mint}`, { mint: b.mint, amount: amt });
   }
 
-  let maxBaseAbs = 0;
-  let maxQuoteAbs = 0;
+  const absDiff = (a: bigint, b: bigint) => (a > b ? a - b : b - a);
+  let maxBaseAbs = 0n;
+  let maxQuoteAbs = 0n;
   for (const b of post) {
     if (b.mint !== baseMint && b.mint !== quoteMint) continue;
     const key = `${b.accountIndex}:${b.mint}`;
-    const postAmt = Number(b.uiTokenAmount.amount);
-    if (!Number.isFinite(postAmt)) continue;
-    const prev = preMap.get(key)?.amount ?? 0;
-    const delta = Math.abs(postAmt - prev);
-    if (b.mint === baseMint) maxBaseAbs = Math.max(maxBaseAbs, delta);
-    else maxQuoteAbs = Math.max(maxQuoteAbs, delta);
+    const postAmt = asAtoms(b.uiTokenAmount.amount);
+    if (postAmt == null) continue;
+    const delta = absDiff(postAmt, preMap.get(key)?.amount ?? 0n);
+    if (b.mint === baseMint) maxBaseAbs = delta > maxBaseAbs ? delta : maxBaseAbs;
+    else maxQuoteAbs = delta > maxQuoteAbs ? delta : maxQuoteAbs;
   }
   // Accounts that only appear in pre (fully drained)
   for (const [key, bal] of preMap) {
-    const still = post.some(
-      (b) => `${b.accountIndex}:${b.mint}` === key,
-    );
+    const still = post.some((b) => `${b.accountIndex}:${b.mint}` === key);
     if (still) continue;
-    if (bal.mint === baseMint) maxBaseAbs = Math.max(maxBaseAbs, bal.amount);
-    else maxQuoteAbs = Math.max(maxQuoteAbs, bal.amount);
+    if (bal.mint === baseMint) maxBaseAbs = bal.amount > maxBaseAbs ? bal.amount : maxBaseAbs;
+    else maxQuoteAbs = bal.amount > maxQuoteAbs ? bal.amount : maxQuoteAbs;
   }
 
-  if (maxBaseAbs <= 0 || maxQuoteAbs <= 0) return null;
-  const baseUi = maxBaseAbs / 10 ** baseDecimals;
-  const quoteUi = maxQuoteAbs / 10 ** quoteDecimals;
-  if (!(baseUi > 0)) return null;
-  const price = quoteUi / baseUi;
-  return price > 0 && Number.isFinite(price) ? price : null;
+  if (maxBaseAbs <= 0n || maxQuoteAbs <= 0n) return null;
+  return atomsRatioToPrice(maxQuoteAbs, maxBaseAbs, quoteDecimals, baseDecimals);
 }
 
 function txInvolvesDbc(tx: ParsedTransactionWithMeta): boolean {
@@ -202,8 +185,9 @@ export async function reconstructPoolPriceHistory(
   let spot: number | null = null;
   let baseMint = opts?.baseMint;
   let quoteMint = opts?.quoteMint;
-  let baseDecimals = 9;
-  let quoteDecimals = 9;
+  // Decimals come from chain via fetchSpotPrice; without them no price is derived.
+  let baseDecimals: number | null = null;
+  let quoteDecimals: number | null = null;
 
   try {
     const spotRes = await fetchSpotPrice(connection, pool);
@@ -218,9 +202,17 @@ export async function reconstructPoolPriceHistory(
     /* spot optional */
   }
 
-  if (quoteMint) {
-    quoteDecimals = quoteDecimalsForMint(quoteMint);
+  if (baseDecimals == null || quoteDecimals == null) {
+    return {
+      points: [],
+      spot: null,
+      scanned: 0,
+      parsedSwaps: 0,
+      error: "Could not read pool / mint decimals from chain; price history not derived.",
+    };
   }
+  const bDec = baseDecimals;
+  const qDec = quoteDecimals;
 
   let sigs: { signature: string; blockTime: number | null }[] = [];
   try {
@@ -276,7 +268,7 @@ export async function reconstructPoolPriceHistory(
         metaSig.blockTime != null ? metaSig.blockTime * 1000 : null;
 
       for (const ev of events) {
-        const parsed = priceFromSwapEvent(ev, baseDecimals, quoteDecimals);
+        const parsed = priceFromSwapEvent(ev, bDec, qDec);
         if (!parsed) continue;
         price = parsed.price;
         if (parsed.tsSec != null && parsed.tsSec > 1_000_000_000) {
@@ -286,13 +278,7 @@ export async function reconstructPoolPriceHistory(
       }
 
       if (price == null && baseMint && quoteMint) {
-        price = priceFromTokenBalances(
-          tx,
-          baseMint,
-          quoteMint,
-          baseDecimals,
-          quoteDecimals,
-        );
+        price = priceFromTokenBalances(tx, baseMint, quoteMint, bDec, qDec);
       }
 
       if (price == null || tMs == null) continue;

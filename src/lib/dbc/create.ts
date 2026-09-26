@@ -29,7 +29,9 @@ import { getDbcClient } from "./client";
 import {
   buildPresetConfig,
   getPreset,
+  launchPresetOverrides,
   MIN_LP_LOCK_PCT,
+  presetMarketCaps,
   validateEquiCurveConfig,
 } from "./presets";
 import type { LaunchFormInput, PreparedLaunch } from "./types";
@@ -179,6 +181,8 @@ export async function prepareLaunchTransaction(args: {
     } satisfies LaunchKeypairs);
 
   const preset = getPreset(input.presetId);
+  const caps = presetMarketCaps(input.presetId, quoteLabel);
+  let thresholdAtoms = "";
   let mode: PreparedLaunch["mode"];
   let configPubkey: PublicKey;
   const transactions: Transaction[] = [];
@@ -236,16 +240,21 @@ export async function prepareLaunchTransaction(args: {
   } else {
     mode = "config-and-pool";
     configPubkey = keypairs.config.publicKey;
-    const curveConfig = buildPresetConfig(input.presetId, {
-      totalTokenSupply: input.totalSupply || 1_000_000_000,
-      creatorTradingFeePercentage,
-      lpLockPct,
-      mintRenounce: effectiveMintRenounce,
-      antiSniper,
-      quoteDecimals: quoteDecimals as 6 | 9,
-      tokenType: transferProfile === "open-spl" ? "spl" : "token-2022",
-      allowMintAuthority: wantsTransferHook && !effectiveMintRenounce,
-    });
+    const curveConfig = buildPresetConfig(
+      input.presetId,
+      launchPresetOverrides({
+        totalSupply: input.totalSupply,
+        creatorTradingFeePercentage,
+        lpLockPct,
+        mintRenounce: effectiveMintRenounce,
+        antiSniper,
+        quoteDecimals: quoteDecimals as 6 | 9,
+        transferProfile,
+      }),
+    );
+    thresholdAtoms = String(
+      (curveConfig as { migrationQuoteThreshold: { toString(): string } }).migrationQuoteThreshold.toString(),
+    );
     const configErrors = validateEquiCurveConfig(curveConfig);
     if (configErrors.length) {
       throw new EquiCurveError(
@@ -340,8 +349,10 @@ export async function prepareLaunchTransaction(args: {
         name,
         symbol,
         uri,
-        initialMarketCapUsd: preset.initialMarketCap,
-        migrationMarketCapUsd: preset.migrationMarketCap,
+        initialMarketCapQuote: caps.initial,
+        migrationMarketCapQuote: caps.migration,
+        migrationQuoteThresholdAtoms: thresholdAtoms,
+        quoteDecimals,
         feeLabel: preset.feeLabel,
         migration: `DAMM v2 · partner LP lock ${lpLockPct}% · quote ${quoteLabel} · ${transferProfile}`,
       },

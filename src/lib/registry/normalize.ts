@@ -1,4 +1,4 @@
-import type { RegistryFilePayload, RegistryLaunch } from "./types";
+import type { PublicRegistryLaunch, RegistryFilePayload, RegistryLaunch } from "./types";
 import { isValidPublicKey, PRESET_IDS, SECTORS } from "@/lib/validation";
 
 export const MAX_REGISTRY_ENTRIES = 500;
@@ -102,4 +102,19 @@ export function mergeEntry(
     updatedAt: new Date().toISOString(),
     launches: [entry, ...rest].slice(0, MAX_REGISTRY_ENTRIES),
   };
+}
+
+/** True only after server-side chain verification succeeded for this row. */
+export function isRegistryVerified(r: Pick<RegistryLaunch, "authSigner" | "chainCheckedAt" | "creator">): boolean {
+  return (
+    typeof r.authSigner === "string" &&
+    typeof r.chainCheckedAt === "string" &&
+    r.chainCheckedAt.length > 0 &&
+    r.authSigner === r.creator
+  );
+}
+
+/** API shape: adds the explicit `verified` flag. */
+export function toPublicLaunch(r: RegistryLaunch): PublicRegistryLaunch {
+  return { ...r, verified: isRegistryVerified(r) };
 }

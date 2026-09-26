@@ -27,12 +27,14 @@ export function applyChainLookup(
       status: chainStatusFromCurve(s.curve, s.quoteReserve),
       statusSource: "chain",
       verification: { state: "verified", checkedAt: s.checkedAt, cluster },
+      verified: true,
     };
   }
   return {
     ...o,
     quoteProgress: null,
     statusSource: "registry",
+    verified: false,
     verification: {
       state: lookup.status,
       checkedAt,
@@ -56,6 +58,7 @@ export function markNotChecked(o: ExploreOffering, cluster: string): ExploreOffe
     ...o,
     quoteProgress: null,
     statusSource: "registry",
+    verified: false,
     verification: { state: "not_checked", checkedAt: null, cluster },
   };
 }

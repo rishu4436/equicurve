@@ -188,14 +188,37 @@ export function getDammV2ConfigKey(): PublicKey {
   }
 }
 
-export function explorerTxUrl(signature: string): string {
+/** True when the app points at a local validator (solana-test-validator). */
+export function isLocalRpc(url: string = getRpcUrl()): boolean {
+  try {
+    const h = new URL(url).hostname;
+    return h === "localhost" || h === "127.0.0.1" || h === "0.0.0.0" || h === "::1";
+  } catch {
+    return false;
+  }
+}
+
+/** Human cluster label for UI ("localnet" when the RPC is a local validator). */
+export function getClusterLabel(): string {
+  return isLocalRpc() ? "localnet" : getCluster();
+}
+
+/**
+ * Explorer query string for the ACTIVE cluster. A local validator uses the
+ * explorer's custom-cluster mode (only localhost URLs are ever embedded, so
+ * no private RPC key can leak into a link).
+ */
+export function explorerClusterQuery(): string {
+  const rpc = getRpcUrl();
+  if (isLocalRpc(rpc)) return `?cluster=custom&customUrl=${encodeURIComponent(rpc)}`;
   const cluster = getCluster();
-  const q = cluster === "mainnet-beta" ? "" : `?cluster=${cluster}`;
-  return `https://explorer.solana.com/tx/${signature}${q}`;
+  return cluster === "mainnet-beta" ? "" : `?cluster=${cluster}`;
+}
+
+export function explorerTxUrl(signature: string): string {
+  return `https://explorer.solana.com/tx/${signature}${explorerClusterQuery()}`;
 }
 
 export function explorerAddressUrl(address: string): string {
-  const cluster = getCluster();
-  const q = cluster === "mainnet-beta" ? "" : `?cluster=${cluster}`;
-  return `https://explorer.solana.com/address/${address}${q}`;
+  return `https://explorer.solana.com/address/${address}${explorerClusterQuery()}`;
 }

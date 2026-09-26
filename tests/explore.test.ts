@@ -28,6 +28,7 @@ function offering(pool: string, over: Partial<ExploreOffering> = {}): ExploreOff
     status: "graduated", // registry claims graduated
     statusSource: "registry",
     verification: { state: "not_checked", checkedAt: null, cluster: "devnet" },
+    verified: false,
     profileSigned: true,
     createdAt: "2026-01-01T00:00:00.000Z",
     creator: "c",
@@ -43,6 +44,7 @@ describe("verification mapping", () => {
     const o = applyChainLookup(offering("p1"), { status: "verified", snapshot: snapshot() }, "t", "devnet", []);
     expect(o.status).toBe("raising");
     expect(o.statusSource).toBe("chain");
+    expect(o.verified).toBe(true);
     expect(o.verification.state).toBe("verified");
     expect(o.quoteProgress).toBeCloseTo(10 / 85, 5);
   });
@@ -106,5 +108,15 @@ describe("enrichOfferings", () => {
     expect(r.offerings.filter((o) => o.verification.state === "not_checked")).toHaveLength(4);
     expect(r.enriched).toBe(6);
     expect(r.offerings).toHaveLength(pools.length);
+  });
+});
+
+describe("explicit verified flag", () => {
+  it("is false for not-checked, not-found and RPC-unavailable lookups", () => {
+    expect(markNotChecked(offering("p"), "devnet").verified).toBe(false);
+    expect(applyChainLookup(offering("p", { verified: true }), { status: "not_found" } as ChainLookupResult, "t", "devnet", []).verified).toBe(false);
+    expect(
+      applyChainLookup(offering("p", { verified: true }), { status: "rpc_unavailable", error: "down" } as ChainLookupResult, "t", "devnet", []).verified,
+    ).toBe(false);
   });
 });

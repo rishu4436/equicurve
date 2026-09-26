@@ -213,3 +213,32 @@ describe("migrated pools with an unsupported destination", () => {
     expect(v.detail).toMatch(/DAMM v1/);
   });
 });
+
+import { graduationNumbers } from "@/lib/dbc/curveState";
+
+describe("graduationNumbers (exact, bigint)", () => {
+  it("unknown when reads fail", () => {
+    expect(graduationNumbers({ quoteReserve: null, migrationQuoteThreshold: "1", isMigrated: false }).known).toBe(false);
+    expect(graduationNumbers({ quoteReserve: "1", migrationQuoteThreshold: null, isMigrated: false }).known).toBe(false);
+    expect(graduationNumbers({ quoteReserve: "1", migrationQuoteThreshold: "0", isMigrated: false }).known).toBe(false);
+  });
+  it("exact remaining beyond 2^53", () => {
+    const threshold = 2n ** 60n + 7n;
+    const reserve = 2n ** 59n + 3n;
+    const g = graduationNumbers({
+      quoteReserve: reserve.toString(),
+      migrationQuoteThreshold: threshold.toString(),
+      isMigrated: false,
+    });
+    expect(g.known && g.remaining).toBe(threshold - reserve);
+    expect(g.known && g.progressBps).toBe(4999); // floor, never rounds up to look further along
+    expect(g.known && g.complete).toBe(false);
+  });
+  it("complete when reserve >= threshold or migrated", () => {
+    const g = graduationNumbers({ quoteReserve: "772542486", migrationQuoteThreshold: "772542485", isMigrated: false });
+    expect(g.known && g.remaining).toBe(0n);
+    expect(g.known && g.complete).toBe(true);
+    const m = graduationNumbers({ quoteReserve: "0", migrationQuoteThreshold: "10", isMigrated: true });
+    expect(m.known && m.complete).toBe(true);
+  });
+});

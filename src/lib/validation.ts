@@ -200,6 +200,8 @@ export type WizardValidationInput = {
   sector: string;
   website: string;
   uri: string;
+  /** Token image URL (optional, https). */
+  image?: string;
   raiseTarget: number;
   quote: "SOL" | "USDC";
   seedBuy: string;
@@ -246,6 +248,7 @@ export function validateWizard(s: WizardValidationInput): FieldErrors {
   e.sector = check(sectorSchema, s.sector);
   e.website = check(optionalHttpsUrlSchema, s.website);
   e.uri = validateMetadataUriOverride(s.uri);
+  e.image = check(optionalHttpsUrlSchema, s.image ?? "");
   e.raiseTarget = check(raiseTargetSchema, s.raiseTarget);
   e.quote = check(quoteSchema, s.quote);
   e.seedBuy = validateSeedBuy(s.seedBuy, s.quote);

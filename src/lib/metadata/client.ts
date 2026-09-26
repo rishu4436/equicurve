@@ -25,14 +25,14 @@ function dataUri(meta: NonNullable<SignedLaunchBody["payload"]["metadata"]> | {
 export async function resolveMetadataUri(args: {
   customUri: string;
   signed: SignedLaunchBody | null;
-  fallback: { name: string; symbol: string; description: string };
+  fallback: { name: string; symbol: string; description: string; image?: string };
 }): Promise<MetadataUriResult> {
   const trimmed = args.customUri.trim();
   if (trimmed && !isPlaceholderMetadataUri(trimmed)) {
     return { uri: trimmed, source: "custom" };
   }
   const meta = args.signed?.payload.metadata;
-  const inline = dataUri(meta ?? { ...args.fallback, image: "" });
+  const inline = dataUri(meta ?? { ...args.fallback, image: args.fallback.image ?? "" });
   if (!args.signed || !meta) {
     return { uri: inline, source: "data-uri", note: "No wallet signature — using inline data: URI metadata." };
   }

@@ -179,3 +179,38 @@ describe("refreshFromChain", () => {
     ).toMatchObject({ ok: false, status: 503 });
   });
 });
+
+import { coerceStoredLaunch, toPublicLaunch } from "@/lib/registry/normalize";
+
+describe("registry verified flag", () => {
+  it("chain-verified, creator-signed entries are verified: true", async () => {
+    const kp = Keypair.generate();
+    const r = await authorizeRegistration({ body: await signed(kp), ...deps(kp) });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(toPublicLaunch(r.entry).verified).toBe(true);
+  });
+
+  it("legacy / unverified rows are verified: false", () => {
+    const legacy = coerceStoredLaunch({
+      pool: POOL,
+      mint: MINT,
+      config: Keypair.generate().publicKey.toBase58(),
+      creator: Keypair.generate().publicKey.toBase58(),
+      name: "Legacy",
+      ticker: "LEG",
+      status: "graduated",
+    });
+    expect(legacy).not.toBeNull();
+    const pub = toPublicLaunch(legacy!);
+    expect(pub.verified).toBe(false);
+    expect(pub.status).toBe("unknown");
+  });
+
+  it("signer ≠ creator is never verified", async () => {
+    const kp = Keypair.generate();
+    const r = await authorizeRegistration({ body: await signed(kp), ...deps(kp) });
+    if (!r.ok) throw new Error("setup");
+    expect(toPublicLaunch({ ...r.entry, creator: Keypair.generate().publicKey.toBase58() }).verified).toBe(false);
+  });
+});

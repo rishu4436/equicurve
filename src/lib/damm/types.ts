@@ -37,4 +37,13 @@ export type DammQuoteResult = {
   outputMint: string;
   inputDecimals: number;
   outputDecimals: number;
+  /** Total fee (LP/claiming + protocol + compounding + referral) in fee-mint atoms. */
+  feeAtoms: string;
+  feeMint: string;
+  feeDecimals: number;
+  slippageBps: number;
+  /** ms epoch when quoted. */
+  quotedAt: number;
+  /** Deterministic key of the pool state used (sqrtPrice:liquidity). */
+  poolStateKey: string;
 };

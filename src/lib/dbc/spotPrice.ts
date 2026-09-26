@@ -1,20 +1,9 @@
-import {
-  getPriceFromSqrtPrice,
-  TokenDecimal,
-} from "@meteora-ag/dynamic-bonding-curve-sdk";
 import { PublicKey, type Connection } from "@solana/web3.js";
 import BN from "bn.js";
-import { quoteDecimalsForMint } from "@/lib/constants";
+import { sqrtPriceX64ToDecimalString } from "@/lib/amounts";
 import { getDbcClient } from "./client";
 import { withRpcRetry } from "@/lib/rpc";
 import { fetchDbcPool } from "./poolAccount";
-
-function toTokenDecimal(n: number): TokenDecimal {
-  if (n === 6) return TokenDecimal.SIX;
-  if (n === 7) return TokenDecimal.SEVEN;
-  if (n === 8) return TokenDecimal.EIGHT;
-  return TokenDecimal.NINE;
-}
 
 function bnishToBn(v: unknown): BN | null {
   if (v == null) return null;
@@ -44,10 +33,22 @@ export type SpotPriceResult = {
   quoteMint: string;
   baseMint: string;
   sqrtPrice: string;
+  /** Exact decimal string (bigint math from sqrtPrice). */
+  priceExact: string;
 };
 
+async function readMintDecimals(connection: Connection, mint: PublicKey): Promise<number | null> {
+  try {
+    const info = await withRpcRetry(() => connection.getParsedAccountInfo(mint, "confirmed"));
+    const d = (info.value?.data as { parsed?: { info?: { decimals?: unknown } } } | undefined)?.parsed?.info?.decimals;
+    return typeof d === "number" && Number.isInteger(d) ? d : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
- * Live spot from on-chain virtual pool `sqrtPrice` via SDK `getPriceFromSqrtPrice`.
+ * Live spot from on-chain virtual pool `sqrtPrice` (Q64.64, exact bigint math).
  * Not a historical sample — use for the "now" marker only.
  */
 export async function fetchSpotPrice(
@@ -64,28 +65,17 @@ export async function fetchSpotPrice(
   const config = await withRpcRetry(() => client.state.getPoolConfig(normalized.config));
   if (!config) return null;
 
-  const baseDecimalsRaw = Number(
-    (config as { tokenDecimal?: number }).tokenDecimal ?? 9,
-  );
-  const baseDecimals =
-    baseDecimalsRaw === 6 ||
-    baseDecimalsRaw === 7 ||
-    baseDecimalsRaw === 8 ||
-    baseDecimalsRaw === 9
-      ? baseDecimalsRaw
-      : 9;
+  const quoteMintPk = (config as { quoteMint?: PublicKey }).quoteMint;
+  if (!quoteMintPk) return null;
+  // Decimals from the mint accounts (not defaults / known-mint tables).
+  const [baseDecimals, quoteDecimals] = await Promise.all([
+    readMintDecimals(connection, normalized.baseMint),
+    readMintDecimals(connection, quoteMintPk),
+  ]);
+  if (baseDecimals == null || quoteDecimals == null) return null;
 
-  const quoteMintPk =
-    (config as { quoteMint?: PublicKey }).quoteMint ??
-    new PublicKey("So11111111111111111111111111111111111111112");
-  const quoteDecimals = quoteDecimalsForMint(quoteMintPk);
-
-  const decimal = getPriceFromSqrtPrice(
-    sqrtPrice,
-    toTokenDecimal(baseDecimals),
-    toTokenDecimal(quoteDecimals),
-  );
-  const price = Number(String(decimal));
+  const priceStr = sqrtPriceX64ToDecimalString(sqrtPrice.toString(10), baseDecimals, quoteDecimals);
+  const price = Number(priceStr);
   if (!(price > 0) || !Number.isFinite(price)) return null;
 
   return {
@@ -95,5 +85,6 @@ export async function fetchSpotPrice(
     quoteMint: quoteMintPk.toBase58(),
     baseMint: normalized.baseMint.toBase58(),
     sqrtPrice: sqrtPrice.toString(),
+    priceExact: priceStr,
   };
 }

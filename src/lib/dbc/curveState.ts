@@ -273,3 +273,54 @@ export function deriveGraduationView(args: {
     canMigrate: false,
   };
 }
+
+/* ------------------------------------------------------ graduation numbers */
+
+export type GraduationNumbers =
+  | { known: false; reason: string }
+  | {
+      known: true;
+      /** Config migrationQuoteThreshold (quote atoms). */
+      threshold: bigint;
+      /** Pool quote reserve (quote atoms). */
+      reserve: bigint;
+      /** Exact quote atoms still needed on the curve (0 when complete). */
+      remaining: bigint;
+      /** 0..1, display only (ratio of exact integers). */
+      progress: number;
+      /** Progress in basis points, exact integer floor. */
+      progressBps: number;
+      complete: boolean;
+    };
+
+/**
+ * Exact graduation numbers from on-chain facts (bigint; never float on u64).
+ * Remaining is quote that must still be swapped IN to the curve (net of
+ * trading fees, which are charged on top of it for buys).
+ */
+export function graduationNumbers(f: Pick<CurveFacts, "quoteReserve" | "migrationQuoteThreshold" | "isMigrated">): GraduationNumbers {
+  if (f.quoteReserve == null || f.migrationQuoteThreshold == null) {
+    return { known: false, reason: "Quote reserve or migration threshold could not be read from chain." };
+  }
+  let reserve: bigint;
+  let threshold: bigint;
+  try {
+    reserve = BigInt(f.quoteReserve);
+    threshold = BigInt(f.migrationQuoteThreshold);
+  } catch {
+    return { known: false, reason: "Malformed on-chain amounts." };
+  }
+  if (threshold <= 0n) return { known: false, reason: "Migration threshold is zero." };
+  const complete = f.isMigrated === true || reserve >= threshold;
+  const remaining = complete ? 0n : threshold - reserve;
+  const bps = complete ? 10_000n : (reserve * 10_000n) / threshold;
+  return {
+    known: true,
+    threshold,
+    reserve,
+    remaining,
+    progress: Number(bps) / 10_000,
+    progressBps: Number(bps),
+    complete,
+  };
+}

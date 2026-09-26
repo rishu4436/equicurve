@@ -47,8 +47,13 @@ export type PreparedLaunch = {
     name: string;
     symbol: string;
     uri: string;
-    initialMarketCapUsd: number;
-    migrationMarketCapUsd: number;
+    /** Start market cap in QUOTE units (SOL or USDC), not USD. */
+    initialMarketCapQuote: number;
+    /** Graduation market cap in QUOTE units (SOL or USDC), not USD. */
+    migrationMarketCapQuote: number;
+    /** migrationQuoteThreshold of the built config (quote atoms). "" when using a shared config. */
+    migrationQuoteThresholdAtoms: string;
+    quoteDecimals: number;
     feeLabel: string;
     migration: string;
   };

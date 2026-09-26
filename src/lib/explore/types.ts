@@ -33,6 +33,8 @@ export type ExploreOffering = {
   /** "chain" only when THIS response verified the pool on-chain. */
   statusSource: "chain" | "registry";
   verification: OfferingVerification;
+  /** True only when THIS response verified the pool on-chain. */
+  verified: boolean;
   /** Profile text signed by the on-chain creator. */
   profileSigned: boolean;
   createdAt: string;

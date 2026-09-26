@@ -1,7 +1,6 @@
 import { getTokenProgram } from "@meteora-ag/cp-amm-sdk";
 import { getMint } from "@solana/spl-token";
 import { PublicKey, type Connection } from "@solana/web3.js";
-import { quoteLabelForMint, WSOL_MINT } from "@/lib/constants";
 import type { DestinationCheck } from "@/lib/dbc/curveState";
 import { tryDeriveDammV2PoolAddress, verifyDammV2Pool } from "@/lib/dbc/migrate";
 import { withRpcRetry } from "@/lib/rpc";
@@ -71,17 +70,10 @@ async function readMintDecimals(
   tokenProgram: PublicKey,
 ): Promise<number> {
   try {
-    const info = await getMint(
-      connection,
-      mint,
-      connection.commitment,
-      tokenProgram,
-    );
+    const info = await withRpcRetry(() => getMint(connection, mint, "confirmed", tokenProgram));
     return info.decimals;
   } catch (e) {
-    if (mint.equals(WSOL_MINT)) return 9;
-    if (quoteLabelForMint(mint) === "USDC") return 6;
-    // Never guess decimals for arbitrary mints — amounts would be off by 10^n.
+    // Decimals always come from chain — never guessed, not even for SOL/USDC.
     throw new EquiCurveError(`Could not read decimals for mint ${mint.toBase58()}.`, "RPC_UNAVAILABLE", e);
   }
 }

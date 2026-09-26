@@ -188,3 +188,55 @@ export function ratioClamped(
   if (n >= d) return 1;
   return Number((n * 1_000_000n) / d) / 1_000_000;
 }
+
+/**
+ * Exact price from two integer atom amounts (e.g. a swap's quote-in and
+ * base-out): (numAtoms / 10^numDecimals) / (denAtoms / 10^denDecimals),
+ * computed in bigint and returned as a plain decimal string truncated to
+ * `frac` fraction digits. Never converts a u64 amount to a float first.
+ */
+export function atomsRatioToDecimalString(
+  numAtoms: bigint | BN | string,
+  denAtoms: bigint | BN | string,
+  numDecimals: number,
+  denDecimals: number,
+  frac = 18,
+): string | null {
+  assertDecimals(numDecimals);
+  assertDecimals(denDecimals);
+  const n = toAtoms(numAtoms);
+  const d = toAtoms(denAtoms);
+  if (d <= 0n || n < 0n) return null;
+  // price × 10^frac = n × 10^(denDecimals + frac) / (d × 10^numDecimals)
+  const scaled = (n * 10n ** BigInt(denDecimals + frac)) / (d * 10n ** BigInt(numDecimals));
+  return formatAtomsExact(scaled, frac);
+}
+
+/** Chart-ready number from {@link atomsRatioToDecimalString} (single conversion at the end). */
+export function atomsRatioToPrice(
+  numAtoms: bigint | BN | string,
+  denAtoms: bigint | BN | string,
+  numDecimals: number,
+  denDecimals: number,
+): number | null {
+  const s = atomsRatioToDecimalString(numAtoms, denAtoms, numDecimals, denDecimals);
+  if (s == null) return null;
+  const v = Number(s);
+  return Number.isFinite(v) && v > 0 ? v : null;
+}
+
+/** Q64.64 sqrtPrice → price (quote per base, UI units) as an exact decimal string. */
+export function sqrtPriceX64ToDecimalString(
+  sqrtPrice: bigint | BN | string,
+  baseDecimals: number,
+  quoteDecimals: number,
+  frac = 18,
+): string {
+  const sp = toAtoms(sqrtPrice);
+  const shift = baseDecimals - quoteDecimals;
+  let num = sp * sp * 10n ** BigInt(frac);
+  let den = 1n << 128n;
+  if (shift >= 0) num *= 10n ** BigInt(shift);
+  else den *= 10n ** BigInt(-shift);
+  return formatAtomsExact(num / den, frac);
+}

@@ -54,6 +54,14 @@ export type RegistryLaunch = {
   authIssuedAt: string | null;
 };
 
+/**
+ * Registry row as served by the API. `verified` is true only when the server
+ * has read the pool on-chain (chainCheckedAt) AND the profile signer equals
+ * the on-chain creator. Clients must treat verified=false rows as unverified
+ * claims, never as chain facts.
+ */
+export type PublicRegistryLaunch = RegistryLaunch & { verified: boolean };
+
 /** Durable store for EquiCurve Explore launch registry. */
 export interface LaunchRegistryStore {
   readonly backend: RegistryBackend;
