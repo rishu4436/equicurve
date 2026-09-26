@@ -6,13 +6,27 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { CurveMiniViz } from "@/components/ui/CurveMiniViz";
-import { explorerAddressUrl, explorerTxUrl, getCluster } from "@/lib/constants";
+import { getClusterLabel, getCluster, getOptionalPoolConfigKey, WSOL_MINT } from "@/lib/constants";
 import { planLaunchAddresses, prepareLaunchTransaction } from "@/lib/dbc/create";
 import { signLaunchPayload, type LaunchAuthPayload, type SignedLaunchBody } from "@/lib/auth/launchAuth";
 import { getUsdcMint } from "@/lib/constants";
 import { resolveMetadataUri } from "@/lib/metadata/client";
-import { Keypair } from "@solana/web3.js";
-import { CURVE_PRESETS, getPreset, MIN_LP_LOCK_PCT } from "@/lib/dbc/presets";
+import { Keypair, PublicKey } from "@solana/web3.js";
+import { CURVE_PRESETS, getPreset, MIN_LP_LOCK_PCT, tradingFeeSplit } from "@/lib/dbc/presets";
+import { buildLaunchReview, type LaunchReview, type ReviewRow } from "@/lib/dbc/launchReview";
+import { fetchPoolSnapshot, expectedDammDestination } from "@/lib/dbc/migrate";
+import { formatAtomsExact } from "@/lib/amounts";
+import { setReceiptState, upsertReceiptItem, type LaunchReceipt } from "@/lib/dbc/receipt";
+import {
+  FeeSplitAnswer,
+  LpLockAnswer,
+  PresetFacts,
+  PresetShapeNote,
+  presetThresholdLabel,
+} from "@/components/issuer/IssuerAnswers";
+import { LaunchReceiptCard } from "./LaunchReceiptCard";
+import { ImageUrlField } from "./ImageUrlField";
+import type { ImageCheckResult } from "@/lib/metadata/imageCheck";
 import type { PresetId } from "@/lib/dbc/types";
 import { toUserMessage } from "@/lib/errors";
 import { validateSeedBuy } from "@/lib/validation";
@@ -80,10 +94,32 @@ export function CreateWizard() {
     config: string;
     sig: string;
   } | null>(null);
+  const [receipt, setReceipt] = useState<LaunchReceipt | null>(null);
   const eligibility = useEligibilityGate();
 
   const idx = stepIndex(step);
   const feePlatform = 100 - state.feeIssuer;
+  const walletAddr = wallet.publicKey?.toBase58() ?? null;
+  const review: LaunchReview = useMemo(
+    () =>
+      buildLaunchReview({
+        presetId: state.presetId,
+        quote: state.quote,
+        quoteMint: state.quote === "USDC" ? (getUsdcMint()?.toBase58() ?? null) : WSOL_MINT.toBase58(),
+        transferProfile: state.transferProfile,
+        totalSupply: state.totalSupply,
+        creatorPct: state.feeIssuer,
+        lpLockPct: state.lpLockPct,
+        mintRenounce: state.mintRenounce,
+        antiSniper: state.antiSniper,
+        feeClaimer: state.feeClaimer,
+        wallet: walletAddr,
+        seedBuy: state.seedBuy,
+        cluster: getClusterLabel(),
+        sharedConfig: getOptionalPoolConfigKey()?.toBase58() ?? null,
+      }),
+    [state, walletAddr],
+  );
 
   function patch(p: Partial<WizardState>) {
     setState((s) => ({ ...s, ...p }));
@@ -117,6 +153,10 @@ export function CreateWizard() {
     if (!eligibility.ok && !eligibility.ensure()) {
       return;
     }
+    if (step === "review" && review.errors.length) {
+      toast.error(review.errors[0]);
+      return;
+    }
     if (idx >= WIZARD_STEPS.length - 1) return;
     go(WIZARD_STEPS[idx + 1].id);
   }
@@ -128,8 +168,21 @@ export function CreateWizard() {
     }
     setBusy(true);
     setResult(null);
+    setReceipt(null);
     setLaunchLog([`Preparing DBC createConfigAndPool (${state.quote} quote)…`]);
+    const image = state.image.trim();
+    let receiptRef: LaunchReceipt = { cluster: getClusterLabel(), items: [] };
+    const rec = (next: LaunchReceipt) => {
+      receiptRef = next;
+      setReceipt(next);
+    };
     try {
+      if (image) {
+        const chk = (await fetch(`/api/image-check?url=${encodeURIComponent(image)}`, { cache: "no-store" })
+          .then((r) => r.json())
+          .catch(() => ({ ok: false, error: "image check failed (network)" }))) as ImageCheckResult;
+        if (!chk.ok) throw new Error(`Token image rejected: ${chk.error}`);
+      }
       const launchKeypairs = {
         config: Keypair.generate(),
         baseMint: Keypair.generate(),
@@ -157,7 +210,7 @@ export function CreateWizard() {
           name: state.name.trim(),
           symbol: state.ticker.trim(),
           description,
-          image: "",
+          image,
           ...(website ? { external_url: website } : {}),
         },
       };
@@ -189,7 +242,7 @@ export function CreateWizard() {
       const meta = await resolveMetadataUri({
         customUri: state.uri,
         signed,
-        fallback: { name: state.name.trim(), symbol: state.ticker.trim(), description },
+        fallback: { name: state.name.trim(), symbol: state.ticker.trim(), description, image },
       });
       setLaunchLog((l) => [
         ...l,
@@ -236,6 +289,13 @@ export function CreateWizard() {
         `Transactions to sign: ${transactions.length}`,
       ]);
 
+      const qDec = prepared.summary.quoteDecimals;
+      let r0: LaunchReceipt = { cluster: getClusterLabel(), items: [] };
+      r0 = upsertReceiptItem(r0, { key: "config", label: prepared.mode === "pool-only" ? "Config (shared)" : "Config", value: prepared.configPubkey, kind: "address", state: "estimate", note: "Planned address; confirmed once read back from chain." });
+      r0 = upsertReceiptItem(r0, { key: "pool", label: "DBC pool", value: prepared.poolPubkey, kind: "address", state: "estimate", note: "Derived from quote mint + base mint + config." });
+      r0 = upsertReceiptItem(r0, { key: "mint", label: "Base mint", value: prepared.baseMintPubkey, kind: "address", state: "estimate" });
+      rec(r0);
+
       let lastSig = "";
       for (let i = 0; i < transactions.length; i++) {
         const tx = transactions[i];
@@ -246,9 +306,53 @@ export function CreateWizard() {
           ...l,
           `Awaiting wallet signature (${i + 1}/${transactions.length})…`,
         ]);
-        lastSig = await signAndSendTransaction({ connection, wallet, tx });
+        const txKey = `tx${i}`;
+        const txLabel =
+          transactions.length > 1
+            ? i === 0
+              ? "Tx 1 · create config"
+              : `Tx ${i + 1} · create pool${prepared.seedBuyAtoms !== "0" ? " + seed buy" : ""}`
+            : `Tx · create ${prepared.mode === "pool-only" ? "pool" : "config + pool"}${prepared.seedBuyAtoms !== "0" ? " + seed buy" : ""}`;
+        try {
+          lastSig = await signAndSendTransaction({
+            connection,
+            wallet,
+            tx,
+            onSubmitted: (sig) =>
+              rec(upsertReceiptItem(receiptRef, { key: txKey, label: txLabel, value: sig, kind: "tx", state: "pending", note: "Submitted; waiting for confirmation." })),
+          });
+        } catch (e) {
+          if (receiptRef.items.some((x) => x.key === txKey)) rec(setReceiptState(receiptRef, txKey, "failed", toUserMessage(e)));
+          throw e;
+        }
+        rec(upsertReceiptItem(receiptRef, { key: txKey, label: txLabel, value: lastSig, kind: "tx", state: "confirmed", note: "Confirmed on-chain." }));
         setLaunchLog((l) => [...l, `TX ${i + 1}: ${lastSig}`]);
       }
+
+      // Read the pool back from chain before calling anything "confirmed".
+      try {
+        const snap = await fetchPoolSnapshot(connection, new PublicKey(prepared.poolPubkey));
+        let r = receiptRef;
+        r = setReceiptState(r, "pool", "confirmed", "DBC pool account read back from chain.");
+        r = setReceiptState(r, "mint", snap.baseMint === prepared.baseMintPubkey ? "confirmed" : "failed", snap.baseMint === prepared.baseMintPubkey ? "Pool's base mint matches." : `Pool reports base mint ${snap.baseMint}.`);
+        r = setReceiptState(r, "config", snap.config === prepared.configPubkey && snap.configRead ? "confirmed" : "failed", snap.configRead ? "Config account read back from chain." : "Config could not be read.");
+        if (snap.migrationQuoteThreshold && snap.quoteDecimals != null) {
+          r = upsertReceiptItem(r, { key: "threshold", label: "Migration threshold", value: `${formatAtomsExact(snap.migrationQuoteThreshold, snap.quoteDecimals)} ${prepared.quoteLabel}`, kind: "text", state: "confirmed", note: "Read from the on-chain config." });
+        }
+        const dest = expectedDammDestination(snap);
+        if (dest) {
+          r = upsertReceiptItem(r, { key: "damm", label: "DAMM v2 pool after graduation", value: dest.dammPool.toBase58(), kind: "address", state: "estimate", note: "Derived address; the pool only exists after migration." });
+        }
+        rec(r);
+      } catch (e) {
+        let r = receiptRef;
+        for (const k of ["pool", "mint", "config"]) r = setReceiptState(r, k, "pending", `Not read back yet (${toUserMessage(e)}). Refresh the offering page.`);
+        if (prepared.summary.migrationQuoteThresholdAtoms) {
+          r = upsertReceiptItem(r, { key: "threshold", label: "Migration threshold", value: `${formatAtomsExact(prepared.summary.migrationQuoteThresholdAtoms, qDec)} ${prepared.quoteLabel}`, kind: "text", state: "estimate", note: "Computed from the preset; not yet read from chain." });
+        }
+        rec(r);
+      }
+      rec(upsertReceiptItem(receiptRef, { key: "metadata", label: "Token metadata", value: meta.source === "hosted" ? meta.uri : meta.source === "custom" ? meta.uri : "inline data: URI", kind: "text", state: meta.source === "hosted" ? "confirmed" : meta.source === "custom" ? "estimate" : "local", note: meta.source === "hosted" ? "Hosted JSON written with your signature." : meta.source === "custom" ? "Custom URI; not fetched by EquiCurve." : meta.note }));
 
       setResult({
         pool: prepared.poolPubkey,
@@ -297,8 +401,10 @@ export function CreateWizard() {
             ? "Registry: listed (signature + on-chain creator verified)"
             : `Registry: not listed (${reg.error}) — saved in this browser only`,
         ]);
+        rec(upsertReceiptItem(receiptRef, { key: "registry", label: "Registry listing", value: reg.ok ? "listed · server verified signature + on-chain creator" : `not listed · ${reg.error}`, kind: "text", state: reg.ok ? "confirmed" : "local" }));
       } else {
         setLaunchLog((l) => [...l, "Registry: skipped (unsigned) — saved in this browser only"]);
+        rec(upsertReceiptItem(receiptRef, { key: "registry", label: "Registry listing", value: "skipped (unsigned) · saved in this browser only", kind: "text", state: "local" }));
       }
       pushActivity({
         id: `${lastSig}-launch`,
@@ -382,7 +488,8 @@ export function CreateWizard() {
                 state={state}
                 patch={patch}
                 onEdit={go}
-                feePlatform={feePlatform}
+                review={review}
+                walletAddr={walletAddr}
               />
             )}
             {step === "launch" && (
@@ -391,6 +498,7 @@ export function CreateWizard() {
                 busy={busy}
                 log={launchLog}
                 result={result}
+                receipt={receipt}
                 onLaunch={onLaunch}
                 walletConnected={!!wallet.publicKey}
               />
@@ -511,6 +619,12 @@ function StepBasics({
           placeholder="https://"
         />
       </label>
+      <ImageUrlField value={state.image} onChange={(image) => patch({ image })} />
+      <p className="rounded-input border border-line bg-subtle px-3 py-2 text-xs text-fg-muted">
+        Name and ticker are written on-chain at launch and are <strong className="text-fg-primary">fixed forever</strong>{" "}
+        (as is the mint address). After launch you can still edit the description, image and website with a
+        wallet-signed update on the offering page.
+      </p>
       <label className="block space-y-1.5">
         <span className="ec-label">Metadata URI (optional override)</span>
         <input
@@ -731,62 +845,53 @@ function StepCurve({
   patch: (p: Partial<WizardState>) => void;
 }) {
   const selected = getPreset(state.presetId);
+  const q = state.quote;
   return (
     <section className="space-y-4">
       <header>
         <h1 className="text-2xl font-semibold text-fg-primary">Curve preset</h1>
         <p className="mt-1 text-sm text-fg-secondary">
-          Official templates map to real{" "}
-          <code className="text-accent-soft">buildCurveWithMarketCap</code>{" "}
-          configs. Migration target is always DAMM v2. Prefer{" "}
-          <strong className="text-fg-primary">Short raise</strong> to demo
-          graduation quickly.
+          Each preset maps to a real <code className="text-accent-soft">buildCurveWithMarketCap</code> config for your
+          quote asset (<strong className="text-fg-primary">{q}</strong>). Amounts below are in {q}, not dollars. Migration
+          target is always DAMM v2.
         </p>
       </header>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {CURVE_PRESETS.filter((p) => OFFICIAL.includes(p.id)).map((p) => (
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {CURVE_PRESETS.map((p) => (
           <button
             key={p.id}
             type="button"
             onClick={() => patch({ presetId: p.id })}
+            data-testid={`preset-${p.id}`}
             className={clsx(
               "ec-card p-4 text-left transition",
-              state.presetId === p.id
-                ? "border-accent/60 shadow-glow"
-                : "hover:border-accent/30",
+              state.presetId === p.id ? "border-accent/60 shadow-glow" : "hover:border-accent/30",
             )}
           >
             <CurveMiniViz preset={p.id} className="mb-2 h-12 w-full" />
-            <p className="font-semibold text-fg-primary">{p.name}</p>
+            <p className="font-semibold text-fg-primary">
+              {p.name}
+              {!OFFICIAL.includes(p.id) && <span className="ml-1 text-[10px] font-normal text-gold">EquiCurve</span>}
+            </p>
             <p className="text-xs text-accent-soft">{p.tagline}</p>
             <p className="mt-1 font-mono text-[10px] text-fg-muted">
-              Migrate @ ${p.migrationMarketCap.toLocaleString()}
+              Graduates at {presetThresholdLabel(p.id, q)} raised
             </p>
           </button>
         ))}
       </div>
-      <div className="ec-card space-y-2 p-4 text-sm">
-        <p className="font-medium text-fg-primary">Selected: {selected.name}</p>
+      <div className="ec-card space-y-3 p-4 text-sm">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <p className="font-medium text-fg-primary">Selected: {selected.name}</p>
+          <p className="font-mono text-xs text-accent-soft" data-testid="migration-threshold">
+            Migration threshold: {presetThresholdLabel(state.presetId, q, 6)}
+          </p>
+        </div>
         <p className="text-fg-secondary">{selected.description}</p>
-        <p className="font-mono text-xs text-fg-muted">
-          Grad threshold ~${selected.migrationMarketCap.toLocaleString()} SOL
-          quote · {selected.feeLabel}
-        </p>
-        <p className="text-xs text-signal-grad">
-          Migration target: DAMM v2 (fixed — cannot pick v1)
-        </p>
+        <PresetFacts id={state.presetId} quote={q} />
+        <p className="text-xs text-signal-grad">Migration target: DAMM v2 (fixed — cannot pick v1)</p>
       </div>
-      <p className="text-xs text-fg-muted">
-        Equity-tuned preset also available via{" "}
-        <button
-          type="button"
-          className="text-accent underline"
-          onClick={() => patch({ presetId: "equity" })}
-        >
-          Use Equity-tuned
-        </button>
-        .
-      </p>
+      <PresetShapeNote />
     </section>
   );
 }
@@ -819,7 +924,8 @@ function StepFees({
         </p>
         <label className="block space-y-1.5">
           <span className="ec-label">
-            Issuer (creator) fee share — {state.feeIssuer}%
+            Issuer (creator) fee share — {state.feeIssuer}% of the non-protocol part ={" "}
+            {tradingFeeSplit(state.feeIssuer).creatorPct}% of each fee
           </span>
           <input
             type="range"
@@ -832,7 +938,8 @@ function StepFees({
         </label>
         <label className="block space-y-1.5">
           <span className="ec-label">
-            Platform / partner fee share — {feePlatform}%
+            Platform / partner fee share — {feePlatform}% ={" "}
+            {tradingFeeSplit(state.feeIssuer).partnerPct}% of each fee (Meteora keeps 20%)
           </span>
           <input
             type="range"
@@ -848,6 +955,7 @@ function StepFees({
         <p className="text-xs text-fg-muted">
           Partner share accrues to feeClaimer. Default: deployer wallet.
           Optional advanced override below.
+        </p>
         <label className="block space-y-1.5">
           <span className="ec-label">
             Partner fee claimer (optional advanced)
@@ -863,7 +971,7 @@ function StepFees({
             remainder.
           </p>
         </label>
-        </p>
+        <FeeSplitAnswer creatorPct={state.feeIssuer} feeLabel={getPreset(state.presetId).feeLabel} />
       </div>
       <div className="ec-card space-y-3 p-5">
         <label className="flex items-center gap-2 text-sm">
@@ -904,6 +1012,7 @@ function StepFees({
             <code className="text-accent-soft">MIN_LOCKED_LIQUIDITY_BPS</code>).
           </p>
         </label>
+        <LpLockAnswer lockPct={state.lpLockPct} />
         <fieldset className="space-y-2">
           <legend className="ec-label">Mint authority (TokenAuthorityOption)</legend>
           <label className="flex items-center gap-2 text-sm">
@@ -934,84 +1043,89 @@ function StepFees({
   );
 }
 
+const REVIEW_GROUPS: ReviewRow["group"][] = ["Token", "Curve", "Fees", "Liquidity", "Authorities", "Seed buy", "Network"];
+const GROUP_STEP: Partial<Record<ReviewRow["group"], WizardStepId>> = {
+  Token: "offering",
+  Curve: "curve",
+  Fees: "fees",
+  Liquidity: "fees",
+  Authorities: "fees",
+  "Seed buy": "offering",
+};
+
 function StepReview({
   state,
   patch,
   onEdit,
-  feePlatform,
+  review,
+  walletAddr,
 }: {
   state: WizardState;
   patch: (p: Partial<WizardState>) => void;
   onEdit: (s: WizardStepId) => void;
-  feePlatform: number;
+  review: LaunchReview;
+  walletAddr: string | null;
 }) {
-  const preset = getPreset(state.presetId);
+  const claimer = state.feeClaimer.trim() || walletAddr;
   return (
     <section className="space-y-4">
       <header>
-        <h1 className="text-2xl font-semibold text-fg-primary">Review</h1>
+        <h1 className="text-2xl font-semibold text-fg-primary">Review every on-chain setting</h1>
         <p className="mt-1 text-sm text-fg-secondary">
-          Confirm params before signing on {getCluster()}. Bonding price ≠ NAV.
-          Quote is {state.quote}.
+          This is exactly what the create transaction will write on {getClusterLabel()}, built with the same code path
+          as Launch. Name <strong className="text-fg-primary">{state.name}</strong> · ticker{" "}
+          <strong className="text-fg-primary">${state.ticker}</strong> (fixed after launch). Bonding price ≠ NAV.
         </p>
       </header>
-      <div className="ec-card divide-y divide-line text-sm">
-        {(
-          [
-            [
-              "basics",
-              "Basics",
-              `${state.name} · $${state.ticker} · ${state.sector}`,
-            ],
-            [
-              "offering",
-              "Offering",
-              `Target $${state.raiseTarget.toLocaleString()} · quote ${state.quote} · seed ${state.seedBuy || 0} ${state.quote}`,
-            ],
-            [
-              "curve",
-              "Curve",
-              `${preset.name} → DAMM v2 · ${preset.feeLabel}`,
-            ],
-            [
-              "fees",
-              "Fees & locks",
-              `Creator ${state.feeIssuer}% / partner ${feePlatform}% · lock ${state.lpLockPct}% · mint ${state.mintRenounce ? "renounce" : "retain"}`,
-            ],
-          ] as const
-        ).map(([id, title, summary]) => (
-          <div
-            key={id}
-            className="flex items-center justify-between gap-3 px-4 py-3"
-          >
-            <div>
-              <p className="font-medium text-fg-primary">{title}</p>
-              <p className="text-fg-secondary">{summary}</p>
+      {review.errors.length > 0 && (
+        <ul className="space-y-1 rounded-input border border-signal-danger/30 bg-signal-danger/10 px-3 py-2 text-xs text-signal-danger">
+          {review.errors.map((e) => (
+            <li key={e}>{e}</li>
+          ))}
+        </ul>
+      )}
+      <div className="ec-card divide-y divide-line text-sm" data-testid="launch-review">
+        {REVIEW_GROUPS.map((g) => {
+          const rows = review.rows.filter((r) => r.group === g);
+          if (!rows.length) return null;
+          const editStep = GROUP_STEP[g];
+          return (
+            <div key={g} className="px-4 py-3">
+              <div className="mb-1 flex items-center justify-between">
+                <p className="text-xs font-semibold uppercase tracking-wider text-fg-muted">{g}</p>
+                {editStep && (
+                  <button type="button" className="text-xs text-accent hover:underline" onClick={() => onEdit(editStep)}>
+                    Edit
+                  </button>
+                )}
+              </div>
+              <dl className="space-y-1.5">
+                {rows.map((r) => (
+                  <div key={r.label} className="grid gap-1 sm:grid-cols-[11rem_1fr]">
+                    <dt className="text-xs text-fg-muted">{r.label}</dt>
+                    <dd className="min-w-0 text-xs">
+                      <span className="whitespace-pre-wrap break-all font-mono text-fg-primary">{r.value}</span>
+                      {r.field && <span className="ml-2 font-mono text-[10px] text-fg-muted">{r.field}</span>}
+                      {r.note && <span className="block text-[10px] text-fg-muted">{r.note}</span>}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
             </div>
-            <button
-              type="button"
-              className="text-xs text-accent hover:underline"
-              onClick={() => onEdit(id)}
-            >
-              Edit
-            </button>
-          </div>
-        ))}
+          );
+        })}
       </div>
       <div className="ec-card space-y-2 p-4 text-sm">
-        <p className="font-medium text-fg-primary">Risk acknowledgment</p>
+        <p className="font-medium text-fg-primary">Acknowledgments</p>
         {(
           [
-            ["ackBonding", "I understand bonding price ≠ NAV / fair value"],
-            [
-              "ackDocs",
-              "I attested required disclosures (stored locally — not uploaded)",
-            ],
+            ["ackBonding", "I understand the bonding price is set by the curve, not by NAV or fair value."],
+            ["ackDocs", "I attested the required disclosures (stored in this browser, not uploaded or verified)."],
             [
               "ackFees",
-              "I accept Meteora migration fee (~0.2%) and EquiCurve terms",
+              "I accept the fees above: 0.001 SOL pool creation fee, Meteora's 20% protocol share of trading fees, and a 1% DAMM v2 pool fee after migration (no separate migration fee in this config).",
             ],
-            ["ackClaimer", "Deployer wallet will be fee claimer"],
+            ["ackClaimer", `Partner fees and LP go to the fee claimer: ${claimer ?? "the connected wallet"}.`],
           ] as const
         ).map(([key, label]) => (
           <label key={key} className="flex items-start gap-2 text-fg-secondary">
@@ -1025,22 +1139,6 @@ function StepReview({
           </label>
         ))}
       </div>
-      <div className="rounded-card border border-line bg-subtle/50 p-4 font-mono text-xs text-fg-muted">
-        <p>Network: {getCluster()}</p>
-        <p>Quote: {state.quote}</p>
-        <p>Migration: DAMM v2</p>
-        <p>
-          Preset MC: {preset.initialMarketCap} → {preset.migrationMarketCap}
-        </p>
-        <p>
-          On-chain: creatorTradingFeePercentage={state.feeIssuer},
-          partnerPermanentLockedLiquidityPercentage={state.lpLockPct},
-          TokenAuthorityOption=
-          {state.mintRenounce
-            ? "CreatorUpdateAuthority"
-            : "CreatorUpdateAndMintAuthority"}
-        </p>
-      </div>
     </section>
   );
 }
@@ -1050,6 +1148,7 @@ function StepLaunch({
   busy,
   log,
   result,
+  receipt,
   onLaunch,
   walletConnected,
 }: {
@@ -1057,6 +1156,7 @@ function StepLaunch({
   busy: boolean;
   log: string[];
   result: { pool: string; mint: string; config: string; sig: string } | null;
+  receipt: LaunchReceipt | null;
   onLaunch: () => void;
   walletConnected: boolean;
 }) {
@@ -1065,16 +1165,17 @@ function StepLaunch({
       <header>
         <h1 className="text-2xl font-semibold text-fg-primary">Launch</h1>
         <p className="mt-1 text-sm text-fg-secondary">
-          Signs a real Meteora DBC transaction on {getCluster()} for{" "}
+          Signs a real Meteora DBC transaction on {getClusterLabel()} for{" "}
           <strong className="text-fg-primary">{state.name}</strong> ($
           {state.ticker}). No mock success.
         </p>
       </header>
       <ol className="ec-card space-y-2 p-4 text-sm text-fg-secondary">
-        <li>1. Create DBC config (fee / lock / mint authority from your inputs)</li>
-        <li>2. Create virtual pool + mint ({state.quote} quote)</li>
+        <li>1. Sign a free message binding the registry / metadata to the planned pool and mint</li>
+        <li>2. Create DBC config (fee / lock / mint authority from your inputs)</li>
+        <li>3. Create virtual pool + mint ({state.quote} quote)</li>
         <li>
-          3.{" "}
+          4.{" "}
           {state.seedBuy.trim() !== "" && !/^0*(\.0*)?$/.test(state.seedBuy.trim())
             ? `Seed buy ${state.seedBuy.trim()} ${state.quote} in the same flow`
             : "Optional seed buy skipped — trade after launch"}
@@ -1082,69 +1183,24 @@ function StepLaunch({
       </ol>
       <button
         type="button"
-        disabled={busy || !walletConnected}
+        disabled={busy || !walletConnected || !!result}
         onClick={onLaunch}
         className="ec-btn-primary w-full sm:w-auto"
       >
         {busy
           ? "Preparing & signing…"
-          : walletConnected
-            ? "Sign & launch on DBC"
-            : "Connect wallet to launch"}
+          : result
+            ? "Launched"
+            : walletConnected
+              ? "Sign & launch on DBC"
+              : "Connect wallet to launch"}
       </button>
+      {receipt && receipt.items.length > 0 && <LaunchReceiptCard receipt={receipt} />}
       {log.length > 0 && (
-        <pre className="ec-card max-h-64 overflow-auto p-4 font-mono text-[11px] text-fg-secondary">
-          {log.join("\n")}
-        </pre>
-      )}
-      {result && (
-        <div className="ec-card space-y-2 border-accent/40 p-4 text-xs">
-          <p className="font-medium text-accent-soft">Live on curve</p>
-          <p className="font-mono">
-            tx:{" "}
-            <a
-              className="underline"
-              href={explorerTxUrl(result.sig)}
-              target="_blank"
-              rel="noreferrer"
-            >
-              {result.sig.slice(0, 16)}…
-            </a>
-          </p>
-          <p className="font-mono">
-            pool:{" "}
-            <a
-              className="underline"
-              href={explorerAddressUrl(result.pool)}
-              target="_blank"
-              rel="noreferrer"
-            >
-              {result.pool}
-            </a>
-          </p>
-          <p className="font-mono">
-            mint:{" "}
-            <a
-              className="underline"
-              href={explorerAddressUrl(result.mint)}
-              target="_blank"
-              rel="noreferrer"
-            >
-              {result.mint}
-            </a>
-          </p>
-          <p className="font-mono">
-            config:{" "}
-            <a
-              className="underline"
-              href={explorerAddressUrl(result.config)}
-              target="_blank"
-              rel="noreferrer"
-            >
-              {result.config}
-            </a>
-          </p>
-        </div>
+        <details className="ec-card p-4" open={!receipt}>
+          <summary className="cursor-pointer text-xs text-fg-muted">Launch log</summary>
+          <pre className="mt-2 max-h-64 overflow-auto font-mono text-[11px] text-fg-secondary">{log.join("\n")}</pre>
+        </details>
       )}
     </section>
   );

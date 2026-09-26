@@ -49,6 +49,8 @@ export type WizardState = {
   /** Optional partner fee claimer pubkey; blank = deployer wallet. */
   feeClaimer: string;
   uri: string;
+  /** Token image (https). Checked server-side (type / size) before it is stored. */
+  image: string;
   totalSupply: number;
 };
 
@@ -81,6 +83,7 @@ export const INITIAL_WIZARD: WizardState = {
   ackClaimer: false,
   feeClaimer: "",
   uri: "",
+  image: "",
   totalSupply: 1_000_000_000,
 };
 
@@ -90,7 +93,7 @@ export function stepIndex(id: WizardStepId): number {
 
 /** Fields validated on each step (schema-backed via validateWizard). */
 export const STEP_FIELDS: Record<WizardStepId, (keyof FieldErrors)[]> = {
-  basics: ["name", "ticker", "thesis", "sector", "website", "uri"],
+  basics: ["name", "ticker", "thesis", "sector", "website", "uri", "image"],
   offering: ["raiseTarget", "quote", "seedBuy"],
   curve: ["presetId", "totalSupply"],
   fees: ["feeIssuer", "lpLockPct", "feeClaimer"],

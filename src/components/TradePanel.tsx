@@ -19,7 +19,14 @@ import {
 import { tryFormatAtoms } from "@/lib/amounts";
 import { fetchPoolSnapshot } from "@/lib/dbc/migrate";
 import { PoolNotFoundError } from "@/lib/dbc/poolAccount";
-import { quoteAndBuildSwap, type SwapDirection, type SwapQuoteView } from "@/lib/dbc/swap";
+import {
+  fetchDbcPoolStateKey,
+  quoteAndBuildSwap,
+  type SwapDirection,
+  type SwapQuoteView,
+} from "@/lib/dbc/swap";
+import { freshnessMessage, quoteFreshness } from "@/lib/trade/quoteFreshness";
+import { SwapReview, type SwapReviewRow } from "@/components/trade/SwapReview";
 import type { PoolSnapshot } from "@/lib/dbc/types";
 import { toUserMessage } from "@/lib/errors";
 import { pushActivity } from "@/lib/local/launches";
@@ -54,6 +61,7 @@ export function TradePanel({
   const [amount, setAmount] = useState("0.1");
   const [quoteOut, setQuoteOut] = useState<SwapQuoteView | null>(null);
   const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -79,60 +87,74 @@ export function TradePanel({
     return localGate.ensure();
   }
 
-  async function onQuote() {
+  async function buildQuote(): Promise<SwapQuoteView> {
+    return quoteAndBuildSwap({
+      connection,
+      owner: wallet.publicKey!,
+      pool: new PublicKey(poolAddress),
+      direction,
+      amountUi: amount,
+    });
+  }
+
+  /** Step 1: quote + build, then show the pre-sign summary. */
+  async function onReview() {
     if (!checkGate()) return;
     if (!wallet.publicKey) {
       toast.error("Connect a wallet to quote.");
       return;
     }
     setBusy(true);
+    setNotice(null);
     try {
-      const q = await quoteAndBuildSwap({
-        connection,
-        owner: wallet.publicKey,
-        pool: new PublicKey(poolAddress),
-        direction,
-        amountUi: amount,
-      });
-      setQuoteOut(q);
-      toast.message(`Min out: ${tryFormatAtoms(q.minimumAmountOut, q.outputDecimals)}`);
+      setQuoteOut(await buildQuote());
     } catch (e) {
+      setQuoteOut(null);
       toast.error(toUserMessage(e));
     } finally {
       setBusy(false);
     }
   }
 
-  async function onSwap() {
-    if (!checkGate()) return;
+  /**
+   * Step 2: re-check freshness right before signing. A quote older than 15s or
+   * computed against a pool state that has since changed is rebuilt and must
+   * be confirmed again — the user always signs exactly what they reviewed.
+   */
+  async function onConfirm() {
+    if (!checkGate() || !quoteOut) return;
     if (!wallet.publicKey) {
       toast.error("Connect a wallet to swap.");
       return;
     }
     setBusy(true);
     try {
-      const q = await quoteAndBuildSwap({
-        connection,
-        owner: wallet.publicKey,
-        pool: new PublicKey(poolAddress),
-        direction,
-        amountUi: amount,
-      });
-      setQuoteOut(q);
-      const tx = q.tx;
-      const sig = await signAndSendTransaction({ connection, wallet, tx });
+      const key = await fetchDbcPoolStateKey(connection, new PublicKey(poolAddress));
+      const f = quoteFreshness(quoteOut, key, Date.now());
+      if (!f.fresh) {
+        const fresh = await buildQuote();
+        setQuoteOut(fresh);
+        setNotice(freshnessMessage(f));
+        return;
+      }
+      const sig = await signAndSendTransaction({ connection, wallet, tx: quoteOut.tx });
       pushActivity({
         id: `${sig}-${Date.now()}`,
         pool: poolAddress,
         mint: snapshot?.baseMint,
         kind: direction,
-        amount,
+        amount:
+          quoteOut.mode === "partial_fill"
+            ? tryFormatAtoms(quoteOut.fillableIn, quoteOut.inputDecimals, quoteOut.inputDecimals)
+            : amount,
         sig,
         wallet: wallet.publicKey.toBase58(),
         at: new Date().toISOString(),
       });
       toast.success("Swap landed — " + sig.slice(0, 8));
       window.open(explorerTxUrl(sig), "_blank");
+      setQuoteOut(null);
+      setNotice(null);
       await refresh();
       onSwapComplete?.();
     } catch (e) {
@@ -149,6 +171,55 @@ export function TradePanel({
     ? quoteLabelForMint(snapshot.quoteMint)
     : "quote";
   const curvePhase = snapshot?.curve.phase ?? "unknown";
+  const outSymbol = direction === "buy" ? "tokens" : quoteSymbol;
+  const inSymbol = direction === "buy" ? quoteSymbol : "tokens";
+
+  function reviewRows(q: SwapQuoteView): SwapReviewRow[] {
+    const rows: SwapReviewRow[] = [
+      {
+        label: "Exact input",
+        value: `${tryFormatAtoms(q.amountIn, q.inputDecimals, q.inputDecimals)} ${inSymbol}`,
+        hint: `${q.amountIn} atoms`,
+      },
+    ];
+    if (q.mode === "partial_fill") {
+      rows.push({
+        label: "Filled by curve",
+        value: `${tryFormatAtoms(q.fillableIn, q.inputDecimals, q.inputDecimals)} ${inSymbol}`,
+        hint: `unused ${tryFormatAtoms(q.unusedIn, q.inputDecimals, q.inputDecimals)} ${inSymbol} stays in your wallet`,
+      });
+    }
+    rows.push(
+      { label: "Estimated output", value: `${tryFormatAtoms(q.expectedOut, q.outputDecimals)} ${outSymbol}` },
+      {
+        label: "Minimum output",
+        value: `${tryFormatAtoms(q.minimumAmountOut, q.outputDecimals)} ${outSymbol}`,
+        strong: true,
+      },
+      {
+        label: "Trading fee",
+        value: `${tryFormatAtoms(q.feeAtoms, q.feeDecimals, q.feeDecimals)} ${quoteSymbol}`,
+        hint: direction === "buy" ? "taken from input" : "taken from output",
+      },
+      { label: "Slippage tolerance", value: `${q.slippageBps / 100}%` },
+    );
+    return rows;
+  }
+
+  function reviewNotices(q: SwapQuoteView): { tone: "info" | "warn"; text: string }[] {
+    const out: { tone: "info" | "warn"; text: string }[] = [];
+    if (notice) out.push({ tone: "warn", text: notice });
+    if (q.mode === "partial_fill") {
+      out.push({
+        tone: "warn",
+        text: q.completesCurve
+          ? `Your buy is larger than what is left on the curve. It is capped to the fillable amount (${tryFormatAtoms(q.fillableIn, q.inputDecimals, q.inputDecimals)} ${quoteSymbol}); this buy completes the curve and trading closes until migration to DAMM v2.`
+          : "This buy lands at the very end of the curve, so it is sent as a partial fill: the program takes only what the curve can fill and never fails with DBC 6033.",
+      });
+    }
+    out.push({ tone: "info", text: "Anti-sniper fee schedule may apply on early swaps; the fee above already reflects it." });
+    return out;
+  }
   const showLocalGate = !onGateRequired;
 
   const body = (
@@ -309,50 +380,38 @@ export function TradePanel({
           />
         </label>
 
-        {quoteOut && (
-          <div className="mt-3 rounded-input border border-accent/30 bg-accent/5 px-3 py-2 text-xs">
-            <p className="text-fg-muted">
-              Quote · expected out{" "}
-              <span className="font-mono text-fg-primary">
-                {tryFormatAtoms(quoteOut.expectedOut, quoteOut.outputDecimals)}{" "}
-                {direction === "buy" ? "tokens" : quoteSymbol}
-              </span>
+        {quoteOut ? (
+          <SwapReview
+            title={direction === "buy" ? "Review buy on curve" : "Review sell on curve"}
+            rows={reviewRows(quoteOut)}
+            notices={reviewNotices(quoteOut)}
+            quotedAt={quoteOut.quotedAt}
+            busy={busy}
+            onCancel={() => {
+              setQuoteOut(null);
+              setNotice(null);
+            }}
+            onConfirm={() => void onConfirm()}
+            confirmLabel={direction === "buy" ? "Confirm & sign buy" : "Confirm & sign sell"}
+          />
+        ) : (
+          <>
+            <p className="mt-3 text-[11px] text-signal-warn">
+              Bonding price ≠ NAV. Review disclosures before trading.
             </p>
-            <p className="text-fg-muted">Min amount out (after {quoteOut.slippageBps / 100}% slippage)</p>
-            <p className="font-mono text-sm text-accent-soft">
-              {tryFormatAtoms(quoteOut.minimumAmountOut, quoteOut.outputDecimals)}{" "}
-              {direction === "buy" ? "tokens" : quoteSymbol}
-            </p>
-            <p className="mt-1 text-[10px] text-fg-muted">
-              Exact input: {tryFormatAtoms(quoteOut.amountIn, quoteOut.inputDecimals, quoteOut.inputDecimals)} ·
-              anti-sniper fee schedule may apply on first swaps
-            </p>
-          </div>
+            <div className="mt-4">
+              <button
+                type="button"
+                disabled={busy || !wallet.publicKey || curvePhase !== "raising"}
+                title={curvePhase !== "raising" ? "Trading is only enabled when the curve is verified as raising" : undefined}
+                onClick={() => void onReview()}
+                className="ec-btn-primary w-full"
+              >
+                {busy ? "Quoting…" : direction === "buy" ? "Review buy" : "Review sell"}
+              </button>
+            </div>
+          </>
         )}
-
-        <p className="mt-3 text-[11px] text-signal-warn">
-          Bonding price ≠ NAV. Review disclosures before trading.
-        </p>
-
-        <div className="mt-4 flex gap-2">
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => void onQuote()}
-            className="ec-btn-secondary flex-1"
-          >
-            Quote
-          </button>
-          <button
-            type="button"
-            disabled={busy || !wallet.publicKey || curvePhase !== "raising"}
-            title={curvePhase !== "raising" ? "Trading is only enabled when the curve is verified as raising" : undefined}
-            onClick={() => void onSwap()}
-            className="ec-btn-primary flex-1"
-          >
-            {busy ? "Working…" : direction === "buy" ? "Buy" : "Sell"}
-          </button>
-        </div>
       </div>
     </div>
   );

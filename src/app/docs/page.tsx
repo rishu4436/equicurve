@@ -1,25 +1,27 @@
 import Link from "next/link";
 import { DOCS } from "@/lib/constants";
-import { CURVE_PRESETS } from "@/lib/dbc/presets";
+import { CURVE_PRESETS, presetPriceMultiple } from "@/lib/dbc/presets";
+import { IssuerFaq, PresetShapeNote, presetThresholdLabel } from "@/components/issuer/IssuerAnswers";
+import { PositioningExplainer } from "@/components/trust/PositioningExplainer";
 
 const STEPS = [
   {
     n: "1",
     title: "Create",
     href: "/create",
-    body: "Issuer runs the 6-step wizard: Basics → Offering (self-attest docs) → Curve preset → Fees & locks (≥10% LP) → Review → Launch. Launch signs a real DBC createConfigAndPool / createPool transaction — no mock success.",
+    body: "Issuer runs the 6-step wizard: Basics → Offering (self-attest docs) → Curve preset → Fees & locks (≥10% LP) → Review → Launch. Review lists every on-chain setting (quote mint, token program, supply, curve points, threshold, fee split, lock, authorities, exact seed buy, 0.001 SOL pool fee). Launch signs real DBC transactions and shows a receipt where each item is confirmed, pending or an estimate.",
   },
   {
     n: "2",
     title: "Trade",
     href: "/explore",
-    body: "Investors open the offering, acknowledge the self-attestation & risk disclosure (not KYC; stored in the browser), then buy/sell on the bonding curve. Progress rings track on-chain quote reserves toward the migration threshold.",
+    body: "Investors open the offering, acknowledge the self-attestation & risk disclosure (not KYC; stored in the browser), then buy/sell on the bonding curve after a pre-sign summary (exact input, estimated and minimum output, fee, slippage; re-quoted if older than 15s or the pool changed). Buys larger than what is left on the curve are capped to the fillable amount.",
   },
   {
     n: "3",
     title: "Graduate",
     href: "/docs#graduate",
-    body: "When quote progress ≈ 100%, migrateToDammV2 moves liquidity into a DAMM v2 pool with locked LP. Graduation surfaces the migrate TX signature + explorer link; DAMM pool address is best-effort derived when possible.",
+    body: "When quote progress ≈ 100%, migrateToDammV2 moves liquidity into a DAMM v2 pool with locked LP. The offering page shows the exact quote remaining; the DAMM v2 pool address is labelled expected (derived) until the account is fetched, then verified.",
   },
 ];
 
@@ -37,6 +39,13 @@ export default function DocsPage() {
           .
         </p>
       </header>
+
+      <PositioningExplainer />
+
+      <section className="ec-card space-y-4 p-5">
+        <h2 className="text-xl font-semibold text-fg-primary">Issuer questions</h2>
+        <IssuerFaq lockPct={null} creatorPct={null} />
+      </section>
 
       <section className="space-y-4">
         <h2 className="text-xl font-semibold text-fg-primary">
@@ -78,8 +87,9 @@ export default function DocsPage() {
         <p className="text-sm text-fg-secondary">
           All official presets call{" "}
           <code className="text-accent-soft">buildCurveWithMarketCap</code> with
-          different initial / migration market caps and fee schedulers.
+          different initial / migration market caps (quote units) and fee schedulers.
         </p>
+        <PresetShapeNote />
         <div className="space-y-3">
           {CURVE_PRESETS.map((p) => (
             <div key={p.id} className="ec-card p-4">
@@ -91,8 +101,8 @@ export default function DocsPage() {
                   </span>
                 </h3>
                 <span className="font-mono text-[10px] text-fg-muted">
-                  {p.initialMarketCap.toLocaleString()} →{" "}
-                  {p.migrationMarketCap.toLocaleString()} MC
+                  graduates at {presetThresholdLabel(p.id, "SOL")} or {presetThresholdLabel(p.id, "USDC")} ·{" "}
+                  {presetPriceMultiple(p.id)}× price range
                 </span>
               </div>
               <p className="mt-2 text-sm text-fg-secondary">{p.description}</p>

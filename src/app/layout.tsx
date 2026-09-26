@@ -18,10 +18,24 @@ const mono = JetBrains_Mono({
   subsets: ["latin"],
 });
 
+const TITLE = "EquiCurve — issuer-controlled launch & price discovery on Solana";
+const DESCRIPTION =
+  "An issuer-controlled launch and price-discovery interface for equity-inspired and RWA-related tokens, built on Meteora Dynamic Bonding Curve with graduation to DAMM v2. Does not create shareholder rights.";
+
 export const metadata: Metadata = {
-  title: "EquiCurve — Fair discovery for tokenized equity on Solana",
-  description:
-    "Launch tokenized equity / RWA offerings on Meteora Dynamic Bonding Curve. Graduate into DAMM v2 with Studio-class create UX and xStocks-grade trust.",
+  title: TITLE,
+  description: DESCRIPTION,
+  openGraph: {
+    title: TITLE,
+    description: DESCRIPTION,
+    siteName: "EquiCurve",
+    type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: TITLE,
+    description: DESCRIPTION,
+  },
 };
 
 export default function RootLayout({

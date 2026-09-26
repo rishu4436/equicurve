@@ -421,7 +421,8 @@ export function GraduatePanel({ poolAddress }: { poolAddress: string }) {
         <div className="rounded-input border border-line bg-subtle px-3 py-2 text-xs text-fg-secondary">
           <p>
             <strong className="text-fg-primary">LP lock ≥10%</strong> of migrated
-            liquidity (≥1 day vesting policy). Protocol migration fee ~0.2%.
+            liquidity is permanently locked (exact % read from the pool config). EquiCurve configs set no separate
+            migration fee (migrationFee 0%); the DAMM v2 pool then charges its own trading fee.
           </p>
           <p className="mt-1 text-fg-muted">
             Position NFTs are created by the migrate instruction — shown in

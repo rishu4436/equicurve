@@ -11,6 +11,10 @@ import { DammTicket } from "@/components/offering/DammTicket";
 import { FeeClaimsCard } from "@/components/issuer/FeeClaimsCard";
 import { EligibilityGate, useEligibilityGate } from "@/components/gate/EligibilityGate";
 import { PriceHistoryChart } from "@/components/offering/PriceHistoryChart";
+import { GraduationCard } from "@/components/offering/GraduationCard";
+import { presetPriceMultiple } from "@/lib/dbc/presets";
+import { IssuerFaq } from "@/components/issuer/IssuerAnswers";
+import { MetadataEditor } from "@/components/offering/MetadataEditor";
 import { ProgressRing } from "@/components/ui/ProgressRing";
 import { StatusPill } from "@/components/ui/StatusPill";
 import {
@@ -434,6 +438,7 @@ export function OfferingDetailClient({ id, demo }: Props) {
                 quoteLabel={quote}
                 progress={(progressPct ?? 0) / 100}
                 illustrative={illustrative}
+                priceMultiple={presetPriceMultiple(presetId, quote === "USDC" ? "USDC" : "SOL")}
               />
               <div className="mt-4 flex items-center gap-4 border-t border-line pt-4">
                 {progressPct != null && <ProgressRing value={progressPct} size={72} stroke={5} />}
@@ -444,16 +449,6 @@ export function OfferingDetailClient({ id, demo }: Props) {
                       {progressPct == null ? "unknown" : `${progressPct.toFixed(2)}%`}
                     </span>
                   </p>
-                  {snapshot && snapshot.quoteDecimals != null && snapshot.migrationQuoteThreshold && (
-                    <p className="text-xs">
-                      Quote reserve{" "}
-                      <span className="font-mono text-fg-primary">
-                        {tryFormatAtoms(snapshot.quoteReserve, snapshot.quoteDecimals, 4)} /{" "}
-                        {tryFormatAtoms(snapshot.migrationQuoteThreshold, snapshot.quoteDecimals, 4)} {quote}
-                      </span>{" "}
-                      (migration threshold)
-                    </p>
-                  )}
                   {snapshot && (
                     <p>
                       Base progress{" "}
@@ -485,8 +480,14 @@ export function OfferingDetailClient({ id, demo }: Props) {
                 </div>
               </div>
               {poolAddress && !illustrative && (
-                <div className="mt-4">
-                  <GraduationStatusCard view={gradView} snapshot={snapshot} />
+                <div className="mt-4 space-y-3">
+                  <GraduationCard
+                    snapshot={snapshot}
+                    readFailed={snapReadFailed}
+                    destination={destination}
+                    quoteLabel={quote}
+                  />
+                  <GraduationStatusCard view={gradView} snapshot={snapshot} compact />
                 </div>
               )}
               {poolAddress &&
@@ -541,17 +542,28 @@ export function OfferingDetailClient({ id, demo }: Props) {
                         <dd className="text-fg-primary">{quote}</dd>
                       </div>
                       <div>
-                        <dt className="text-fg-muted">Raise target</dt>
+                        <dt className="text-fg-muted">Issuer-stated raise target</dt>
                         <dd className="font-mono text-fg-primary">
-                          {raiseTarget
-                            ? `$${raiseTarget.toLocaleString()}`
-                            : "—"}
+                          {raiseTarget ? `${raiseTarget.toLocaleString()} (display only)` : "—"}
                         </dd>
                       </div>
                     </dl>
                     <p className="rounded-input border border-signal-warn/30 bg-signal-warn/5 px-3 py-2 text-xs text-signal-warn">
-                      Bonding price is discovery, not NAV / fair value.
+                      Bonding price is discovery, not NAV / fair value. The token does not by itself grant shareholder
+                      rights; any equity or asset link depends on the issuer&apos;s own legal framework.
                     </p>
+                    <IssuerFaq
+                      lockPct={snapshot?.lockPct ?? null}
+                      creatorPct={snapshot?.creatorFeePct ?? null}
+                    />
+                    <p className="text-[10px] text-fg-muted">
+                      {snapshot?.lockPct != null
+                        ? "Lock and fee split above are read from this pool's on-chain config."
+                        : "Pool config not read: lock and fee split shown generically."}
+                    </p>
+                    {poolAddress && mint && !illustrative && (
+                      <MetadataEditor pool={poolAddress} mint={mint} creator={snapshot?.creator ?? null} />
+                    )}
                   </div>
                 )}
 
@@ -569,8 +581,8 @@ export function OfferingDetailClient({ id, demo }: Props) {
                         transfer-hook when NEXT_PUBLIC_TRANSFER_HOOK_PROGRAM is configured).
                       </li>
                       <li>
-                        Migration fee ~0.2% protocol; LP lock ≥{lockPct}% post
-                        DAMM v2.
+                        No separate migration fee in EquiCurve configs; the DAMM v2 pool charges its own trading fee
+                        after migration. {lockPct}% of the graduated LP is permanently locked.
                       </li>
                     </ul>
                     <p className="pt-2 font-medium text-fg-primary">

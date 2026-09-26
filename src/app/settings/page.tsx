@@ -24,6 +24,7 @@ type Health = {
 type RegistryInfo = {
   ok?: boolean;
   count?: number;
+  verifiedCount?: number;
   label?: string;
   error?: string;
   registry?: { backend?: RegistryBackend };
@@ -148,7 +149,7 @@ export default function SettingsPage() {
                 ? "…"
                 : registry.error
                   ? registry.error
-                  : String(registry.count ?? 0)}
+                  : `${registry.count ?? 0} (${registry.verifiedCount ?? 0} chain-verified)`}
             </dd>
           </div>
           <div className="flex justify-between gap-4">

@@ -44,7 +44,7 @@ export default async function GraduatePage({
               : "Pass a DBC pool address to run the real migrator."}
           </p>
           <div className="rounded-input border border-line bg-subtle px-3 py-2 text-xs text-fg-muted">
-            Protocol migration fee ~0.2% · Locked / vesting ≥10% · Position NFTs
+            No separate migration fee (EquiCurve configs) · ≥10% of LP permanently locked · Position NFTs
             minted on migrate
           </div>
           <div className="flex flex-wrap justify-center gap-3">

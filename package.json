@@ -2,7 +2,7 @@
   "name": "equicurve",
   "version": "0.1.0",
   "private": true,
-  "description": "EquiCurve — tokenized equity / RWA launchpad on Meteora DBC with DAMM v2 graduation",
+  "description": "EquiCurve — an issuer-controlled launch and price-discovery interface for equity-inspired and RWA-related tokens (Meteora DBC → DAMM v2)",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

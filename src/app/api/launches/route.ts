@@ -11,6 +11,7 @@ import {
   putRegistryLaunch,
 } from "@/lib/registry/store";
 import { checkRateLimit, clientKey, readJsonBody } from "@/lib/server/http";
+import { toPublicLaunch } from "@/lib/registry/normalize";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,15 +24,16 @@ function err(status: number, error: string, code?: string, headers?: Record<stri
 }
 
 export async function GET() {
-  const launches = await listRegistryLaunches();
+  const launches = (await listRegistryLaunches()).map(toPublicLaunch);
   return NextResponse.json({
     ok: true,
     source: "equicurve-registry",
     label: "EquiCurve registry (not a full chain indexer)",
     trust:
-      "Chain fields (creator, mint, config, quote, status) are written only from server-side on-chain reads; profiles are signed by the on-chain creator.",
+      "Chain fields (creator, mint, config, quote, status) are written only from server-side on-chain reads; profiles are signed by the on-chain creator. Each row carries verified: boolean — false until the server's chain verification succeeded.",
     registry: getRegistryMeta(),
     count: launches.length,
+    verifiedCount: launches.filter((l) => l.verified).length,
     launches,
   });
 }
@@ -57,7 +59,7 @@ export async function POST(req: Request) {
   return NextResponse.json({
     ok: true,
     unchanged: result.unchanged,
-    launch: result.entry,
+    launch: toPublicLaunch(result.entry),
     registry: getRegistryMeta(),
   });
 }
@@ -81,5 +83,5 @@ export async function PATCH(req: Request) {
   if (!result.ok) return err(result.status, result.error, result.code);
   await putRegistryLaunch(result.entry);
   invalidateExploreCache();
-  return NextResponse.json({ ok: true, launch: result.entry, registry: getRegistryMeta() });
+  return NextResponse.json({ ok: true, launch: toPublicLaunch(result.entry), registry: getRegistryMeta() });
 }

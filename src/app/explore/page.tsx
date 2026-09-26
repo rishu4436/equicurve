@@ -86,7 +86,8 @@ function remoteToOffering(o: ExploreOffering): DemoOffering {
     raised: 0,
     presetId: isPresetId(String(o.presetId)) ? (o.presetId as PresetId) : "flat",
     feeBps: 0,
-    verified: false,
+    // Explicit server flag: true only when the pool was verified on-chain in this response.
+    verified: o.verified === true,
     lockPct: o.lockPct ?? 0,
     status: o.status,
     volume24h: 0,

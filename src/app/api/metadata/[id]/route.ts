@@ -11,6 +11,7 @@ import {
   writeMetadataRecord,
 } from "@/lib/metadata/store";
 import { serverLookup } from "@/lib/registry/chain";
+import { serverCheckImage } from "@/lib/server/imageCheck";
 import { withRpcRetry } from "@/lib/rpc";
 import { checkRateLimit, clientKey, readJsonBody } from "@/lib/server/http";
 
@@ -46,7 +47,11 @@ async function mintExists(mint: string): Promise<MintExistence> {
   }
 }
 
-/** Create (pre-launch) or edit (creator-only) hosted metadata. Wallet-signed. */
+/**
+ * Create (pre-launch, action "launch") or edit (creator-only, action "update")
+ * hosted metadata. Wallet-signed. Name / symbol / mint are immutable after the
+ * first write; description, image and external_url are editable.
+ */
 export async function PUT(req: Request, ctx: Ctx) {
   const { id } = await ctx.params;
   if (!isValidMetadataId(id)) {
@@ -70,6 +75,7 @@ export async function PUT(req: Request, ctx: Ctx) {
     existing: await readMetadataRecord(id),
     mintExists,
     lookup: serverLookup,
+    checkImage: serverCheckImage,
   });
   if (!result.ok) {
     return NextResponse.json({ error: result.error, code: result.code }, { status: result.status });

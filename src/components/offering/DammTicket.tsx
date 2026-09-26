@@ -1,7 +1,7 @@
 "use client";
 
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
-import { PublicKey } from "@solana/web3.js";
+import { PublicKey, type Transaction } from "@solana/web3.js";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { clsx } from "clsx";
@@ -17,7 +17,7 @@ import {
   fetchDammPoolSnapshot,
   fetchUserDammPositions,
   meteoraDammPoolUrl,
-  quoteDammSwap,
+  fetchDammPoolStateKey,
   resolveDammPoolAddress,
   type DammPoolSnapshot,
   type DammPositionView,
@@ -28,6 +28,8 @@ import { tryFormatAtoms } from "@/lib/amounts";
 import { toUserMessage } from "@/lib/errors";
 import { pushActivity, updateLaunch } from "@/lib/local/launches";
 import { signAndSendTransaction } from "@/lib/send";
+import { freshnessMessage, quoteFreshness } from "@/lib/trade/quoteFreshness";
+import { SwapReview, type SwapReviewRow } from "@/components/trade/SwapReview";
 
 type Props = {
   dbcPool: string;
@@ -67,6 +69,8 @@ export function DammTicket({
   const [amount, setAmount] = useState("0.1");
   const [quote, setQuote] = useState<DammQuoteResult | null>(null);
   const [busy, setBusy] = useState(false);
+  const [pendingTx, setPendingTx] = useState<Transaction | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const dammConfig = dammConfigProp ?? null;
   const quoteLabel = quoteLabelForMint(quoteMint);
@@ -137,33 +141,19 @@ export function DammTicket({
     return true;
   }
 
-  async function handleQuote() {
-    if (!ensureGate()) return;
-    if (!snap?.exists || !snap.address) {
-      toast.error("DAMM pool not available on-chain yet.");
-      return;
-    }
-    setBusy(true);
-    try {
-      const q = await quoteDammSwap({
-        connection,
-        pool: new PublicKey(snap.address),
-        snap,
-        direction,
-        amountUi: amount,
-      });
-      setQuote(q);
-      toast.message(
-        `Min out: ${formatRaw(q.minimumAmountOut, q.outputDecimals)}`,
-      );
-    } catch (e) {
-      toast.error(toUserMessage(e));
-    } finally {
-      setBusy(false);
-    }
+  async function buildReview(): Promise<{ tx: Transaction; quote: DammQuoteResult }> {
+    return buildDammSwapTx({
+      connection,
+      payer: wallet.publicKey!,
+      pool: new PublicKey(snap!.address),
+      snap: snap!,
+      direction,
+      amountUi: amount,
+    });
   }
 
-  async function handleSwap() {
+  /** Step 1: quote + build the exact tx and show the pre-sign summary. */
+  async function handleReview() {
     if (!ensureGate()) return;
     if (!wallet.publicKey) {
       toast.error("Connect a wallet to swap on DAMM v2.");
@@ -174,17 +164,36 @@ export function DammTicket({
       return;
     }
     setBusy(true);
+    setNotice(null);
     try {
-      const { tx, quote: q } = await buildDammSwapTx({
-        connection,
-        payer: wallet.publicKey,
-        pool: new PublicKey(snap.address),
-        snap,
-        direction,
-        amountUi: amount,
-      });
-      setQuote(q);
-      const sig = await signAndSendTransaction({ connection, wallet, tx });
+      const r = await buildReview();
+      setQuote(r.quote);
+      setPendingTx(r.tx);
+    } catch (e) {
+      setQuote(null);
+      setPendingTx(null);
+      toast.error(toUserMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Step 2: re-quote if stale (>15s) or pool state changed; else sign what was reviewed. */
+  async function handleConfirm() {
+    if (!ensureGate() || !quote || !pendingTx) return;
+    if (!wallet.publicKey || !snap?.exists || !snap.address) return;
+    setBusy(true);
+    try {
+      const key = await fetchDammPoolStateKey(connection, new PublicKey(snap.address));
+      const f = quoteFreshness(quote, key, Date.now());
+      if (!f.fresh) {
+        const r = await buildReview();
+        setQuote(r.quote);
+        setPendingTx(r.tx);
+        setNotice(freshnessMessage(f));
+        return;
+      }
+      const sig = await signAndSendTransaction({ connection, wallet, tx: pendingTx });
       pushActivity({
         id: `${sig}-damm-swap`,
         pool: dbcPool,
@@ -197,12 +206,44 @@ export function DammTicket({
       });
       toast.success(`DAMM swap confirmed — ${sig.slice(0, 8)}…`);
       window.open(explorerTxUrl(sig), "_blank");
+      setQuote(null);
+      setPendingTx(null);
+      setNotice(null);
       await refresh();
     } catch (e) {
       toast.error(toUserMessage(e));
     } finally {
       setBusy(false);
     }
+  }
+
+  function symbolFor(mint: string): string {
+    if (mint === baseMint) return "tokens";
+    if (mint === quoteMint) return quoteLabel;
+    return shortAddr(mint);
+  }
+
+  function reviewRows(q: DammQuoteResult): SwapReviewRow[] {
+    return [
+      {
+        label: "Exact input",
+        value: `${tryFormatAtoms(q.amountIn, q.inputDecimals, q.inputDecimals)} ${symbolFor(q.inputMint)}`,
+        hint: `${q.amountIn} atoms`,
+      },
+      { label: "Estimated output", value: `${formatRaw(q.amountOut, q.outputDecimals)} ${symbolFor(q.outputMint)}` },
+      {
+        label: "Minimum output",
+        value: `${formatRaw(q.minimumAmountOut, q.outputDecimals)} ${symbolFor(q.outputMint)}`,
+        strong: true,
+      },
+      {
+        label: "Pool fee",
+        value: `${tryFormatAtoms(q.feeAtoms, q.feeDecimals, q.feeDecimals)} ${symbolFor(q.feeMint)}`,
+        hint: "LP + protocol share, from the DAMM v2 quote",
+      },
+      { label: "Slippage tolerance", value: `${q.slippageBps / 100}%` },
+      ...(q.priceImpactPct != null ? [{ label: "Price impact", value: `${q.priceImpactPct}%` }] : []),
+    ];
   }
 
   async function handleClaimFees(pos: DammPositionView) {
@@ -417,7 +458,11 @@ export function DammTicket({
                   "ec-btn-secondary flex-1 text-xs",
                   direction === "quote_to_base" && "border-accent text-accent",
                 )}
-                onClick={() => setDirection("quote_to_base")}
+                onClick={() => {
+                  setDirection("quote_to_base");
+                  setQuote(null);
+                  setPendingTx(null);
+                }}
               >
                 Buy base with {quoteLabel}
               </button>
@@ -427,7 +472,11 @@ export function DammTicket({
                   "ec-btn-secondary flex-1 text-xs",
                   direction === "base_to_quote" && "border-accent text-accent",
                 )}
-                onClick={() => setDirection("base_to_quote")}
+                onClick={() => {
+                  setDirection("base_to_quote");
+                  setQuote(null);
+                  setPendingTx(null);
+                }}
               >
                 Sell base for {quoteLabel}
               </button>
@@ -438,47 +487,39 @@ export function DammTicket({
               <input
                 className="ec-input mt-1 w-full"
                 value={amount}
-                onChange={(e) => setAmount(e.target.value)}
+                onChange={(e) => {
+                  setAmount(e.target.value);
+                  setQuote(null);
+                  setPendingTx(null);
+                }}
                 inputMode="decimal"
               />
             </label>
-            {quote && (
-              <div className="rounded-input border border-line bg-subtle px-3 py-2 text-xs text-fg-secondary">
-                <p>
-                  Est. out:{" "}
-                  <span className="font-mono text-fg-primary">
-                    {formatRaw(quote.amountOut, quote.outputDecimals)}
-                  </span>
-                </p>
-                <p>
-                  Min out:{" "}
-                  <span className="font-mono text-fg-primary">
-                    {formatRaw(quote.minimumAmountOut, quote.outputDecimals)}
-                  </span>
-                </p>
-                {quote.priceImpactPct != null && (
-                  <p>Price impact: {quote.priceImpactPct}%</p>
-                )}
-              </div>
+            {quote ? (
+              <SwapReview
+                title="Review DAMM v2 swap"
+                rows={reviewRows(quote)}
+                notices={notice ? [{ tone: "warn", text: notice }] : []}
+                quotedAt={quote.quotedAt}
+                busy={busy}
+                onCancel={() => {
+                  setQuote(null);
+                  setPendingTx(null);
+                  setNotice(null);
+                }}
+                onConfirm={() => void handleConfirm()}
+                confirmLabel="Confirm & sign swap"
+              />
+            ) : (
+              <button
+                type="button"
+                disabled={busy || !wallet.publicKey}
+                onClick={() => void handleReview()}
+                className="ec-btn-primary w-full"
+              >
+                {busy ? "Quoting…" : "Review swap"}
+              </button>
             )}
-            <div className="flex gap-2">
-              <button
-                type="button"
-                disabled={busy || !wallet.publicKey}
-                onClick={() => void handleQuote()}
-                className="ec-btn-secondary flex-1"
-              >
-                {busy ? "Working…" : "Quote"}
-              </button>
-              <button
-                type="button"
-                disabled={busy || !wallet.publicKey}
-                onClick={() => void handleSwap()}
-                className="ec-btn-primary flex-1"
-              >
-                {busy ? "Working…" : "Swap"}
-              </button>
-            </div>
           </>
         )}
       </div>

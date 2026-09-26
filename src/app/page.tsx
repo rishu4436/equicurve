@@ -2,6 +2,8 @@ import Link from "next/link";
 import { CurveMiniViz } from "@/components/ui/CurveMiniViz";
 import { HomeLocalStrip } from "@/components/home/HomeLocalStrip";
 import { CURVE_PRESETS } from "@/lib/dbc/presets";
+import { PositioningExplainer } from "@/components/trust/PositioningExplainer";
+import { POSITIONING } from "@/lib/positioning";
 
 export default function HomePage() {
   const official = CURVE_PRESETS.filter((p) =>
@@ -16,15 +18,15 @@ export default function HomePage() {
       >
         <div>
           <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-accent">
-            Equity / RWA · Meteora DBC → DAMM v2
+            Equity-inspired &amp; RWA-related tokens · Meteora DBC → DAMM v2
           </p>
           <h1 className="text-4xl font-semibold tracking-tight text-fg-primary sm:text-5xl">
-            Fair discovery for tokenized equity on Solana
+            Issuer-controlled launch and price discovery on Solana
           </h1>
           <p className="mt-4 max-w-xl text-base leading-relaxed text-fg-secondary sm:text-lg">
-            Launch on Meteora Dynamic Bonding Curve. Graduate into DAMM v2.
-            Studio-class create wizard with on-chain fee share, LP lock, and mint
-            authority — SOL or USDC quote, not a meme pad with compliance bolted on.
+            {POSITIONING} Issuers set the curve, fee split, LP lock and mint authority; every setting is written
+            on-chain and shown before signing. The token&apos;s link to any company or asset comes from the
+            issuer&apos;s own legal framework, not from EquiCurve.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link href="/create" className="ec-btn-primary">
@@ -35,7 +37,7 @@ export default function HomePage() {
             </Link>
           </div>
           <div className="mt-6 flex flex-wrap gap-2">
-            {["LP lock ≥10% on-chain", "Program IDs", "SOL / USDC quote"].map((t) => (
+            {["LP lock ≥10% on-chain", "Every setting reviewed before signing", "No shareholder rights created"].map((t) => (
               <span
                 key={t}
                 className="rounded-pill border border-line bg-elevated px-3 py-1 text-xs text-fg-secondary"
@@ -87,6 +89,8 @@ export default function HomePage() {
         </div>
       </section>
 
+      <PositioningExplainer compact />
+
       {/* Real local stats + featured — no fake capital strip */}
       <HomeLocalStrip />
 
@@ -104,7 +108,7 @@ export default function HomePage() {
             {
               n: "2",
               title: "Discover on DBC",
-              body: "Investors trade the bonding curve in SOL. Progress rings track real quote progress toward graduation.",
+              body: "Buyers trade the bonding curve in SOL or USDC. Progress shows the exact quote raised toward the graduation threshold.",
               href: "/explore",
             },
             {

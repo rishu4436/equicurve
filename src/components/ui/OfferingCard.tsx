@@ -14,7 +14,8 @@ export function OfferingCard({ offering }: { offering: DemoOffering }) {
     offering.raiseTarget > 0 ? (offering.raised / offering.raiseTarget) * 100 : 0;
   const pct = illustrative ? examplePct : livePct;
   const graduated = offering.status === "graduated";
-  const verified = offering.verification?.state === "verified";
+  // Respect the explicit server flag; a verification label alone is not enough.
+  const verified = offering.verified === true && offering.verification?.state === "verified";
   const statusUnverified = !illustrative && !verified;
 
   return (

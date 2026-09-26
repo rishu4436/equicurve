@@ -17,6 +17,8 @@ type Props = {
   progress: number;
   /** Demo / empty — show curve shape only, no fake history. */
   illustrative?: boolean;
+  /** Graduation price ÷ start price for the theoretical shape (preset). */
+  priceMultiple?: number;
 };
 
 function formatPrice(p: number, quote: string): string {
@@ -39,13 +41,19 @@ function formatTime(t: number): string {
   }
 }
 
-/** Theoretical bonding-path y values (eased), normalized 0–1 — shape only. */
-function curveShapeYs(progress: number, n = 32): number[] {
-  const p = Math.min(1, Math.max(0, progress));
+/**
+ * Theoretical price vs raise progress for a single constant-liquidity DBC
+ * segment: √P moves linearly with quote raised, so
+ * P(x) / P0 = (1 + x(√m − 1))², x ∈ [0,1] = share of the threshold raised,
+ * m = graduation / start price. Returned normalized to 0–1 (shape only).
+ */
+export function curveShapeYs(priceMultiple: number, n = 32): number[] {
+  const m = Math.max(priceMultiple, 1.0001);
+  const r = Math.sqrt(m) - 1;
   const ys: number[] = [];
   for (let i = 0; i <= n; i++) {
-    const t = i / n;
-    ys.push(Math.pow(t, 0.85) * Math.max(p, 0.08));
+    const x = i / n;
+    ys.push(((1 + x * r) ** 2 - 1) / (m - 1));
   }
   return ys;
 }
@@ -55,12 +63,14 @@ function ChartSvg({
   spot,
   quoteLabel,
   progress,
+  priceMultiple,
   mode,
 }: {
   history: PricePoint[];
   spot: number | null;
   quoteLabel: string;
   progress: number;
+  priceMultiple: number;
   mode: "live" | "illustrative" | "thin";
 }) {
   const w = 360;
@@ -72,7 +82,8 @@ function ChartSvg({
   const innerW = w - padL - padR;
   const innerH = h - padT - padB;
 
-  const swapPts = history.filter((p) => p.source === "swap" || p.source === "local");
+  // Only chain-derived swap prices form the history line.
+  const swapPts = history.filter((p) => p.source === "swap");
   const series =
     swapPts.length > 0
       ? swapPts
@@ -101,8 +112,12 @@ function ChartSvg({
       ? series.map((p, i) => `${i === 0 ? "M" : "L"}${xOf(p.t)},${yOf(p.price)}`).join(" ")
       : null;
 
-  // Curve shape overlay — normalized into chart height, dashed, not on price axis scale
-  const shapeYs = curveShapeYs(progress);
+  // Theoretical overlay: x = raise progress (0→100% of threshold), NOT time;
+  // y normalized into chart height, NOT on the price axis scale.
+  const shapeYs = curveShapeYs(priceMultiple);
+  const pClamped = Math.min(1, Math.max(0, progress));
+  const shapeNowX = padL + pClamped * innerW;
+  const shapeNowY = padT + innerH - (((1 + pClamped * (Math.sqrt(Math.max(priceMultiple, 1.0001)) - 1)) ** 2 - 1) / (Math.max(priceMultiple, 1.0001) - 1)) * innerH;
   const shapePts = shapeYs
     .map((ny, i) => {
       const x = padL + (i / (shapeYs.length - 1)) * innerW;
@@ -160,6 +175,9 @@ function ChartSvg({
         strokeDasharray="4 3"
         opacity={0.85}
       />
+      {mode !== "illustrative" && (
+        <circle cx={shapeNowX} cy={shapeNowY} r="3" fill="none" stroke="#A78BFA" strokeWidth="1.5" />
+      )}
 
       {/* historical series */}
       {histLine && (
@@ -203,15 +221,15 @@ function ChartSvg({
 
       <text x={padL} y={14} fill="#6B7A8F" fontSize="9">
         {mode === "illustrative"
-          ? "Curve shape (not history)"
+          ? "Theoretical curve shape (not history)"
           : series.filter((p) => p.source === "swap").length > 0
-            ? `Swap-implied · ${quoteLabel}/token`
+            ? `Swap-derived · ${quoteLabel}/token`
             : spot != null
-              ? `Live spot · ${quoteLabel}/token`
-              : "Awaiting swaps"}
+              ? `Live spot only · ${quoteLabel}/token`
+              : "No swaps parsed yet"}
       </text>
-      <text x={w - padR - 110} y={14} fill="#A78BFA" fontSize="9">
-        dashed = curve shape
+      <text x={w - padR} y={14} fill="#A78BFA" fontSize="8" textAnchor="end">
+        dashed: price vs % raised (x ≠ time)
       </text>
       {series.length >= 1 && mode !== "illustrative" && (
         <>
@@ -241,8 +259,10 @@ export function PriceHistoryChart({
   quoteLabel,
   progress,
   illustrative = false,
+  priceMultiple = 15,
 }: Props) {
   const { connection } = useConnection();
+  const [spotAt, setSpotAt] = useState<number | null>(null);
   const [points, setPoints] = useState<PricePoint[]>([]);
   const [spot, setSpot] = useState<number | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -267,6 +287,7 @@ export function PriceHistoryChart({
         { limit: 40 },
       );
       setSpot(result.spot);
+      setSpotAt(result.spot != null ? Date.now() : null);
       setMeta({ scanned: result.scanned, parsedSwaps: result.parsedSwaps });
       if (result.error) setStatus(result.error);
       else setStatus(null);
@@ -308,7 +329,7 @@ export function PriceHistoryChart({
           <p className="text-[10px] text-fg-muted">
             {illustrative
               ? "Illustrative offering — curve shape only; no invented price history."
-              : "Swap-implied from confirmed txs + live spot from pool √price. Accumulated in this browser."}
+              : "Three separate series, labelled below. Swap points are cached in this browser between visits."}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -336,37 +357,46 @@ export function PriceHistoryChart({
         spot={illustrative ? null : displaySpot}
         quoteLabel={quoteLabel}
         progress={progress}
+        priceMultiple={priceMultiple}
         mode={mode}
       />
 
-      <div className="flex flex-wrap gap-3 text-[10px] text-fg-muted">
-        <span className="inline-flex items-center gap-1">
-          <span className="inline-block h-0.5 w-3 bg-accent" /> Swap history
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <span className="inline-block h-2 w-2 rounded-full bg-gold" /> Live spot
-        </span>
-        <span className="inline-flex items-center gap-1">
+      <ul className="grid gap-1 text-[10px] text-fg-muted sm:grid-cols-3" data-testid="price-legend">
+        <li className="flex items-start gap-1.5">
+          <span className="mt-1 inline-block h-0.5 w-3 shrink-0 bg-accent" />
+          <span>
+            <strong className="text-fg-secondary">Swap-derived history</strong> · execution price (incl. fees) of
+            confirmed swaps in the last {meta.scanned || 40} pool signatures. Partial, not a full chart.
+          </span>
+        </li>
+        <li className="flex items-start gap-1.5">
+          <span className="mt-0.5 inline-block h-2 w-2 shrink-0 rounded-full bg-gold" />
+          <span>
+            <strong className="text-fg-secondary">Live spot</strong> · marginal price from the pool&apos;s √price
+            {spotAt ? `, read ${new Date(spotAt).toLocaleTimeString()}` : ""}. No fee, no size.
+          </span>
+        </li>
+        <li className="flex items-start gap-1.5">
           <span
-            className="inline-block h-0.5 w-3"
-            style={{
-              background:
-                "repeating-linear-gradient(90deg,#A78BFA 0 3px,transparent 3px 6px)",
-            }}
-          />{" "}
-          Curve shape (not history)
-        </span>
-      </div>
+            className="mt-1 inline-block h-0.5 w-3 shrink-0"
+            style={{ background: "repeating-linear-gradient(90deg,#A78BFA 0 3px,transparent 3px 6px)" }}
+          />
+          <span>
+            <strong className="text-fg-secondary">Theoretical curve</strong> · price vs share of the threshold raised
+            ({priceMultiple}× range, ring = now). Not time, not to price scale.
+          </span>
+        </li>
+      </ul>
 
       {!illustrative && poolAddress && (
         <p className="text-[10px] text-fg-muted">
           {swapCount > 0
             ? `${swapCount} swap point${swapCount === 1 ? "" : "s"} from ${meta.scanned || "…"} recent pool signatures (parsed ${meta.parsedSwaps}).`
             : meta.scanned > 0
-              ? `Scanned ${meta.scanned} signatures — no parseable swaps yet. Spot shown when available; curve shape is theoretical.`
-              : "Open a live pool to reconstruct history from RPC."}
-          {" "}
-          Axis: {quoteLabel} per base token. Not an oracle / not NAV.
+              ? `Scanned ${meta.scanned} signatures — no parseable swaps yet.`
+              : "Open a live pool to reconstruct history from RPC."}{" "}
+          Axis: {quoteLabel} per base token, computed from exact on-chain amounts and mint decimals. Not an oracle, not
+          NAV.
         </p>
       )}
       {status && (

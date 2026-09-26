@@ -7,6 +7,8 @@ import {
   getCluster,
 } from "@/lib/constants";
 import { MIN_LP_LOCK_PCT } from "@/lib/dbc/presets";
+import { IssuerFaq } from "@/components/issuer/IssuerAnswers";
+import { PositioningExplainer } from "@/components/trust/PositioningExplainer";
 
 const DBC_ID = DBC_PROGRAM_ID.toBase58();
 const DAMM_ID = DAMM_V2_PROGRAM.toBase58();
@@ -19,8 +21,8 @@ export default function TrustPage() {
       <header>
         <h1 className="text-3xl font-semibold text-fg-primary">Trust Center</h1>
         <p className="mt-2 text-sm text-fg-secondary">
-          Program IDs, LP lock policy, mint authority rules, and risk posture
-          for EquiCurve issuers and investors. Always verify addresses on Solana
+          What EquiCurve does on-chain, what it relies on, and what it does not do. Program IDs, LP lock policy, mint
+          authority rules, and risk posture for issuers and buyers. Always verify addresses on Solana
           Explorer — never trust UI copy alone.
         </p>
         <p className="mt-2 text-xs text-fg-muted">
@@ -28,6 +30,40 @@ export default function TrustPage() {
           <span className="font-mono text-signal-warn">{cluster}</span>
         </p>
       </header>
+
+      <PositioningExplainer compact />
+
+      <section className="ec-card space-y-3 p-5" id="trust-assumptions">
+        <h2 className="font-semibold text-fg-primary">Trust assumptions</h2>
+        <ul className="list-disc space-y-1.5 pl-5 text-sm text-fg-secondary">
+          <li>
+            <strong className="text-fg-primary">Meteora programs</strong> (DBC, DAMM v2) execute curve trades, fee
+            accounting, LP locks and migration. EquiCurve does not run its own on-chain program.
+          </li>
+          <li>
+            <strong className="text-fg-primary">Your RPC</strong> is trusted for reads. Unknown or failed reads are
+            shown as unknown, never as 0% or complete.
+          </li>
+          <li>
+            <strong className="text-fg-primary">The EquiCurve server</strong> hosts the registry and metadata JSON.
+            It only lists a pool after verifying the creator&apos;s wallet signature and reading the pool on-chain;
+            registry rows carry <code>verified: false</code> until that succeeds.
+          </li>
+          <li>
+            <strong className="text-fg-primary">The issuer</strong> is trusted for everything off-chain: legal
+            structure, disclosures, custody, redemption. EquiCurve&apos;s attestation checklist is self-reported.
+          </li>
+          <li>
+            <strong className="text-fg-primary">This browser</strong> stores local launch and activity records; they
+            are labelled local and are not proof of anything.
+          </li>
+        </ul>
+      </section>
+
+      <section className="ec-card space-y-4 p-5">
+        <h2 className="font-semibold text-fg-primary">Issuer questions</h2>
+        <IssuerFaq lockPct={null} creatorPct={null} />
+      </section>
 
       <section className="ec-card space-y-4 p-5">
         <h2 className="font-semibold text-fg-primary">Meteora programs</h2>
@@ -169,7 +205,8 @@ export default function TrustPage() {
             partner permanent lock (safest demo default)
           </li>
           <li>
-            Protocol migration fee ~0.2% — shown on Graduation before you sign
+            No separate migration fee in EquiCurve configs (migrationFee 0%); DAMM v2 pool fee 1% after graduation
+            (FixedBps100 config)
           </li>
         </ul>
         <p className="text-xs text-fg-muted">
