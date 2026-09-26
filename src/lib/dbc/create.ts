@@ -296,10 +296,10 @@ export async function prepareLaunchTransaction(args: {
           });
         transactions.push(createConfigTx, createPoolWithFirstBuyTx);
       }
-      signersPerTx.push(
-        [keypairs.config],
-        [keypairs.config, keypairs.baseMint],
-      );
+      // The pool+first-buy tx does NOT reference the config keypair as a
+      // signer; partialSign() with it throws "unknown signer" — AFTER the
+      // config tx already landed (proven on-chain in the devnet e2e run).
+      signersPerTx.push([keypairs.config], [keypairs.baseMint]);
     } else if (wantsTransferHook) {
       const tx = await client.partner.createConfigAndPoolWithTransferHook(
         baseParams as never,
