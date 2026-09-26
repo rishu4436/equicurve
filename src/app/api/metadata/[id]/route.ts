@@ -1,14 +1,28 @@
+import { PublicKey } from "@solana/web3.js";
 import { NextResponse } from "next/server";
+import { MAX_SIGNED_BODY_BYTES } from "@/lib/auth/launchAuth";
+import { getServerConnection } from "@/lib/connection";
+import { getCluster } from "@/lib/constants";
+import { authorizeMetadataWrite, type MintExistence } from "@/lib/metadata/authorize";
 import {
+  isValidMetadataId,
   readMetadata,
-  writeMetadata,
-  type TokenMetadataJson,
+  readMetadataRecord,
+  writeMetadataRecord,
 } from "@/lib/metadata/store";
+import { serverLookup } from "@/lib/registry/chain";
+import { withRpcRetry } from "@/lib/rpc";
+import { checkRateLimit, clientKey, readJsonBody } from "@/lib/server/http";
+
+export const runtime = "nodejs";
 
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function GET(_req: Request, ctx: Ctx) {
   const { id } = await ctx.params;
+  if (!isValidMetadataId(id)) {
+    return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+  }
   const meta = await readMetadata(id);
   if (!meta) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -21,29 +35,45 @@ export async function GET(_req: Request, ctx: Ctx) {
   });
 }
 
+async function mintExists(mint: string): Promise<MintExistence> {
+  try {
+    const info = await withRpcRetry(() =>
+      getServerConnection().getAccountInfo(new PublicKey(mint), "confirmed"),
+    );
+    return info ? "exists" : "missing";
+  } catch {
+    return "unknown";
+  }
+}
+
+/** Create (pre-launch) or edit (creator-only) hosted metadata. Wallet-signed. */
 export async function PUT(req: Request, ctx: Ctx) {
   const { id } = await ctx.params;
-  let body: Partial<TokenMetadataJson>;
-  try {
-    body = (await req.json()) as Partial<TokenMetadataJson>;
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  if (!isValidMetadataId(id)) {
+    return NextResponse.json({ error: "Metadata id must be a mint address" }, { status: 400 });
   }
-  const name = (body.name ?? "").trim();
-  const symbol = (body.symbol ?? "").trim();
-  if (name.length < 2 || symbol.length < 1) {
+  const rl = checkRateLimit(clientKey(req, "metadata:put"), 20, 10 * 60 * 1000);
+  if (!rl.ok) {
     return NextResponse.json(
-      { error: "name and symbol required" },
-      { status: 400 },
+      { error: "Too many metadata writes — slow down." },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfterSec) } },
     );
   }
-  const meta: TokenMetadataJson = {
-    name,
-    symbol,
-    description: (body.description ?? "").trim() || `${name} (${symbol})`,
-    image: (body.image ?? "").trim(),
-    external_url: body.external_url?.trim() || undefined,
-  };
-  const saved = await writeMetadata(id, meta);
-  return NextResponse.json({ ok: true, id: saved, meta });
+  const body = await readJsonBody(req, MAX_SIGNED_BODY_BYTES);
+  if (!body.ok) return NextResponse.json({ error: body.error }, { status: body.status });
+
+  const result = await authorizeMetadataWrite({
+    id,
+    body: body.value,
+    serverCluster: getCluster(),
+    nowMs: Date.now(),
+    existing: await readMetadataRecord(id),
+    mintExists,
+    lookup: serverLookup,
+  });
+  if (!result.ok) {
+    return NextResponse.json({ error: result.error, code: result.code }, { status: result.status });
+  }
+  if (!result.unchanged) await writeMetadataRecord(id, result.record);
+  return NextResponse.json({ ok: true, id, unchanged: result.unchanged, meta: result.record.meta });
 }

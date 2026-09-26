@@ -1,52 +1,60 @@
+import type { SignedLaunchBody } from "@/lib/auth/launchAuth";
 import { isPlaceholderMetadataUri } from "@/lib/constants";
 
-export type MetadataDraft = {
-  id: string;
-  name: string;
-  symbol: string;
-  description?: string;
-  image?: string;
-  website?: string;
+export type MetadataUriResult = {
+  uri: string;
+  source: "custom" | "hosted" | "data-uri";
+  note?: string;
 };
 
+function dataUri(meta: NonNullable<SignedLaunchBody["payload"]["metadata"]> | {
+  name: string;
+  symbol: string;
+  description: string;
+  image: string;
+}): string {
+  return `data:application/json,${encodeURIComponent(JSON.stringify(meta))}`;
+}
+
 /**
- * Prefer app-hosted /api/metadata/[id]. Falls back to a data: URI if the
- * write fails. Custom non-placeholder URIs are returned as-is.
+ * Custom https override → used as-is. Otherwise, with a creator-signed launch
+ * payload, write app-hosted JSON at /api/metadata/<mint>. Without a signature
+ * (wallet can't signMessage / user declined) or on write failure, fall back
+ * to an inline data: URI.
  */
-export async function resolveMetadataUri(
-  customUri: string,
-  draft: MetadataDraft,
-): Promise<string> {
-  const trimmed = customUri.trim();
+export async function resolveMetadataUri(args: {
+  customUri: string;
+  signed: SignedLaunchBody | null;
+  fallback: { name: string; symbol: string; description: string };
+}): Promise<MetadataUriResult> {
+  const trimmed = args.customUri.trim();
   if (trimmed && !isPlaceholderMetadataUri(trimmed)) {
-    return trimmed;
+    return { uri: trimmed, source: "custom" };
   }
-
-  const payload = {
-    name: draft.name,
-    symbol: draft.symbol,
-    description:
-      draft.description?.trim() ||
-      `${draft.name} (${draft.symbol}) — EquiCurve DBC offering`,
-    image: draft.image?.trim() || "",
-    external_url: draft.website?.trim() || undefined,
-  };
-
+  const meta = args.signed?.payload.metadata;
+  const inline = dataUri(meta ?? { ...args.fallback, image: "" });
+  if (!args.signed || !meta) {
+    return { uri: inline, source: "data-uri", note: "No wallet signature — using inline data: URI metadata." };
+  }
   try {
-    const origin =
-      typeof window !== "undefined" ? window.location.origin : "";
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
     if (!origin) throw new Error("no origin");
-    const res = await fetch(
-      `${origin}/api/metadata/${encodeURIComponent(draft.id)}`,
-      {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      },
-    );
-    if (!res.ok) throw new Error(`metadata HTTP ${res.status}`);
-    return `${origin}/api/metadata/${encodeURIComponent(draft.id)}`;
-  } catch {
-    return `data:application/json,${encodeURIComponent(JSON.stringify(payload))}`;
+    const id = encodeURIComponent(args.signed.payload.mint);
+    const res = await fetch(`${origin}/api/metadata/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(args.signed),
+    });
+    if (!res.ok) {
+      const j = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new Error(j.error || `metadata HTTP ${res.status}`);
+    }
+    return { uri: `${origin}/api/metadata/${id}`, source: "hosted" };
+  } catch (e) {
+    return {
+      uri: inline,
+      source: "data-uri",
+      note: `Hosted metadata write failed (${e instanceof Error ? e.message : "error"}) — using inline data: URI.`,
+    };
   }
 }

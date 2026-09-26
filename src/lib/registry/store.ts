@@ -3,7 +3,6 @@ import type {
   LaunchRegistryStore,
   RegistryBackend,
   RegistryLaunch,
-  RegistryLaunchInput,
   RegistryMeta,
 } from "./types";
 import {
@@ -73,17 +72,8 @@ export async function getRegistryLaunch(
   return getLaunchRegistryStore().get(pool);
 }
 
-export async function upsertRegistryLaunch(
-  input: RegistryLaunchInput,
-): Promise<RegistryLaunch> {
-  return getLaunchRegistryStore().upsert(input);
-}
-
-export async function patchRegistryLaunch(
-  pool: string,
-  patch: Partial<RegistryLaunchInput>,
-): Promise<RegistryLaunch | null> {
-  return getLaunchRegistryStore().patch(pool, patch);
+export async function putRegistryLaunch(entry: RegistryLaunch): Promise<RegistryLaunch> {
+  return getLaunchRegistryStore().put(entry);
 }
 
 /** Test helper — drop cached store so env changes take effect. */
