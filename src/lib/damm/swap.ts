@@ -6,7 +6,10 @@ import {
 } from "@meteora-ag/cp-amm-sdk";
 import { PublicKey, Transaction, type Connection } from "@solana/web3.js";
 import BN from "bn.js";
+import { AmountError, parseUiAmountToBN } from "@/lib/amounts";
 import { EquiCurveError } from "@/lib/errors";
+import { withRpcRetry } from "@/lib/rpc";
+import { setFreshBlockhash } from "@/lib/send";
 import { getCpAmm } from "./client";
 import type {
   DammPoolSnapshot,
@@ -14,11 +17,17 @@ import type {
   DammSwapDirection,
 } from "./types";
 
-function uiToAmount(ui: number, decimals: number): BN {
-  if (!(ui > 0) || !Number.isFinite(ui)) {
-    throw new EquiCurveError("Enter a positive amount.", "VALIDATION");
+/** Exact decimal string → atoms (no float). */
+function uiToAmount(ui: string, decimals: number): BN {
+  try {
+    return parseUiAmountToBN(ui, decimals);
+  } catch (e) {
+    throw new EquiCurveError(
+      e instanceof AmountError ? e.message : "Enter a positive amount.",
+      "VALIDATION",
+      e,
+    );
   }
-  return new BN(Math.round(ui * 10 ** decimals));
 }
 
 function pickMints(
@@ -74,20 +83,21 @@ export async function quoteDammSwap(args: {
   pool: PublicKey;
   snap: DammPoolSnapshot;
   direction: DammSwapDirection;
-  amountUi: number;
+  /** Exact decimal string in input-token units. */
+  amountUi: string;
   /** Slippage percent (1 = 1%). */
   slippagePct?: number;
 }): Promise<DammQuoteResult> {
   const { connection, pool, snap, direction, amountUi, slippagePct = 1 } = args;
   if (!snap.exists) {
     throw new EquiCurveError(
-      "DAMM v2 pool account not found on this cluster.",
+      "DAMM v2 pool account not verified on this cluster — refusing to quote.",
       "SDK",
     );
   }
 
   const cp = getCpAmm(connection);
-  const poolState = await cp.fetchPoolState(pool);
+  const poolState = await withRpcRetry(() => cp.fetchPoolState(pool));
   const { inputMint, outputMint, inputDecimals, outputDecimals } = pickMints(
     snap,
     direction,
@@ -151,7 +161,8 @@ export async function buildDammSwapTx(args: {
   pool: PublicKey;
   snap: DammPoolSnapshot;
   direction: DammSwapDirection;
-  amountUi: number;
+  /** Exact decimal string in input-token units. */
+  amountUi: string;
   slippagePct?: number;
 }): Promise<{ tx: Transaction; quote: DammQuoteResult }> {
   const { connection, payer, pool, snap, direction, amountUi, slippagePct = 1 } =
@@ -173,7 +184,7 @@ export async function buildDammSwapTx(args: {
   });
 
   const cp = getCpAmm(connection);
-  const poolState = await cp.fetchPoolState(pool);
+  const poolState = await withRpcRetry(() => cp.fetchPoolState(pool));
 
   const tx = await cp.swap2({
     payer,
@@ -193,8 +204,6 @@ export async function buildDammSwapTx(args: {
     minimumAmountOut: new BN(quote.minimumAmountOut),
   });
 
-  const { blockhash } = await connection.getLatestBlockhash("confirmed");
-  tx.feePayer = payer;
-  tx.recentBlockhash = blockhash;
+  await setFreshBlockhash(connection, tx, payer);
   return { tx, quote };
 }

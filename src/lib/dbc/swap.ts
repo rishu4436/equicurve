@@ -1,82 +1,111 @@
 import { SwapMode } from "@meteora-ag/dynamic-bonding-curve-sdk";
 import { PublicKey, Transaction, type Connection } from "@solana/web3.js";
 import BN from "bn.js";
+import { AmountError, parseUiAmountToBN } from "@/lib/amounts";
 import { EquiCurveError } from "@/lib/errors";
+import { withRpcRetry } from "@/lib/rpc";
+import { setFreshBlockhash } from "@/lib/send";
 import { getDbcClient } from "./client";
-import { normalizePoolAccount } from "./poolAccount";
-import { isTransferHookPoolAccount } from "./transferHook";
-import { quoteDecimalsForMint } from "@/lib/constants";
+import { requireDbcPool } from "./poolAccount";
+import { USDC_MINT_DEVNET, USDC_MINT_MAINNET, WSOL_MINT } from "@/lib/constants";
 
 export type SwapDirection = "buy" | "sell";
 
+export const DEFAULT_SLIPPAGE_BPS = 100;
+
+function knownQuoteDecimals(mint: PublicKey): number | null {
+  if (mint.equals(WSOL_MINT)) return 9;
+  if (mint.equals(USDC_MINT_MAINNET) || mint.equals(USDC_MINT_DEVNET)) return 6;
+  return null;
+}
+
+export type SwapQuoteView = {
+  tx: Transaction;
+  /** Exact input atoms. */
+  amountIn: string;
+  inputDecimals: number;
+  /** Expected output atoms (before slippage). */
+  expectedOut: string;
+  /** Min output atoms after slippage. */
+  minimumAmountOut: string;
+  outputDecimals: number;
+  slippageBps: number;
+};
+
+/**
+ * Quote + build a DBC ExactIn swap.
+ * - buy: input = quote token (SOL 9 / USDC 6), output = base token
+ * - sell: input = base token (config.tokenDecimal), output = quote
+ * Amount is an exact decimal string — no float math.
+ */
 export async function quoteAndBuildSwap(args: {
   connection: Connection;
   owner: PublicKey;
   pool: PublicKey;
   direction: SwapDirection;
-  amount: number;
-  decimals?: number;
+  /** Exact decimal string in input-token units. */
+  amountUi: string;
   slippageBps?: number;
-}): Promise<{
-  tx: Transaction;
-  minimumAmountOut: string;
-  amountIn: string;
-}> {
-  const {
-    connection,
-    owner,
-    pool,
-    direction,
-    amount,
-    decimals = 9,
-    slippageBps = 100,
-  } = args;
+}): Promise<SwapQuoteView> {
+  const { connection, owner, pool, direction, amountUi } = args;
+  const slippageBps = args.slippageBps ?? DEFAULT_SLIPPAGE_BPS;
 
   if (!owner) {
     throw new EquiCurveError("Connect a wallet to trade.", "MISSING_WALLET");
   }
-  if (!(amount > 0)) {
-    throw new EquiCurveError("Enter a positive amount.", "VALIDATION");
+  if (!Number.isInteger(slippageBps) || slippageBps < 1 || slippageBps > 5_000) {
+    throw new EquiCurveError("Slippage must be between 0.01% and 50%.", "VALIDATION");
   }
 
   const client = getDbcClient(connection);
-  const account = await client.state.getPool(pool);
-  if (!account) {
+  const fetched = await requireDbcPool(connection, pool);
+  const config = await withRpcRetry(() => client.state.getPoolConfig(fetched.state.config));
+  if (!config) {
+    throw new EquiCurveError("Pool config account missing on this cluster.", "SDK");
+  }
+  if (fetched.state.isMigrated === 1) {
     throw new EquiCurveError(
-      `Pool ${pool.toBase58()} not found on this RPC/cluster.`,
-      "SDK",
+      "This pool has graduated to DAMM v2 — trade on the DAMM v2 ticket instead.",
+      "VALIDATION",
     );
   }
 
-  // Quote math expects the inner VirtualPool fields (unwrap transfer-hook wrapper).
-  const normalized = normalizePoolAccount(
-    account as Parameters<typeof normalizePoolAccount>[0],
-  );
-  const virtualPool =
-    (account as { poolState?: unknown }).poolState ?? account;
-
-  const config = await client.state.getPoolConfig(normalized.config);
-  if (!config) {
-    throw new EquiCurveError("Pool config account missing.", "SDK");
+  const quoteMint = new PublicKey(config.quoteMint);
+  const quoteDecimals = knownQuoteDecimals(quoteMint);
+  if (quoteDecimals == null) {
+    throw new EquiCurveError(
+      `Unsupported quote mint ${quoteMint.toBase58()} (EquiCurve supports SOL / USDC).`,
+      "VALIDATION",
+    );
+  }
+  const baseDecimals = Number(config.tokenDecimal);
+  if (!Number.isInteger(baseDecimals) || baseDecimals < 0 || baseDecimals > 18) {
+    throw new EquiCurveError("Pool config has an invalid token decimal.", "SDK");
   }
 
-    const quoteMintPk =
-    (config as { quoteMint?: PublicKey }).quoteMint ??
-    (normalized as { quoteMint?: PublicKey }).quoteMint;
-  const resolvedDecimals = quoteMintPk
-    ? quoteDecimalsForMint(quoteMintPk)
-    : decimals;
+  const swapBaseForQuote = direction === "sell";
+  const inputDecimals = swapBaseForQuote ? baseDecimals : quoteDecimals;
+  const outputDecimals = swapBaseForQuote ? quoteDecimals : baseDecimals;
 
-const amountIn = new BN(Math.round(amount * 10 ** resolvedDecimals));
+  let amountIn: BN;
+  try {
+    amountIn = parseUiAmountToBN(amountUi, inputDecimals);
+  } catch (e) {
+    throw new EquiCurveError(
+      e instanceof AmountError ? e.message : "Invalid amount.",
+      "VALIDATION",
+      e,
+    );
+  }
+
   const currentPoint =
-    Number((config as { activationType?: number }).activationType) === 0
-      ? new BN(await connection.getSlot("confirmed"))
+    Number(config.activationType) === 0
+      ? new BN(await withRpcRetry(() => connection.getSlot("confirmed")))
       : new BN(Math.floor(Date.now() / 1000));
 
-  const swapBaseForQuote = direction === "sell";
-
+  // SDK quote functions expect the wrapped `{ poolState }` account.
   const quote = client.pool.swapQuote2({
-    virtualPool: virtualPool as never,
+    virtualPool: fetched.account as never,
     config,
     swapBaseForQuote,
     swapMode: SwapMode.ExactIn,
@@ -87,6 +116,14 @@ const amountIn = new BN(Math.round(amount * 10 ** resolvedDecimals));
     currentPoint,
   });
 
+  const minOut = quote.minimumAmountOut;
+  if (!minOut || minOut.isZero()) {
+    throw new EquiCurveError(
+      "Quote returned zero output — amount too small or curve exhausted.",
+      "VALIDATION",
+    );
+  }
+
   const swapArgs = {
     owner,
     payer: owner,
@@ -94,20 +131,26 @@ const amountIn = new BN(Math.round(amount * 10 ** resolvedDecimals));
     swapBaseForQuote,
     swapMode: SwapMode.ExactIn,
     amountIn,
-    minimumAmountOut: quote.minimumAmountOut ?? new BN(0),
+    minimumAmountOut: minOut,
     referralTokenAccount: null,
   } as const;
-  const tx = isTransferHookPoolAccount(account)
-    ? await client.pool.swap2WithTransferHook(swapArgs as never)
-    : await client.pool.swap2(swapArgs as never);
+  const tx =
+    fetched.kind === "transfer-hook"
+      ? await client.pool.swap2WithTransferHook(swapArgs as never)
+      : await client.pool.swap2(swapArgs as never);
 
-  const { blockhash } = await connection.getLatestBlockhash("confirmed");
-  tx.feePayer = owner;
-  tx.recentBlockhash = blockhash;
+  await setFreshBlockhash(connection, tx, owner);
+
+  const expected =
+    (quote as { outputAmount?: BN }).outputAmount ?? minOut;
 
   return {
     tx,
-    minimumAmountOut: (quote.minimumAmountOut ?? new BN(0)).toString(),
-    amountIn: amountIn.toString(),
+    amountIn: amountIn.toString(10),
+    inputDecimals,
+    expectedOut: expected.toString(10),
+    minimumAmountOut: minOut.toString(10),
+    outputDecimals,
+    slippageBps,
   };
 }

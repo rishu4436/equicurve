@@ -1,6 +1,8 @@
 import { getTokenProgram } from "@meteora-ag/cp-amm-sdk";
 import { PublicKey, Transaction, type Connection } from "@solana/web3.js";
 import { EquiCurveError } from "@/lib/errors";
+import { withRpcRetry } from "@/lib/rpc";
+import { setFreshBlockhash } from "@/lib/send";
 import { getCpAmm } from "./client";
 import type { DammPoolSnapshot, DammPositionView } from "./types";
 
@@ -11,7 +13,7 @@ export async function fetchUserDammPositions(args: {
 }): Promise<DammPositionView[]> {
   const { connection, pool, user } = args;
   const cp = getCpAmm(connection);
-  const rows = await cp.getUserPositionByPool(pool, user);
+  const rows = await withRpcRetry(() => cp.getUserPositionByPool(pool, user));
   return rows.map((row) => {
     const st = row.positionState;
     return {
@@ -54,8 +56,6 @@ export async function buildClaimPositionFeeTx(args: {
     feePayer: owner,
   });
 
-  const { blockhash } = await connection.getLatestBlockhash("confirmed");
-  tx.feePayer = owner;
-  tx.recentBlockhash = blockhash;
+  await setFreshBlockhash(connection, tx, owner);
   return tx;
 }

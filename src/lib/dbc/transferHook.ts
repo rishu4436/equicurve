@@ -55,16 +55,6 @@ export async function requireTransferHookProgram(
   return program;
 }
 
-/** True when SDK state returned a TransferHookPool wrapper `{ poolState }`. */
-export function isTransferHookPoolAccount(account: unknown): boolean {
-  return (
-    !!account &&
-    typeof account === "object" &&
-    "poolState" in account &&
-    typeof (account as { poolState?: unknown }).poolState === "object" &&
-    (account as { poolState: object }).poolState !== null
-  );
-}
 
 export function parseTransferProfile(
   value: string | undefined | null,

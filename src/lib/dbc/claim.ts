@@ -2,8 +2,9 @@ import { PublicKey, type Connection, type Transaction } from "@solana/web3.js";
 import BN from "bn.js";
 import { EquiCurveError } from "@/lib/errors";
 import { getDbcClient } from "./client";
-import { normalizePoolAccount } from "./poolAccount";
-import { isTransferHookPoolAccount } from "./transferHook";
+import { withRpcRetry } from "@/lib/rpc";
+import { setFreshBlockhash } from "@/lib/send";
+import { requireDbcPool } from "./poolAccount";
 
 export type FeeSideBreakdown = {
   unclaimedBase: string;
@@ -86,7 +87,7 @@ export async function fetchPoolFeeBreakdown(
   pool: PublicKey,
 ): Promise<FeeBreakdown> {
   const client = getDbcClient(connection);
-  const breakdown = await client.state.getPoolFeeBreakdown(pool);
+  const breakdown = await withRpcRetry(() => client.state.getPoolFeeBreakdown(pool));
   return toFeeBreakdown(
     sideFromSdk(breakdown.creator),
     sideFromSdk(breakdown.partner),
@@ -99,14 +100,10 @@ export async function resolvePoolFeeRoles(
   pool: PublicKey,
 ): Promise<PoolFeeRoles> {
   const client = getDbcClient(connection);
-  const account = await client.state.getPool(pool);
-  if (!account) {
-    throw new EquiCurveError(`Pool ${pool.toBase58()} not found.`, "SDK");
-  }
-  const virtualPool = normalizePoolAccount(
-    account as Parameters<typeof normalizePoolAccount>[0],
+  const virtualPool = (await requireDbcPool(connection, pool)).state;
+  const configAccount = await withRpcRetry(() =>
+    client.state.getPoolConfig(virtualPool.config),
   );
-  const configAccount = await client.state.getPoolConfig(virtualPool.config);
   if (!configAccount) {
     throw new EquiCurveError(
       `Pool config ${virtualPool.config.toBase58()} not found.`,
@@ -168,8 +165,8 @@ export async function prepareClaimCreatorFees(args: {
   }
 
   const client = getDbcClient(connection);
-  const poolAccount = await client.state.getPool(pool);
-  const tx = isTransferHookPoolAccount(poolAccount)
+  const { kind } = await requireDbcPool(connection, pool);
+  const tx = kind === "transfer-hook"
     ? await client.creator.claimCreatorTradingFee2({
         creator,
         payer: creator,
@@ -186,9 +183,7 @@ export async function prepareClaimCreatorFees(args: {
         maxQuoteAmount: unclaimedQuote,
       });
 
-  const { blockhash } = await connection.getLatestBlockhash("confirmed");
-  tx.feePayer = creator;
-  tx.recentBlockhash = blockhash;
+  await setFreshBlockhash(connection, tx, creator);
 
   return { tx, breakdown };
 }
@@ -231,8 +226,8 @@ export async function prepareClaimPartnerFees(args: {
   }
 
   const client = getDbcClient(connection);
-  const poolAccount = await client.state.getPool(pool);
-  const tx = isTransferHookPoolAccount(poolAccount)
+  const { kind } = await requireDbcPool(connection, pool);
+  const tx = kind === "transfer-hook"
     ? await client.partner.claimPartnerTradingFee2({
         feeClaimer,
         payer: feeClaimer,
@@ -249,9 +244,7 @@ export async function prepareClaimPartnerFees(args: {
         maxQuoteAmount: unclaimedQuote,
       });
 
-  const { blockhash } = await connection.getLatestBlockhash("confirmed");
-  tx.feePayer = feeClaimer;
-  tx.recentBlockhash = blockhash;
+  await setFreshBlockhash(connection, tx, feeClaimer);
 
   return { tx, breakdown, roles };
 }

@@ -6,7 +6,8 @@ import { PublicKey, type Connection } from "@solana/web3.js";
 import BN from "bn.js";
 import { quoteDecimalsForMint } from "@/lib/constants";
 import { getDbcClient } from "./client";
-import { normalizePoolAccount } from "./poolAccount";
+import { withRpcRetry } from "@/lib/rpc";
+import { fetchDbcPool } from "./poolAccount";
 
 function toTokenDecimal(n: number): TokenDecimal {
   if (n === 6) return TokenDecimal.SIX;
@@ -54,23 +55,13 @@ export async function fetchSpotPrice(
   pool: PublicKey,
 ): Promise<SpotPriceResult | null> {
   const client = getDbcClient(connection);
-  const account = await client.state.getPool(pool);
-  if (!account) return null;
-
-  const normalized = normalizePoolAccount(
-    account as Parameters<typeof normalizePoolAccount>[0],
-  );
-  const inner =
-    (account as { poolState?: Record<string, unknown> }).poolState ??
-    (account as Record<string, unknown>);
-
-  const sqrtPrice = bnishToBn(
-    (inner as { sqrtPrice?: unknown }).sqrtPrice ??
-      (normalized.raw as { sqrtPrice?: unknown }).sqrtPrice,
-  );
+  const fetched = await fetchDbcPool(connection, pool);
+  if (!fetched) return null;
+  const normalized = fetched.state;
+  const sqrtPrice = bnishToBn(fetched.state.sqrtPrice);
   if (!sqrtPrice || sqrtPrice.isZero()) return null;
 
-  const config = await client.state.getPoolConfig(normalized.config);
+  const config = await withRpcRetry(() => client.state.getPoolConfig(normalized.config));
   if (!config) return null;
 
   const baseDecimalsRaw = Number(

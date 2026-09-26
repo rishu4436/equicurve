@@ -13,9 +13,25 @@ import {
   WSOL_MINT,
   type QuoteLabel,
 } from "@/lib/constants";
+import { AmountError, formatAtomsExact, parseUiAmountToBN } from "@/lib/amounts";
 import { EquiCurveError } from "@/lib/errors";
+import {
+  firstIssue,
+  lpLockSchema,
+  nameSchema,
+  pctSchema,
+  presetIdSchema,
+  symbolSchema,
+  validateSeedBuy,
+  walletSchema,
+} from "@/lib/validation";
 import { getDbcClient } from "./client";
-import { buildPresetConfig, getPreset, MIN_LP_LOCK_PCT } from "./presets";
+import {
+  buildPresetConfig,
+  getPreset,
+  MIN_LP_LOCK_PCT,
+  validateEquiCurveConfig,
+} from "./presets";
 import type { LaunchFormInput, PreparedLaunch } from "./types";
 import {
   isTransferHookProfileAvailable,
@@ -42,12 +58,16 @@ export type PreparedLaunchBundle = {
   signersPerTx: Keypair[][];
 };
 
-function clampLock(pct: number): number {
-  return Math.min(100, Math.max(MIN_LP_LOCK_PCT, Math.round(pct)));
-}
-
-function clampCreatorFee(pct: number): number {
-  return Math.min(100, Math.max(0, Math.round(pct)));
+function assertValid<T>(
+  schema: { safeParse: (v: unknown) => { success: true; data: T } | { success: false; error: import("zod").ZodError } },
+  value: unknown,
+  label: string,
+): T {
+  const r = schema.safeParse(value);
+  if (!r.success) {
+    throw new EquiCurveError(`${label}: ${firstIssue(r.error)}`, "VALIDATION");
+  }
+  return r.data;
 }
 
 /**
@@ -66,8 +86,9 @@ export async function prepareLaunchTransaction(args: {
     throw new EquiCurveError("Connect a wallet to launch.", "MISSING_WALLET");
   }
 
-  const name = input.name.trim();
-  const symbol = input.symbol.trim().toUpperCase();
+  const name = assertValid(nameSchema, input.name, "Name");
+  const symbol = assertValid(symbolSchema, input.symbol.trim().toUpperCase(), "Ticker");
+  assertValid(presetIdSchema, input.presetId, "Curve preset");
   let uri = input.uri.trim();
   if (!uri || isPlaceholderMetadataUri(uri)) {
     uri = `data:application/json,${encodeURIComponent(
@@ -78,17 +99,17 @@ export async function prepareLaunchTransaction(args: {
         image: "",
       }),
     )}`;
-  }
-  if (name.length < 2 || symbol.length < 1) {
-    throw new EquiCurveError("Name and symbol are required.", "VALIDATION");
+  } else if (!/^https:\/\//i.test(uri) && !uri.startsWith("data:application/json,") && !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/api\/metadata\//.test(uri)) {
+    throw new EquiCurveError("Metadata URI must be https:// (or app-hosted).", "VALIDATION");
   }
 
-  const lpLockPct = clampLock(input.lpLockPct);
-  const creatorTradingFeePercentage = clampCreatorFee(
+  const lpLockPct = assertValid(lpLockSchema, input.lpLockPct, `LP lock % (min ${MIN_LP_LOCK_PCT})`);
+  const creatorTradingFeePercentage = assertValid(
+    pctSchema,
     input.creatorTradingFeePercentage,
+    "Creator fee share",
   );
   const mintRenounce = input.mintRenounce !== false;
-  const seedBuySol = Math.max(0, Number(input.seedBuySol) || 0);
   const antiSniper = !!input.antiSniper;
 
   const transferProfile: TransferProfile = parseTransferProfile(
@@ -121,15 +142,32 @@ export async function prepareLaunchTransaction(args: {
 
   let feeClaimer = payer;
   if (input.feeClaimer?.trim()) {
-    try {
-      feeClaimer = new PublicKey(input.feeClaimer.trim());
-    } catch {
+    const r = walletSchema.safeParse(input.feeClaimer.trim());
+    if (!r.success) {
       throw new EquiCurveError(
-        "Partner fee claimer is not a valid Solana address.",
+        "Partner fee claimer must be a valid on-curve wallet address (it has to sign claims).",
+        "VALIDATION",
+      );
+    }
+    feeClaimer = new PublicKey(r.data);
+  }
+
+  // Exact seed-buy conversion (string → atoms), never float * 10**decimals.
+  const seedRaw = (input.seedBuyAmount ?? "").trim();
+  const seedErr = validateSeedBuy(seedRaw, quoteLabel);
+  if (seedErr) throw new EquiCurveError(`Seed buy: ${seedErr}`, "VALIDATION");
+  let seedBuyAtoms = new BN(0);
+  if (seedRaw && !/^0*(\.0*)?$/.test(seedRaw)) {
+    try {
+      seedBuyAtoms = parseUiAmountToBN(seedRaw, quoteDecimals);
+    } catch (e) {
+      throw new EquiCurveError(
+        `Seed buy: ${e instanceof AmountError ? e.message : "invalid amount"}`,
         "VALIDATION",
       );
     }
   }
+  const hasSeedBuy = !seedBuyAtoms.isZero();
 
   const client = getDbcClient(connection);
   const existingConfig = getOptionalPoolConfigKey();
@@ -167,8 +205,8 @@ export async function prepareLaunchTransaction(args: {
         : {}),
     };
 
-    if (seedBuySol > 0) {
-      const buyAmount = new BN(Math.round(seedBuySol * 10 ** quoteDecimals));
+    if (hasSeedBuy) {
+      const buyAmount = seedBuyAtoms;
       const firstBuyParam = {
         buyer: payer,
         buyAmount,
@@ -208,6 +246,13 @@ export async function prepareLaunchTransaction(args: {
       tokenType: transferProfile === "open-spl" ? "spl" : "token-2022",
       allowMintAuthority: wantsTransferHook && !effectiveMintRenounce,
     });
+    const configErrors = validateEquiCurveConfig(curveConfig);
+    if (configErrors.length) {
+      throw new EquiCurveError(
+        `Config violates Meteora DBC constraints: ${configErrors.join(" ")}`,
+        "VALIDATION",
+      );
+    }
 
     const baseParams = {
       ...curveConfig,
@@ -228,8 +273,8 @@ export async function prepareLaunchTransaction(args: {
         : {}),
     };
 
-    if (seedBuySol > 0) {
-      const buyAmount = new BN(Math.round(seedBuySol * 10 ** quoteDecimals));
+    if (hasSeedBuy) {
+      const buyAmount = seedBuyAtoms;
       const firstBuyParam = {
         buyer: payer,
         buyAmount,
@@ -286,7 +331,8 @@ export async function prepareLaunchTransaction(args: {
       lpLockPct,
       creatorTradingFeePercentage,
       mintRenounce: effectiveMintRenounce,
-      seedBuySol,
+      seedBuyAtoms: seedBuyAtoms.toString(10),
+      seedBuyDisplay: formatAtomsExact(seedBuyAtoms.toString(10), quoteDecimals),
       feeClaimer: feeClaimer.toBase58(),
       transferProfile,
       transferHookProgram: transferHookProgramPk?.toBase58(),
@@ -303,5 +349,35 @@ export async function prepareLaunchTransaction(args: {
     keypairs,
     transactions,
     signersPerTx,
+  };
+}
+
+/**
+ * Pre-compute pool / mint / config addresses before any tx is built, so the
+ * creator can sign the registry + metadata payload that binds to them.
+ * Mirrors the derivation in prepareLaunchTransaction.
+ */
+export function planLaunchAddresses(args: {
+  quoteLabel: QuoteLabel;
+  keypairs: LaunchKeypairs;
+}): { pool: string; mint: string; config: string; quoteMint: string } {
+  let quoteMint = WSOL_MINT;
+  if (args.quoteLabel === "USDC") {
+    const usdc = getUsdcMint();
+    if (!usdc) {
+      throw new EquiCurveError(
+        "USDC quote is not available on this cluster (no known mint).",
+        "VALIDATION",
+      );
+    }
+    quoteMint = usdc;
+  }
+  const config = getOptionalPoolConfigKey() ?? args.keypairs.config.publicKey;
+  const pool = deriveDbcPoolAddress(quoteMint, args.keypairs.baseMint.publicKey, config);
+  return {
+    pool: pool.toBase58(),
+    mint: args.keypairs.baseMint.publicKey.toBase58(),
+    config: config.toBase58(),
+    quoteMint: quoteMint.toBase58(),
   };
 }

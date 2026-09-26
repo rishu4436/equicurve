@@ -1,12 +1,10 @@
 import { getTokenProgram } from "@meteora-ag/cp-amm-sdk";
 import { getMint } from "@solana/spl-token";
 import { PublicKey, type Connection } from "@solana/web3.js";
-import {
-  getDammV2ConfigKey,
-  quoteLabelForMint,
-  WSOL_MINT,
-} from "@/lib/constants";
-import { tryDeriveDammV2PoolAddress } from "@/lib/dbc/migrate";
+import { quoteLabelForMint, WSOL_MINT } from "@/lib/constants";
+import type { DestinationCheck } from "@/lib/dbc/curveState";
+import { tryDeriveDammV2PoolAddress, verifyDammV2Pool } from "@/lib/dbc/migrate";
+import { withRpcRetry } from "@/lib/rpc";
 import { EquiCurveError } from "@/lib/errors";
 import { getCpAmm } from "./client";
 import type { DammPoolSnapshot } from "./types";
@@ -18,49 +16,53 @@ export function meteoraDammPoolUrl(pool: string): string {
 
 /**
  * Resolve the post-grad DAMM v2 pool address for a DBC offering.
- * Prefers stored launch.dammPool, else derives from fee config + mints,
- * then verifies via CpAmm.isPoolExist.
+ * Derives from the DAMM v2 fee config required by the pool's on-chain
+ * migrationFeeOption (caller passes it) + mints. A stored address is only used
+ * when no config is known, and either way the account must be fetched before
+ * it counts as existing — a derived address is not proof.
  */
 export async function resolveDammPoolAddress(args: {
   connection: Connection;
   baseMint: string;
   quoteMint: string;
   storedDammPool?: string | null;
+  /** DAMM v2 fee config from the pool's migrationFeeOption. */
+  dammConfig?: string | null;
 }): Promise<{
   address: string | null;
   exists: boolean;
+  check: DestinationCheck;
   source: DammPoolSnapshot["source"];
 }> {
-  const { connection, baseMint, quoteMint, storedDammPool } = args;
-  const cp = getCpAmm(connection);
+  const { connection, baseMint, quoteMint, storedDammPool, dammConfig } = args;
 
-  if (storedDammPool) {
+  let address: string | null = null;
+  let source: DammPoolSnapshot["source"] = "unknown";
+  if (dammConfig) {
+    address = tryDeriveDammV2PoolAddress({
+      dammConfig: new PublicKey(dammConfig),
+      baseMint: new PublicKey(baseMint),
+      quoteMint: new PublicKey(quoteMint),
+    });
+    source = "derived";
+  } else if (storedDammPool) {
     try {
-      const pk = new PublicKey(storedDammPool);
-      const exists = await cp.isPoolExist(pk);
-      return { address: pk.toBase58(), exists, source: "launch" };
+      address = new PublicKey(storedDammPool).toBase58();
+      source = "launch";
     } catch {
-      /* fall through */
+      address = null;
     }
   }
+  if (!address) return { address: null, exists: false, check: "unchecked", source: "unknown" };
 
-  const derived = tryDeriveDammV2PoolAddress({
-    dammConfig: getDammV2ConfigKey(),
-    baseMint: new PublicKey(baseMint),
-    quoteMint: new PublicKey(quoteMint),
-  });
-  if (!derived) return { address: null, exists: false, source: "unknown" };
-
-  try {
-    const exists = await cp.isPoolExist(new PublicKey(derived));
-    return { address: derived, exists, source: "derived" };
-  } catch (e) {
+  const check = await verifyDammV2Pool(connection, new PublicKey(address));
+  if (check === "rpc_unavailable") {
     throw new EquiCurveError(
       "Failed to check DAMM v2 pool existence on RPC.",
       "RPC_UNAVAILABLE",
-      e,
     );
   }
+  return { address, exists: check === "exists", check, source };
 }
 
 async function readMintDecimals(
@@ -76,9 +78,11 @@ async function readMintDecimals(
       tokenProgram,
     );
     return info.decimals;
-  } catch {
+  } catch (e) {
     if (mint.equals(WSOL_MINT)) return 9;
-    return quoteLabelForMint(mint) === "USDC" ? 6 : 9;
+    if (quoteLabelForMint(mint) === "USDC") return 6;
+    // Never guess decimals for arbitrary mints — amounts would be off by 10^n.
+    throw new EquiCurveError(`Could not read decimals for mint ${mint.toBase58()}.`, "RPC_UNAVAILABLE", e);
   }
 }
 
@@ -91,7 +95,7 @@ export async function fetchDammPoolSnapshot(args: {
 }): Promise<DammPoolSnapshot> {
   const { connection, pool, baseMint, quoteMint, source } = args;
   const cp = getCpAmm(connection);
-  const exists = await cp.isPoolExist(pool);
+  const exists = await withRpcRetry(() => cp.isPoolExist(pool));
   if (!exists) {
     return {
       address: pool.toBase58(),
@@ -109,7 +113,16 @@ export async function fetchDammPoolSnapshot(args: {
     };
   }
 
-  const state = await cp.fetchPoolState(pool);
+  const state = await withRpcRetry(() => cp.fetchPoolState(pool));
+  // The account must be the pool for THIS offering's mints (guards a stale or
+  // wrong stored address from being treated as the graduated pool).
+  const mints = new Set([state.tokenAMint.toBase58(), state.tokenBMint.toBase58()]);
+  if (!mints.has(baseMint) || !mints.has(quoteMint)) {
+    throw new EquiCurveError(
+      `DAMM v2 account ${pool.toBase58()} does not hold this offering's mints.`,
+      "VALIDATION",
+    );
+  }
   const tokenAProgram = getTokenProgram(Number(state.tokenAFlag));
   const tokenBProgram = getTokenProgram(Number(state.tokenBFlag));
   const [tokenADecimals, tokenBDecimals] = await Promise.all([

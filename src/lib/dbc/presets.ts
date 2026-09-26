@@ -160,6 +160,9 @@ const FEE_BY_PRESET: Record<PresetId, FeeSpec> = {
   },
 };
 
+/** Pool creation fee in SOL (= 1,000,000 lamports; SDK min when non-zero). */
+export const POOL_CREATION_FEE_SOL = 0.001;
+
 /** On-chain minimum locked LP (MIN_LOCKED_LIQUIDITY_BPS = 1000 → 10%). */
 export const MIN_LP_LOCK_PCT = 10;
 
@@ -246,7 +249,10 @@ export function buildPresetConfig(
       dynamicFeeEnabled: feeSpec.dynamicFeeEnabled,
       collectFeeMode: CollectFeeMode.QuoteToken,
       creatorTradingFeePercentage: creatorPct,
-      poolCreationFee: 1_000_000,
+      // buildCurveWithMarketCap takes SOL units (converted ×1e9 internally).
+      // 1_000_000 here meant 1,000,000 SOL (1e15 lamports) and failed SDK
+      // validation (max 100 SOL). Intended value: 1,000,000 lamports.
+      poolCreationFee: POOL_CREATION_FEE_SOL,
       enableFirstSwapWithMinFee,
     },
     migration: {
@@ -277,4 +283,50 @@ export function buildPresetConfig(
     initialMarketCap: preset.initialMarketCap,
     migrationMarketCap: preset.migrationMarketCap,
   });
+}
+
+/** Meteora DBC hard limits EquiCurve enforces before building a create tx. */
+export const DBC_CONSTRAINTS = {
+  /** MAX_CURVE_POINT in the SDK / program. */
+  maxCurvePoints: 16,
+  /** MIN_LOCKED_LIQUIDITY_BPS = 1000 → 10% permanently locked after migration. */
+  minLockedLiquidityPct: MIN_LP_LOCK_PCT,
+  /** New configs must migrate to DAMM v2 (DAMM v1 is deprecated for new configs). */
+  migrationOption: MigrationOption.MET_DAMM_V2,
+} as const;
+
+/**
+ * Validate a built ConfigParameters against the DBC constraints above.
+ * Returns human-readable violations (empty array = OK).
+ */
+export function validateEquiCurveConfig(cfg: ConfigParameters): string[] {
+  const errs: string[] = [];
+  const curve = (cfg as { curve?: unknown[] }).curve;
+  if (!Array.isArray(curve) || curve.length === 0) {
+    errs.push("Curve has no points.");
+  } else if (curve.length > DBC_CONSTRAINTS.maxCurvePoints) {
+    errs.push(
+      `Curve has ${curve.length} points; Meteora DBC allows at most ${DBC_CONSTRAINTS.maxCurvePoints}.`,
+    );
+  }
+  const partnerLocked = Number(cfg.partnerPermanentLockedLiquidityPercentage ?? 0);
+  const creatorLocked = Number(cfg.creatorPermanentLockedLiquidityPercentage ?? 0);
+  const partnerLp = Number(cfg.partnerLiquidityPercentage ?? 0);
+  const creatorLp = Number(cfg.creatorLiquidityPercentage ?? 0);
+  const vesting =
+    Number((cfg as { partnerLiquidityVestingInfo?: { vestingPercentage?: number } }).partnerLiquidityVestingInfo?.vestingPercentage ?? 0) +
+    Number((cfg as { creatorLiquidityVestingInfo?: { vestingPercentage?: number } }).creatorLiquidityVestingInfo?.vestingPercentage ?? 0);
+  if (partnerLocked + creatorLocked < DBC_CONSTRAINTS.minLockedLiquidityPct) {
+    errs.push(
+      `Permanently locked liquidity is ${partnerLocked + creatorLocked}%; Meteora DBC requires at least ${DBC_CONSTRAINTS.minLockedLiquidityPct}%.`,
+    );
+  }
+  const lpTotal = partnerLocked + creatorLocked + partnerLp + creatorLp + vesting;
+  if (lpTotal !== 100) {
+    errs.push(`LP percentages must sum to 100 (got ${lpTotal}).`);
+  }
+  if (Number(cfg.migrationOption) !== DBC_CONSTRAINTS.migrationOption) {
+    errs.push("Migration target must be DAMM v2 for new configs.");
+  }
+  return errs;
 }
