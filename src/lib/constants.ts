@@ -89,11 +89,26 @@ export function getRpcUrl(): string {
   );
 }
 
+/**
+ * Server-side RPC URL. Prefer a private, dedicated endpoint in `RPC_URL`
+ * (never exposed to the browser bundle — may contain an API key); falls back
+ * to NEXT_PUBLIC_RPC_URL, then public devnet.
+ */
+export function getServerRpcUrl(): string {
+  if (typeof window === "undefined") {
+    const priv = process.env.RPC_URL?.trim();
+    if (priv) return priv;
+  }
+  return getRpcUrl();
+}
+
 /** Hostname (+ pathname) only — strips query/api-key secrets for health/UI. */
-export function getRpcHost(): string {
+export function getRpcHost(url: string = getRpcUrl()): string {
   try {
-    const u = new URL(getRpcUrl());
-    return u.host + (u.pathname === "/" ? "" : u.pathname);
+    const u = new URL(url);
+    // Never echo path segments that look like API keys.
+    const path = u.pathname === "/" ? "" : u.pathname;
+    return u.host + (/[A-Za-z0-9_-]{20,}/.test(path) ? "/…" : path);
   } catch {
     return "invalid-rpc-url";
   }
@@ -116,6 +131,21 @@ export function getOptionalPoolConfigKey(): PublicKey | null {
   }
 }
 
+/** Operator override for the DAMM v2 fee config, or null when unset / invalid. */
+export function getDammV2ConfigOverride(): PublicKey | null {
+  const raw = process.env.NEXT_PUBLIC_DAMM_V2_CONFIG?.trim();
+  if (!raw) return null;
+  try {
+    return new PublicKey(raw);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Display default only. Migration uses the config required by each pool's
+ * on-chain migrationFeeOption (see lib/dbc/migrate.ts), never this blindly.
+ */
 export function getDammV2ConfigKey(): PublicKey {
   const raw = process.env.NEXT_PUBLIC_DAMM_V2_CONFIG?.trim();
   if (!raw) return DEFAULT_DAMM_V2_CONFIG;
