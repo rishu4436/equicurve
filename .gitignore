@@ -30,3 +30,6 @@ next-env.d.ts
 
 # Local token metadata store
 data/
+
+# Vercel link metadata (created by `vercel link`)
+.vercel
