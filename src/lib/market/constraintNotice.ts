@@ -1,7 +1,41 @@
-import type { DesignedMarket, LaunchPolicy } from "./types";
+import type { ConstraintBudget, DesignedMarket, LaunchPolicy } from "./types";
 
 function pct(n: number): string {
   return `${Math.round(n * 1000) / 10}%`;
+}
+
+/** Fields where `next` is looser than `requested`. Empty when nothing moved. */
+export function constraintBudgetChanges(requested: ConstraintBudget, next: ConstraintBudget): string[] {
+  const lines: string[] = [];
+  if (next.maxThresholdGap > requested.maxThresholdGap) {
+    lines.push(
+      `Threshold gap up to ${(next.maxThresholdGap * 100).toFixed(2)}% (requested ${(requested.maxThresholdGap * 100).toFixed(2)}%).`,
+    );
+  }
+  if (next.maxReferenceImpactBps > requested.maxReferenceImpactBps) {
+    lines.push(`Typical buy impact up to ${next.maxReferenceImpactBps} bps (requested ${requested.maxReferenceImpactBps}).`);
+  }
+  if (next.maxWhaleImpactBps > requested.maxWhaleImpactBps) {
+    lines.push(`Whale buy impact up to ${next.maxWhaleImpactBps} bps (requested ${requested.maxWhaleImpactBps}).`);
+  }
+  if (next.maxConcentration > requested.maxConcentration) {
+    lines.push(
+      `Largest buy up to ${Math.round(next.maxConcentration * 100)}% of filled quote (requested ${Math.round(requested.maxConcentration * 100)}%).`,
+    );
+  }
+  if (next.minRetailProgress < requested.minRetailProgress) {
+    lines.push(
+      `Retail fill down to ${Math.round(next.minRetailProgress * 100)}% (requested ${Math.round(requested.minRetailProgress * 100)}%).`,
+    );
+  }
+  return lines;
+}
+
+function acceptedBudgetLines(budget: ConstraintBudget): string[] {
+  return [
+    "The issuer accepted a wider budget. The original constraints were not met.",
+    `Accepted threshold gap ${(budget.maxThresholdGap * 100).toFixed(2)}%, typical impact ${budget.maxReferenceImpactBps} bps, whale impact ${budget.maxWhaleImpactBps} bps, concentration ${Math.round(budget.maxConcentration * 100)}%, retail progress ${Math.round(budget.minRetailProgress * 100)}%.`,
+  ];
 }
 
 /**
@@ -39,6 +73,7 @@ export function constraintFailureCopy(policy: LaunchPolicy): string[] | null {
       ? "This is a tradeoff example, not a fully feasible recommendation."
       : "Other evaluated candidates passed the constraints. This row is not one of them.",
   );
+  if (policy.negotiation.status === "accepted") lines.push(...acceptedBudgetLines(policy.negotiation.applied));
   return lines;
 }
 
@@ -73,5 +108,6 @@ export function constraintFailureFromDesigned(designed: DesignedMarket): string[
       ? "This is a tradeoff example, not a fully feasible recommendation."
       : "Other evaluated candidates passed the constraints. This row is not one of them.",
   );
+  if (designed.acceptedRelaxation) lines.push(...acceptedBudgetLines(designed.acceptedRelaxation));
   return lines;
 }

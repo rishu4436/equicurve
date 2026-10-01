@@ -65,6 +65,9 @@ export function VerifiedDeployment({ pool }: { pool: string }) {
         {row.constraintsPassed === false && (
           <p className="text-xs text-fg-secondary">
             This design did not meet every issuer constraint. The checks above are the on-chain match.
+            {row.acceptedRelaxation
+              ? ` The issuer accepted a wider budget: whale impact ${row.acceptedRelaxation.maxWhaleImpactBps} bps, retail progress ${Math.round(row.acceptedRelaxation.minRetailProgress * 100)}%.`
+              : ""}
           </p>
         )}
         <div className="flex flex-wrap gap-3 text-xs">

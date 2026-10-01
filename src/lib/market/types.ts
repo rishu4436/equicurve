@@ -104,6 +104,38 @@ export type PolicyRecipe = {
 
 export type DynamicFeeStatus = "simulated" | "base-only" | "not-used";
 
+/**
+ * Issuer constraint budget. Raising an upper bound, or lowering minRetailProgress,
+ * is a loosening. The search may apply a loosening only after the issuer accepts it.
+ */
+export type ConstraintBudget = {
+  maxThresholdGap: number;
+  maxReferenceImpactBps: number;
+  maxWhaleImpactBps: number;
+  /** 0..1. Largest buy's share of filled quote. */
+  maxConcentration: number;
+  /** 0..1. Retail sample must fill at least this much of the threshold. */
+  minRetailProgress: number;
+};
+
+/**
+ * What happened to the issuer's constraints.
+ * satisfied: a row passed the requested budget.
+ * needs-decision: nothing did. The chosen row is for inspection. Deploy stays blocked.
+ * accepted: the issuer accepted a wider budget, and the chosen row passes that budget.
+ * The original constraints are still recorded as failed.
+ */
+export type ConstraintNegotiation = {
+  status: "satisfied" | "needs-decision" | "accepted";
+  requested: ConstraintBudget;
+  /** Budget used to select a deployable row. Equals requested unless the issuer accepted a loosening. */
+  applied: ConstraintBudget;
+  /** Smallest loosening of requested that admits the inspection candidate. Null when a row already passed. */
+  proposal: ConstraintBudget | null;
+  /** Why the chosen row misses the requested budget. Empty when status is satisfied. */
+  blocking: string[];
+};
+
 /** Compact record stored with a launch so a later chain read can be compared. */
 export type DesignedMarket = {
   policyId: string;
@@ -128,8 +160,14 @@ export type DesignedMarket = {
   stressWorstProgress: number;
   /** Fingerprint of the config the simulator scored. Must match review and deploy. */
   configFingerprint: string;
-  /** False when this row failed a hard constraint. Missing on older local records. */
+  /**
+   * True only when this row passed the original constraints.
+   * False when it failed them, including after the issuer accepted a wider budget.
+   * Missing on older local records.
+   */
   constraintsPassed?: boolean;
+  /** Set when the issuer accepted a wider budget. Absent when the original constraints passed. */
+  acceptedRelaxation?: ConstraintBudget;
   candidateCount?: number;
   fullyFeasibleCount?: number;
   rejected?: string[];
@@ -193,6 +231,8 @@ export type LaunchPolicy = {
   limits: string[];
   /** What the search actually evaluated. Not a claim of global optimality. */
   search: SearchCoverage;
+  /** Whether the requested constraints were met, left unresolved, or explicitly widened. */
+  negotiation: ConstraintNegotiation;
   observedLaunches: null;
   observedNote: string;
 };

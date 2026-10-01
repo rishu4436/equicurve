@@ -1,5 +1,5 @@
-import type { ConfigParameters } from "@meteora-ag/dynamic-bonding-curve-sdk";
-import { canonicalMarketConfig, marketConfigFingerprint } from "@/lib/dbc/configFingerprint";
+import { DAMM_V2_MIGRATION_FEE_ADDRESS, type ConfigParameters } from "@meteora-ag/dynamic-bonding-curve-sdk";
+import { canonicalMarketConfig, marketConfigFingerprint, migrationAttestation } from "@/lib/dbc/configFingerprint";
 import { sha256Hex } from "@/lib/market/hash";
 
 /** Plain fields of the config that was fingerprinted and deployed. */
@@ -34,6 +34,20 @@ export type ExpectedMarketConfig = {
   migrationOption: string;
   tokenQuoteDecimal: string;
   tokenBaseDecimal: string;
+  /**
+   * Present on designs signed after migration-fee attestation.
+   * Older stored designs omit them. A missing field is not a pass for a new design,
+   * and it is not a failure for an older one.
+   */
+  migrationFeeOption?: string;
+  migrationFeePercentage?: string;
+  creatorMigrationFeePercentage?: string;
+  migratedCollectFeeMode?: string;
+  migratedDynamicFee?: string;
+  migratedPoolFeeBps?: string;
+  migratedPoolBaseFeeMode?: string;
+  /** DAMM v2 config address selected by migrationFeeOption. */
+  dammV2Config?: string;
 };
 
 export type DeploymentCheckFlags = {
@@ -136,6 +150,7 @@ export function expectedFromConfig(cfg: ConfigParameters): ExpectedMarketConfig 
     migrationOption: text(c.migrationOption),
     tokenQuoteDecimal: text(c.tokenQuoteDecimal),
     tokenBaseDecimal: text(c.tokenBaseDecimal),
+    ...migrationAttestation(cfg),
   };
 }
 
@@ -154,6 +169,20 @@ export function recordedConfigMatchesFingerprint(cfg: ConfigParameters, fingerpr
 
 function same(expected: string, actual: unknown): boolean {
   return expected === text(actual);
+}
+
+/** Older designs omit the field. A present value has to match the chain. */
+function attested(expected: string | undefined, actual: unknown): boolean {
+  if (expected === undefined) return true;
+  return same(expected, actual);
+}
+
+function dammDestinationMatches(expected: string | undefined, chainOption: unknown): boolean {
+  if (expected === undefined) return true;
+  const index = Number(text(chainOption));
+  if (!Number.isInteger(index) || index < 0 || index >= DAMM_V2_MIGRATION_FEE_ADDRESS.length) return false;
+  const address = DAMM_V2_MIGRATION_FEE_ADDRESS[index]?.toBase58() ?? "";
+  return expected === address && address !== "";
 }
 
 /**
@@ -197,6 +226,14 @@ export function compareDeploymentReadback(args: {
     same(expected.migrationOption, chain.migrationOption) &&
     same(expected.tokenQuoteDecimal, chain.tokenQuoteDecimal) &&
     same(expected.tokenBaseDecimal, chain.tokenBaseDecimal) &&
+    attested(expected.migrationFeeOption, chain.migrationFeeOption) &&
+    attested(expected.migrationFeePercentage, chain.migrationFeePercentage) &&
+    attested(expected.creatorMigrationFeePercentage, chain.creatorMigrationFeePercentage) &&
+    attested(expected.migratedCollectFeeMode, chain.migratedCollectFeeMode) &&
+    attested(expected.migratedDynamicFee, chain.migratedDynamicFee) &&
+    attested(expected.migratedPoolFeeBps, chain.migratedPoolFeeBps) &&
+    attested(expected.migratedPoolBaseFeeMode, chain.migratedPoolBaseFeeMode) &&
+    dammDestinationMatches(expected.dammV2Config, chain.migrationFeeOption) &&
     same(expected.baseFee.cliffFeeNumerator, chainFees.baseFee?.cliffFeeNumerator) &&
     same(expected.baseFee.firstFactor, chainFees.baseFee?.firstFactor) &&
     same(expected.baseFee.secondFactor, chainFees.baseFee?.secondFactor) &&

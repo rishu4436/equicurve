@@ -2,8 +2,12 @@ import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { launchCurveConfig } from "@/lib/dbc/create";
+import { marketConfigFingerprint } from "@/lib/dbc/configFingerprint";
 import {
+  canonicalConfigText,
   compareDeploymentReadback,
+  expectedFromConfig,
   recordedFingerprintMatches,
   verifiedPanelVisible,
 } from "@/lib/dbc/deploymentReadback";
@@ -48,6 +52,7 @@ describe("deployment readback", () => {
   it("matches the Journey chain proof and keeps the stored fingerprint honest", () => {
     const row = getPublicDeployment("Eq57sdFYg5UFg4rtV7W3mPWYGFi97ovWAYiLYLX8hejF");
     expect(row?.fingerprint).toBe("16ac1e49b68f4a4c");
+    expect(row?.expected.migrationFeeOption).toBeUndefined();
     expect(recordedFingerprintMatches(row!.canonicalConfig, row!.fingerprint)).toBe(true);
     expect(check(row!.pool, "public-devnet").checks).toEqual({
       fingerprint: true,
@@ -123,5 +128,120 @@ describe("deployment readback", () => {
     expect(() => loadBriefAt(badUri)).toThrow(/https/);
     writeFileSync(join(dir, "empty.json"), "{}");
     expect(() => loadBriefAt(join(dir, "empty.json"))).toThrow(/missing brief/);
+  });
+
+  it("attests the migration fee and the DAMM v2 destination on a new design", () => {
+    const cfg = launchCurveConfig({
+      presetId: "exponential",
+      totalSupply: 1_000_000_000,
+      creatorTradingFeePercentage: 70,
+      lpLockPct: 100,
+      mintRenounce: true,
+      antiSniper: true,
+      quoteDecimals: 9,
+      transferProfile: "open-spl",
+    });
+    const expected = expectedFromConfig(cfg);
+    const canonical = canonicalConfigText(cfg);
+    const fingerprint = marketConfigFingerprint(cfg);
+    const damm = "Hv8Lmzmnju6m7kcokVKvwqz7QPmdX9XfKjJsXz8RXcjp";
+    expect(expected.migrationFeeOption).toBe("2");
+    expect(expected.migrationFeePercentage).toBe("0");
+    expect(expected.creatorMigrationFeePercentage).toBe("0");
+    expect(expected.migratedPoolFeeBps).toBe("0");
+    expect(expected.dammV2Config).toBe(damm);
+    expect(canonical.endsWith(`2\n0\n0\n0\n0\n0\n0\n${damm}`)).toBe(true);
+    expect(recordedFingerprintMatches(canonical, fingerprint)).toBe(true);
+
+    const pool = "Pool111111111111111111111111111111111111111";
+    const config = "Cfg1111111111111111111111111111111111111111";
+    const mint = "Mint111111111111111111111111111111111111111";
+    const quoteMint = WSOL_MINT.toBase58();
+    const chain = {
+      sqrtStartPrice: expected.sqrtStartPrice,
+      curve: expected.curve,
+      migrationQuoteThreshold: expected.migrationQuoteThreshold,
+      creatorTradingFeePercentage: expected.creatorTradingFeePercentage,
+      partnerPermanentLockedLiquidityPercentage: expected.partnerPermanentLockedLiquidityPercentage,
+      partnerLiquidityPercentage: expected.partnerLiquidityPercentage,
+      creatorPermanentLockedLiquidityPercentage: expected.creatorPermanentLockedLiquidityPercentage,
+      creatorLiquidityPercentage: expected.creatorLiquidityPercentage,
+      enableFirstSwapWithMinFee: expected.enableFirstSwapWithMinFee,
+      collectFeeMode: expected.collectFeeMode,
+      migrationOption: expected.migrationOption,
+      tokenQuoteDecimal: expected.tokenQuoteDecimal,
+      tokenBaseDecimal: expected.tokenBaseDecimal,
+      migrationFeeOption: expected.migrationFeeOption,
+      migrationFeePercentage: expected.migrationFeePercentage,
+      creatorMigrationFeePercentage: expected.creatorMigrationFeePercentage,
+      migratedCollectFeeMode: expected.migratedCollectFeeMode,
+      migratedDynamicFee: expected.migratedDynamicFee,
+      migratedPoolFeeBps: expected.migratedPoolFeeBps,
+      migratedPoolBaseFeeMode: expected.migratedPoolBaseFeeMode,
+      poolFees: {
+        baseFee: expected.baseFee,
+        dynamicFee: expected.dynamicFee
+          ? { ...expected.dynamicFee, initialized: expected.dynamicFee.initialized === "" ? 1 : expected.dynamicFee.initialized }
+          : null,
+      },
+      quoteMint,
+    };
+    const identity = {
+      pool,
+      config,
+      mint,
+      threshold: expected.migrationQuoteThreshold,
+      quoteMint,
+    };
+    const snapshot = {
+      pool,
+      config,
+      baseMint: mint,
+      quoteMint,
+      migrationQuoteThreshold: expected.migrationQuoteThreshold,
+    };
+    expect(
+      compareDeploymentReadback({
+        expected,
+        canonicalConfig: canonical,
+        fingerprint,
+        identity,
+        snapshot,
+        chain,
+      }).verified,
+    ).toBe(true);
+
+    const moved = compareDeploymentReadback({
+      expected,
+      canonicalConfig: canonical,
+      fingerprint,
+      identity,
+      snapshot,
+      chain: { ...chain, migrationFeeOption: 3 },
+    });
+    expect(moved.checks.fingerprint).toBe(false);
+    expect(moved.verified).toBe(false);
+
+    const {
+      migrationFeeOption: _option,
+      migrationFeePercentage: _fee,
+      creatorMigrationFeePercentage: _creatorFee,
+      migratedCollectFeeMode: _mode,
+      migratedDynamicFee: _dynamic,
+      migratedPoolFeeBps: _bps,
+      migratedPoolBaseFeeMode: _baseMode,
+      dammV2Config: _damm,
+      ...legacy
+    } = expected;
+    expect(
+      compareDeploymentReadback({
+        expected: legacy,
+        canonicalConfig: canonical,
+        fingerprint,
+        identity,
+        snapshot,
+        chain: { ...chain, migrationFeeOption: 3 },
+      }).checks.fingerprint,
+    ).toBe(true);
   });
 });

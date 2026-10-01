@@ -117,6 +117,13 @@ async function registerRecordedLaunch(
     profileName: string;
     constraintsPassed: boolean;
     transaction: string;
+    acceptedRelaxation?: {
+      maxThresholdGap: number;
+      maxReferenceImpactBps: number;
+      maxWhaleImpactBps: number;
+      maxConcentration: number;
+      minRetailProgress: number;
+    };
   },
 ): Promise<{ ok: boolean; status: number; body: unknown }> {
   const { buildLaunchAuthMessage } = await import("@/lib/auth/launchAuth");
@@ -146,6 +153,7 @@ async function registerRecordedLaunch(
       profileName: recorded.profileName,
       constraintsPassed: recorded.constraintsPassed,
       transaction: recorded.transaction,
+      ...(recorded.acceptedRelaxation ? { acceptedRelaxation: recorded.acceptedRelaxation } : {}),
     },
   };
   const message = buildLaunchAuthMessage(payload, signer, issuedAt);
@@ -279,11 +287,38 @@ async function main() {
   const { buildLaunchReview } = await import("@/lib/dbc/launchReview");
   const { WSOL_MINT } = await import("@/lib/constants");
   const { setFreshBlockhash, signAndSendTransaction } = await import("@/lib/send");
-  const policy = designPolicy(saved.brief);
+  let policy = designPolicy(saved.brief);
+  if (saved.acceptRelaxation === true && policy.negotiation.status === "needs-decision") {
+    const proposal = policy.negotiation.proposal;
+    if (!proposal) {
+      writeStatus({ ...base, status: "CONSTRAINT_UNRESOLVED", simulation: "not run" });
+      console.error("The brief asked to accept a budget, but the search had no proposal. Nothing was sent.");
+      process.exit(1);
+    }
+    policy = designPolicy(saved.brief, { acceptedRelaxation: proposal });
+    if (policy.negotiation.status !== "accepted") {
+      writeStatus({ ...base, status: "CONSTRAINT_UNRESOLVED", simulation: "not run" });
+      console.error("The explicit budget still admits no curve. Nothing was sent.");
+      process.exit(1);
+    }
+  }
   const mismatches = saved.expect ? expectMismatches(policy, saved.expect) : [];
   if (mismatches.length > 0) {
     writeStatus({ ...base, status: "BRIEF_MISMATCH", mismatches, simulation: "not run" });
     console.error(`Saved brief does not match the search. Nothing was simulated.\n${mismatches.join("\n")}`);
+    process.exit(1);
+  }
+  if (sendRequested && policy.negotiation.status === "needs-decision") {
+    writeStatus({
+      ...base,
+      status: "CONSTRAINT_UNRESOLVED",
+      simulation: "not run",
+      blocking: policy.negotiation.blocking,
+      proposal: policy.negotiation.proposal,
+    });
+    console.error(
+      "No curve passed the requested constraints. --send was refused. Nothing was sent. Set acceptRelaxation: true on the brief to deploy the explicit proposal.",
+    );
     process.exit(1);
   }
   const parsed = parseBrief(saved.brief);
@@ -662,6 +697,7 @@ async function main() {
     raiseTarget: Number(saved.brief.targetRaise),
     quote: saved.brief.quote,
     constraintsPassed: policy.chosen.feasible,
+    ...(policy.negotiation.status === "accepted" ? { acceptedRelaxation: policy.negotiation.applied } : {}),
     readbackPassed: true,
     checks: {
       fingerprint: true,

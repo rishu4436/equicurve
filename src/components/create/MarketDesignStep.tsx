@@ -5,10 +5,10 @@ import { toast } from "sonner";
 import { formatAtomsExact } from "@/lib/amounts";
 import { getOptionalPoolConfigKey } from "@/lib/constants";
 import { toUserMessage } from "@/lib/errors";
-import { constraintFailureCopy } from "@/lib/market/constraintNotice";
+import { constraintBudgetChanges, constraintFailureCopy } from "@/lib/market/constraintNotice";
 import { scenarioAssumptions } from "@/lib/market/constraints";
-import { designPolicy, toDesignedMarket } from "@/lib/market/policy";
-import type { CandidateReport, LaunchPolicy, ScenarioTracePoint } from "@/lib/market/types";
+import { deploymentAllowed, designPolicy, toDesignedMarket } from "@/lib/market/policy";
+import type { CandidateReport, ConstraintBudget, LaunchPolicy, ScenarioTracePoint } from "@/lib/market/types";
 import type { WizardState } from "./wizardTypes";
 
 function pct(n: number): string {
@@ -39,6 +39,17 @@ function briefKey(state: WizardState): string {
     state.totalSupply,
     state.stressPaths,
   ].join("|");
+}
+
+function budgetKey(budget: ConstraintBudget | null | undefined): string {
+  if (!budget) return "original";
+  return [
+    budget.maxThresholdGap,
+    budget.maxReferenceImpactBps,
+    budget.maxWhaleImpactBps,
+    budget.maxConcentration,
+    budget.minRetailProgress,
+  ].join(",");
 }
 
 const CHART_COLORS = ["#7c6bf2", "#e2b657", "#3dbe8c"];
@@ -107,28 +118,32 @@ export function MarketDesignStep({
   const shared = getOptionalPoolConfigKey();
   const decimals = state.quote === "USDC" ? 6 : 9;
   const assumptions = scenarioAssumptions(state.assetKind);
-  const currentKey = briefKey(state);
+  const currentKey = `${briefKey(state)}|${budgetKey(state.acceptedRelaxation)}`;
   const stale = policy != null && ranKey !== currentKey;
 
-  function run() {
+  function run(relaxation?: ConstraintBudget | null) {
     setRunning(true);
     setError(null);
-    const key = briefKey(state);
+    const accepted = relaxation === undefined ? state.acceptedRelaxation : relaxation;
+    const key = `${briefKey(state)}|${budgetKey(accepted)}`;
     window.setTimeout(() => {
       try {
-        const next = designPolicy({
-          asset: state.assetKind,
-          objective: state.objective,
-          quote: state.quote,
-          targetRaise: state.targetRaise,
-          typicalTrade: state.typicalTrade,
-          participants: state.participants,
-          totalSupply: state.totalSupply,
-          creatorPct: state.feeIssuer,
-          lpLockPct: state.lpLockPct,
-          antiSniper: state.antiSniper,
-          stressPaths: state.stressPaths,
-        });
+        const next = designPolicy(
+          {
+            asset: state.assetKind,
+            objective: state.objective,
+            quote: state.quote,
+            targetRaise: state.targetRaise,
+            typicalTrade: state.typicalTrade,
+            participants: state.participants,
+            totalSupply: state.totalSupply,
+            creatorPct: state.feeIssuer,
+            lpLockPct: state.lpLockPct,
+            antiSniper: state.antiSniper,
+            stressPaths: state.stressPaths,
+          },
+          accepted ? { acceptedRelaxation: accepted } : undefined,
+        );
         setPolicy(next);
         setRanKey(key);
         setPins(
@@ -157,8 +172,20 @@ export function MarketDesignStep({
     });
   }
 
+  function acceptProposal() {
+    const proposal = policy?.negotiation.proposal;
+    if (!proposal || policy.negotiation.status !== "needs-decision") return;
+    patch({ acceptedRelaxation: proposal });
+    run(proposal);
+  }
+
+  function clearBudget() {
+    patch({ acceptedRelaxation: null });
+    run(null);
+  }
+
   function deploy(row: CandidateReport) {
-    if (!policy || stale) return;
+    if (!policy || stale || !deploymentAllowed(policy, row)) return;
     const designed = toDesignedMarket(policy, row);
     const failure = constraintFailureCopy(policy);
     const picked = !row.feasible
@@ -196,8 +223,9 @@ export function MarketDesignStep({
         <p className="mt-1 text-sm text-fg-secondary">
           Research mode. The search scores a sample of configs against the hard constraints, then marks one preferred
           candidate among those it evaluated. A row that fails a constraint stays available to inspect and is labeled as
-          a tradeoff example, not a design that meets the brief. Asset kind is a market-design assumption, not a legal
-          claim. The row you deploy is the config the wallet will sign.
+          a tradeoff example, not a design that meets the brief. If nothing passes, EquiCurve does not relax a limit.
+          Deploy stays blocked until you accept an explicit budget and run the search again. Asset kind is a
+          market-design assumption, not a legal claim. The row you deploy is the config the wallet will sign.
         </p>
       </header>
 
@@ -251,7 +279,7 @@ export function MarketDesignStep({
         <p>10th percentile and worst path: cohort progress toward the threshold. With few paths the 10th percentile sits near the worst path.</p>
       </div>
 
-      <button type="button" className="ec-btn-primary" onClick={run} disabled={running}>
+      <button type="button" className="ec-btn-primary" onClick={() => run()} disabled={running}>
         {running ? "Simulating designs…" : policy ? "Run the search again" : "Simulate market designs"}
       </button>
       {error && (
@@ -267,6 +295,50 @@ export function MarketDesignStep({
 
       {policy && (
         <>
+          {policy.negotiation.status === "needs-decision" && policy.negotiation.proposal && (
+            <div
+              className="space-y-2 rounded-input border border-signal-warn/40 bg-signal-warn/10 px-4 py-3 text-sm"
+              role="alert"
+              data-testid="constraint-budget"
+            >
+              <p className="font-semibold text-fg-primary">Constraint decision</p>
+              <p className="text-fg-secondary">
+                No curve passed the requested constraints. Nothing was relaxed. Deploy stays blocked until you accept a
+                wider budget.
+              </p>
+              <p className="text-fg-secondary">
+                This budget admits {policy.chosen.profileName}. It is the smallest loosening of the limits that row missed.
+              </p>
+              <ul className="list-disc space-y-1 pl-5 text-xs text-fg-secondary">
+                {constraintBudgetChanges(policy.negotiation.requested, policy.negotiation.proposal).map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+              <button type="button" className="ec-btn-primary" onClick={acceptProposal} disabled={running || stale}>
+                Recalculate with this budget
+              </button>
+            </div>
+          )}
+          {policy.negotiation.status === "accepted" && (
+            <div
+              className="space-y-2 rounded-input border border-signal-warn/40 bg-signal-warn/10 px-4 py-3 text-sm"
+              data-testid="constraint-budget-accepted"
+            >
+              <p className="font-semibold text-fg-primary">Accepted budget</p>
+              <p className="text-fg-secondary">
+                You accepted a wider budget. The original constraints were not met. Review uses this budget, and the
+                design record keeps it.
+              </p>
+              <ul className="list-disc space-y-1 pl-5 text-xs text-fg-secondary">
+                {constraintBudgetChanges(policy.negotiation.requested, policy.negotiation.applied).map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+              <button type="button" className="ec-btn-secondary" onClick={clearBudget} disabled={running}>
+                Use the original constraints
+              </button>
+            </div>
+          )}
           {failure && (
             <div
               className="space-y-1 rounded-input border border-signal-warn/40 bg-signal-warn/10 px-4 py-3 text-sm"
@@ -333,8 +405,9 @@ export function MarketDesignStep({
                   const whale = scenario(row, "whale");
                   const sell = scenario(row, "sell-pressure");
                   const retail = scenario(row, "retail");
+                  const allowed = !stale && deploymentAllowed(policy, row);
                   const selected =
-                    !stale &&
+                    allowed &&
                     state.designed?.configFingerprint === row.configFingerprint &&
                     state.presetId === row.recipe.presetId;
                   const pinnedRow = pins.includes(row.profileId);
@@ -386,11 +459,17 @@ export function MarketDesignStep({
                       <td className="py-2">
                         <button
                           type="button"
-                          className={selected ? "ec-btn-secondary" : row.feasible ? "ec-btn-primary" : "ec-btn-secondary"}
-                          disabled={stale}
+                          className={selected ? "ec-btn-secondary" : allowed ? "ec-btn-primary" : "ec-btn-secondary"}
+                          disabled={!allowed}
                           onClick={() => deploy(row)}
                         >
-                          {row.feasible ? "Review this config" : "Inspect this tradeoff"}
+                          {policy.negotiation.status === "needs-decision"
+                            ? "Blocked until you accept a budget"
+                            : !allowed
+                              ? "Outside this budget"
+                              : row.feasible
+                                ? "Review this config"
+                                : "Review with this budget"}
                         </button>
                       </td>
                     </tr>

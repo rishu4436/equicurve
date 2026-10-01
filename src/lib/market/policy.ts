@@ -20,6 +20,8 @@ import { objectiveLabel } from "./score";
 import type {
   AssetKind,
   CandidateReport,
+  ConstraintBudget,
+  ConstraintNegotiation,
   DynamicFeeStatus,
   LaunchBrief,
   LaunchPolicy,
@@ -262,7 +264,7 @@ function metricsOf(c: CandidateReport): FrontierMetrics {
   };
 }
 
-function violations(c: CandidateReport, limits: DesignConstraints): string[] {
+function violations(c: CandidateReport, limits: ConstraintBudget): string[] {
   const m = metricsOf(c);
   const out: string[] = [];
   if (c.thresholdGap > limits.maxThresholdGap) {
@@ -448,6 +450,86 @@ function whyLines(
   ];
 }
 
+function budgetFrom(limits: DesignConstraints): ConstraintBudget {
+  return {
+    maxThresholdGap: limits.maxThresholdGap,
+    maxReferenceImpactBps: limits.maxReferenceImpactBps,
+    maxWhaleImpactBps: limits.maxWhaleImpactBps,
+    maxConcentration: limits.maxConcentration,
+    minRetailProgress: limits.minRetailProgress,
+  };
+}
+
+function finiteOr(value: number, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+/** A field that would tighten the requested budget is ignored. Acceptance can only loosen. */
+export function loosenConstraintBudget(requested: ConstraintBudget, accepted: ConstraintBudget): ConstraintBudget {
+  return {
+    maxThresholdGap: Math.max(requested.maxThresholdGap, finiteOr(accepted.maxThresholdGap, requested.maxThresholdGap)),
+    maxReferenceImpactBps: Math.max(
+      requested.maxReferenceImpactBps,
+      finiteOr(accepted.maxReferenceImpactBps, requested.maxReferenceImpactBps),
+    ),
+    maxWhaleImpactBps: Math.max(requested.maxWhaleImpactBps, finiteOr(accepted.maxWhaleImpactBps, requested.maxWhaleImpactBps)),
+    maxConcentration: Math.max(requested.maxConcentration, finiteOr(accepted.maxConcentration, requested.maxConcentration)),
+    minRetailProgress: Math.min(requested.minRetailProgress, finiteOr(accepted.minRetailProgress, requested.minRetailProgress)),
+  };
+}
+
+function sameBudget(a: ConstraintBudget, b: ConstraintBudget): boolean {
+  return (
+    a.maxThresholdGap === b.maxThresholdGap &&
+    a.maxReferenceImpactBps === b.maxReferenceImpactBps &&
+    a.maxWhaleImpactBps === b.maxWhaleImpactBps &&
+    a.maxConcentration === b.maxConcentration &&
+    a.minRetailProgress === b.minRetailProgress
+  );
+}
+
+/** Smallest loosening that lets this row pass. Fields it already meets stay at the requested limit. */
+function proposalFor(row: CandidateReport, requested: ConstraintBudget): ConstraintBudget {
+  const metrics = metricsOf(row);
+  const concentration = scenarioOf(row, "retail")?.concentration ?? 0;
+  return loosenConstraintBudget(requested, {
+    maxThresholdGap: row.thresholdGap,
+    maxReferenceImpactBps: metrics.referenceImpactBps,
+    maxWhaleImpactBps: metrics.whaleImpactBps,
+    maxConcentration: concentration,
+    minRetailProgress: metrics.retailProgress,
+  });
+}
+
+function rankFrontier(pool: CandidateReport[], objective: LaunchBrief["objective"]): CandidateReport[] {
+  const frontier = paretoFrontier(pool, metricsOf);
+  frontier.sort((a, b) => prefer(objective, metricsOf(a), metricsOf(b)));
+  return frontier;
+}
+
+/**
+ * Feasible rows when any exist. Otherwise the in-band rows, then the three closest
+ * thresholds. This pool is for inspection. It does not loosen a constraint.
+ */
+function inspectionPool(rows: CandidateReport[], limits: DesignConstraints): CandidateReport[] {
+  const feasible = rows.filter((row) => row.feasible);
+  if (feasible.length > 0) return feasible;
+  const inBand = rows.filter((row) => row.thresholdGap <= limits.maxThresholdGap);
+  if (inBand.length > 0) return inBand;
+  return [...rows].sort((a, b) => a.thresholdGap - b.thresholdGap).slice(0, 3);
+}
+
+export function passesConstraintBudget(row: CandidateReport, budget: ConstraintBudget): boolean {
+  return violations(row, budget).length === 0;
+}
+
+/** True when this row may be signed. An unresolved search is never deployable. */
+export function deploymentAllowed(policy: LaunchPolicy, row: CandidateReport = policy.chosen): boolean {
+  if (policy.negotiation.status === "satisfied") return row.feasible;
+  if (policy.negotiation.status === "accepted") return passesConstraintBudget(row, policy.negotiation.applied);
+  return false;
+}
+
 function promisingMultiples(rows: CandidateReport[], presets: PresetId[]): number[] {
   const feasible = rows.filter((row) => row.feasible);
   if (feasible.length > 0) return [...new Set(feasible.map((row) => row.priceMultiple))];
@@ -461,7 +543,10 @@ function promisingMultiples(rows: CandidateReport[], presets: PresetId[]): numbe
   return [...new Set(closest)];
 }
 
-export function designPolicy(input: LaunchBrief): LaunchPolicy {
+export function designPolicy(
+  input: LaunchBrief,
+  options?: { acceptedRelaxation?: ConstraintBudget },
+): LaunchPolicy {
   const parsed = parseBrief(input);
   const limitsSpec = constraintsFor(parsed.brief.asset, parsed.brief.objective);
   const coarse = multiplesIn(limitsSpec);
@@ -500,31 +585,56 @@ export function designPolicy(input: LaunchBrief): LaunchPolicy {
     candidateCount: rows.length,
     note: "Coarse anchors are the minimum, midpoint, and maximum of the permitted price-multiple range. One finer midpoint is then scored beside each promising anchor. This sample does not prove a global optimum.",
   };
-  let pool = rows.filter((r) => r.feasible);
-  const relaxed: string[] = [];
-  if (pool.length === 0) {
-    pool = rows.filter((r) => r.thresholdGap <= limitsSpec.maxThresholdGap);
-    relaxed.push("Impact, concentration, and participation limits were relaxed because none of the curves passed them.");
+  const requested = budgetFrom(limitsSpec);
+  const inspection = rankFrontier(inspectionPool(rows, limitsSpec), parsed.brief.objective);
+  if (!inspection[0]) throw new EquiCurveError("The frontier was empty.", "SDK");
+  let status: ConstraintNegotiation["status"] = rows.some((row) => row.feasible) ? "satisfied" : "needs-decision";
+  let applied = requested;
+  let pool = inspection;
+  const proposal = status === "satisfied" ? null : proposalFor(inspection[0], requested);
+  const accepted = options?.acceptedRelaxation;
+  if (status === "needs-decision" && accepted) {
+    const widened = loosenConstraintBudget(requested, accepted);
+    if (!sameBudget(widened, requested)) {
+      const passing = rows.filter((row) => passesConstraintBudget(row, widened));
+      if (passing.length > 0) {
+        pool = passing;
+        applied = widened;
+        status = "accepted";
+      }
+    }
   }
-  if (pool.length === 0) {
-    pool = [...rows].sort((a, b) => a.thresholdGap - b.thresholdGap).slice(0, 3);
-    relaxed.push("No curve landed within 5% of the requested raise. The closest curves are shown.");
-  }
-  const frontier = paretoFrontier(pool, metricsOf);
-  frontier.sort((a, b) => prefer(parsed.brief.objective, metricsOf(a), metricsOf(b)));
-  frontier.forEach((row, i) => {
-    row.score = Math.max(0, 100 - i);
+  for (const row of rows) row.score = 0;
+  const frontier = status === "accepted" ? rankFrontier(pool, parsed.brief.objective) : inspection;
+  frontier.forEach((row, index) => {
+    row.score = Math.max(0, 100 - index);
   });
   const chosen = frontier[0];
   if (!chosen) throw new EquiCurveError("The frontier was empty.", "SDK");
+  const negotiation: ConstraintNegotiation = {
+    status,
+    requested,
+    applied,
+    proposal,
+    blocking: status === "satisfied" ? [] : chosen.rejected,
+  };
   const alternatives = frontier.slice(1);
   const priorities = objectivePriorities(parsed.brief.objective);
   const limits = [
     "Order flow is synthetic. It is not a prediction of who will trade or what the price will be.",
     OBSERVED_NOTE,
     `Hard constraints come from the asset profile (${parsed.brief.asset}) and the objective (${parsed.brief.objective}).`,
-    ...relaxed,
   ];
+  if (status === "needs-decision") {
+    limits.push(
+      "No curve passed the requested constraints. Nothing was relaxed. Deploy stays blocked until the issuer accepts an explicit budget.",
+    );
+  }
+  if (status === "accepted") {
+    limits.push(
+      "The issuer accepted a wider budget. The original constraints were not met. This selection is not a silent relaxation.",
+    );
+  }
   if (rows.some((r) => r.dynamicFeeStatus === "base-only")) {
     limits.push("A dynamic fee was requested but its parameters could not be read, so that curve was scored on the base fee only.");
   }
@@ -541,6 +651,13 @@ export function designPolicy(input: LaunchBrief): LaunchPolicy {
     limits.push("The dynamic fee is replayed inside the simulator. It is a model of the program, not a quote from a live pool.");
   }
   const configHash = recipeConfigHash(chosen.recipe);
+  const why = whyLines(parsed, chosen, alternatives[0], priorities, search);
+  if (status === "needs-decision") {
+    why.push("Nothing was relaxed. Deploy stays blocked until the issuer accepts an explicit budget.");
+  }
+  if (status === "accepted") {
+    why.push("The issuer accepted a wider budget. The original constraints were not met.");
+  }
   return {
     version: 1,
     policyId: `EQ-${sha(identity(parsed))}`,
@@ -555,9 +672,10 @@ export function designPolicy(input: LaunchBrief): LaunchPolicy {
     chosen,
     alternatives,
     candidates: [...frontier, ...rows.filter((r) => !frontier.includes(r))],
-    why: whyLines(parsed, chosen, alternatives[0], priorities, search),
+    why,
     limits,
     search,
+    negotiation,
     observedLaunches: null,
     observedNote: OBSERVED_NOTE,
   };
@@ -601,7 +719,8 @@ export function toDesignedMarket(policy: LaunchPolicy, picked: CandidateReport =
     stressP10Progress: picked.stressP10Progress,
     stressWorstProgress: picked.stressWorstProgress,
     configFingerprint: picked.configFingerprint,
-    constraintsPassed: picked.feasible,
+    constraintsPassed: policy.negotiation.status === "satisfied" && picked.feasible,
+    acceptedRelaxation: policy.negotiation.status === "accepted" ? policy.negotiation.applied : undefined,
     candidateCount: policy.candidates.length,
     fullyFeasibleCount: policy.candidates.filter((row) => row.feasible).length,
     rejected: picked.rejected,

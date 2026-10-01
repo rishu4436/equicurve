@@ -2,7 +2,7 @@ import type { PresetId } from "@/lib/dbc/types";
 import type { Sector } from "@/lib/demo/offerings";
 import { MIN_LP_LOCK_PCT } from "@/lib/dbc/presets";
 import { parseUiAmount } from "@/lib/amounts";
-import type { AssetKind, DesignedMarket, MarketObjective } from "@/lib/market/types";
+import type { AssetKind, ConstraintBudget, DesignedMarket, MarketObjective } from "@/lib/market/types";
 import { validateWizard, type FieldErrors } from "@/lib/validation";
 
 export const WIZARD_STEPS = [
@@ -67,6 +67,8 @@ export type WizardState = {
   designed: DesignedMarket | null;
   designWhy: string[];
   designLimits: string[];
+  /** Wider budget the issuer accepted. Null until they explicitly accept one. */
+  acceptedRelaxation: ConstraintBudget | null;
   /** Creator (issuer) share of trading fees; platform/partner gets remainder. */
   feeIssuer: number;
   antiSniper: boolean;
@@ -113,6 +115,7 @@ export const INITIAL_WIZARD: WizardState = {
   designed: null,
   designWhy: [],
   designLimits: [],
+  acceptedRelaxation: null,
   feeIssuer: 70,
   antiSniper: true,
   lpLockPct: 100,
@@ -161,12 +164,15 @@ export function applyWizardPatch(s: WizardState, p: Partial<WizardState>): Wizar
   const touched = Object.keys(p);
   const clears =
     !("marketCaps" in p) &&
-    (touched.some((k) => (DESIGN_INPUT_KEYS as readonly string[]).includes(k)) || "presetId" in p);
+    (touched.some((k) => (DESIGN_INPUT_KEYS as readonly string[]).includes(k)) ||
+      "presetId" in p ||
+      "acceptedRelaxation" in p);
   if (clears) {
     next.marketCaps = null;
     next.designed = null;
     next.designWhy = [];
     next.designLimits = [];
+    if (!("acceptedRelaxation" in p)) next.acceptedRelaxation = null;
   }
   if (typeof p.targetRaise === "string") {
     const n = Number(p.targetRaise);

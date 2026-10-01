@@ -21,6 +21,11 @@ export type SavedBriefFile = {
     stressPaths: number;
     seed: number;
   };
+  /**
+   * When true, a search with no feasible row is rerun under the inspection proposal.
+   * --send refuses an unresolved search unless this is set. Existing proofs leave it unset.
+   */
+  acceptRelaxation?: boolean;
   launch: {
     name: string;
     symbol: string;

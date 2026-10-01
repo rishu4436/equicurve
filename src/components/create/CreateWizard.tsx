@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { getClusterLabel, getCluster, getOptionalPoolConfigKey, WSOL_MINT } from "@/lib/constants";
+import { getClusterLabel, getCluster, getOptionalPoolConfigKey, isLocalRpc, WSOL_MINT } from "@/lib/constants";
 import { launchCurveConfig, planLaunchAddresses, prepareLaunchTransaction } from "@/lib/dbc/create";
 import { signLaunchPayload, type LaunchAuthPayload, type SignedLaunchBody } from "@/lib/auth/launchAuth";
 import { getUsdcMint } from "@/lib/constants";
@@ -169,6 +169,12 @@ export function CreateWizard() {
       toast.error("Design a market before deploying. The transaction builds that design's market caps.");
       return;
     }
+    if (state.designed.constraintsPassed !== true && !state.designed.acceptedRelaxation) {
+      toast.error(
+        "This design does not meet the requested constraints. Accept an explicit budget in Market design before deploying.",
+      );
+      return;
+    }
     if (getOptionalPoolConfigKey()) {
       toast.error(
         "A shared pool config is set. It cannot deploy this market design. Unset NEXT_PUBLIC_POOL_CONFIG_KEY, then rerun the search.",
@@ -258,6 +264,7 @@ export function CreateWizard() {
           expected: expectedDesign,
           profileName: (state.designed.profileName || state.presetId).slice(0, 80),
           constraintsPassed: state.designed.constraintsPassed === true,
+          ...(state.designed.acceptedRelaxation ? { acceptedRelaxation: state.designed.acceptedRelaxation } : {}),
         },
       };
 
@@ -275,14 +282,23 @@ export function CreateWizard() {
         } catch (e) {
           setLaunchLog((l) => [
             ...l,
-            `Message signature skipped (${toUserMessage(e)}) — offering stays local-only, metadata inline.`,
+            isLocalRpc()
+              ? `Message signature skipped (${toUserMessage(e)}) — offering stays local-only, metadata inline.`
+              : `Message signature was not completed (${toUserMessage(e)}). The launch was not sent.`,
           ]);
         }
       } else {
         setLaunchLog((l) => [
           ...l,
-          "Wallet does not support signMessage — offering stays local-only, metadata inline.",
+          isLocalRpc()
+            ? "Wallet does not support signMessage — offering stays local-only, metadata inline."
+            : "This wallet cannot sign the registry message. The launch was not sent.",
         ]);
+      }
+      if (!signed && !isLocalRpc()) {
+        throw new Error(
+          "This deployment needs your wallet's registry signature before it can be sent. Without that signature the market would not be publicly discoverable. Sign the message, or use a wallet that supports signMessage.",
+        );
       }
 
       const meta = await resolveMetadataUri({

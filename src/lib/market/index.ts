@@ -7,18 +7,23 @@ export { dominates, objectivePriorities, paretoFrontier, prefer } from "./pareto
 export {
   DBC_SDK_VERSION,
   MARKET_MODEL_VERSION,
+  deploymentAllowed,
   designPolicy,
+  loosenConstraintBudget,
   materializeRecipe,
   parseBrief,
+  passesConstraintBudget,
   recipeConfigHash,
   toDesignedMarket,
 } from "./policy";
 export { namedScenarios, referenceBuy, replay } from "./scenarios";
-export { constraintFailureCopy, constraintFailureFromDesigned } from "./constraintNotice";
+export { constraintBudgetChanges, constraintFailureCopy, constraintFailureFromDesigned } from "./constraintNotice";
 export { objectiveLabel } from "./score";
 export type {
   AssetKind,
   CandidateReport,
+  ConstraintBudget,
+  ConstraintNegotiation,
   DesignedMarket,
   DynamicFeeStatus,
   LaunchBrief,

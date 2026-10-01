@@ -67,6 +67,17 @@ describe("wizard design wiring", () => {
     expect(cleared.marketCaps).toBeNull();
     expect(cleared.designed).toBeNull();
     expect(cleared.designWhy).toEqual([]);
+    const budget = {
+      maxThresholdGap: 0.08,
+      maxReferenceImpactBps: 900,
+      maxWhaleImpactBps: 1600,
+      maxConcentration: 0.5,
+      minRetailProgress: 0.1,
+    };
+    const accepted = applyWizardPatch(selected, { acceptedRelaxation: budget });
+    expect(accepted.designed).toBeNull();
+    expect(accepted.acceptedRelaxation).toEqual(budget);
+    expect(applyWizardPatch(accepted, { participants: 12 }).acceptedRelaxation).toBeNull();
   });
 
   it("refuses a shared config when the review is showing searched caps", () => {

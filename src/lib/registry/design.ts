@@ -12,6 +12,7 @@ import {
   type ExpectedMarketConfig,
 } from "@/lib/dbc/deploymentReadback";
 import type { QuoteLabel } from "@/lib/dbc/types";
+import type { ConstraintBudget } from "@/lib/market/types";
 import type { PublicDeployment } from "./publicDeployments";
 import type { RegistryLaunch } from "./types";
 
@@ -64,6 +65,24 @@ export const expectedMarketConfigSchema = z
     migrationOption: atom,
     tokenQuoteDecimal: atom,
     tokenBaseDecimal: atom,
+    migrationFeeOption: atom.optional(),
+    migrationFeePercentage: atom.optional(),
+    creatorMigrationFeePercentage: atom.optional(),
+    migratedCollectFeeMode: atom.optional(),
+    migratedDynamicFee: atom.optional(),
+    migratedPoolFeeBps: atom.optional(),
+    migratedPoolBaseFeeMode: atom.optional(),
+    dammV2Config: atom.optional(),
+  })
+  .strict();
+
+const constraintBudgetSchema = z
+  .object({
+    maxThresholdGap: z.number().finite(),
+    maxReferenceImpactBps: z.number().finite(),
+    maxWhaleImpactBps: z.number().finite(),
+    maxConcentration: z.number().finite(),
+    minRetailProgress: z.number().finite(),
   })
   .strict();
 
@@ -77,6 +96,8 @@ export const registryDesignSchema = z
     expected: expectedMarketConfigSchema,
     profileName: z.string().min(1).max(80),
     constraintsPassed: z.boolean(),
+    /** Present only when the issuer accepted a wider budget. Omitted on older designs. */
+    acceptedRelaxation: constraintBudgetSchema.optional(),
     transaction: z
       .string()
       .regex(/^[1-9A-HJ-NP-Za-km-z]{64,100}$/, "transaction must be a base58 signature")
@@ -123,6 +144,7 @@ export type ResolvedDeployment = {
   transaction: string | null;
   constraintsPassed: boolean;
   profileName: string;
+  acceptedRelaxation?: ConstraintBudget;
 };
 
 export function designIsConsistent(design: RegistryDesign): boolean {
@@ -157,6 +179,7 @@ export function resolveDeploymentRecord(args: {
       transaction: reg.design.transaction ?? null,
       constraintsPassed: reg.design.constraintsPassed,
       profileName: reg.design.profileName,
+      acceptedRelaxation: reg.design.acceptedRelaxation,
     };
   }
   const cat = args.catalog;
