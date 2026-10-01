@@ -25,7 +25,49 @@
       "migrationThreshold": true,
       "readback": true
     },
-    "deployedAt": "2026-10-01T11:50:07.000Z"
+    "deployedAt": "2026-10-01T11:50:07.000Z",
+    "canonicalConfig": "5566765500564248\n9641913906080476:8350150398310008660181938192139124,79226673521066979257578248091:2722949887333023254426086695\n99999604415\n90000000:80:90:270:1\n:1:1844674407370955:956:10:120:5000:14460000\n70\n100\n0\n0\n0\ntrue\n0\n1\n\n",
+    "expected": {
+      "sqrtStartPrice": "5566765500564248",
+      "migrationQuoteThreshold": "99999604415",
+      "curve": [
+        {
+          "sqrtPrice": "9641913906080476",
+          "liquidity": "8350150398310008660181938192139124"
+        },
+        {
+          "sqrtPrice": "79226673521066979257578248091",
+          "liquidity": "2722949887333023254426086695"
+        }
+      ],
+      "baseFee": {
+        "cliffFeeNumerator": "90000000",
+        "firstFactor": "80",
+        "secondFactor": "90",
+        "thirdFactor": "270",
+        "baseFeeMode": "1"
+      },
+      "dynamicFee": {
+        "initialized": "",
+        "binStep": "1",
+        "binStepU128": "1844674407370955",
+        "variableFeeControl": "956",
+        "filterPeriod": "10",
+        "decayPeriod": "120",
+        "reductionFactor": "5000",
+        "maxVolatilityAccumulator": "14460000"
+      },
+      "creatorTradingFeePercentage": "70",
+      "partnerPermanentLockedLiquidityPercentage": "100",
+      "partnerLiquidityPercentage": "0",
+      "creatorPermanentLockedLiquidityPercentage": "0",
+      "creatorLiquidityPercentage": "0",
+      "enableFirstSwapWithMinFee": "true",
+      "collectFeeMode": "0",
+      "migrationOption": "1",
+      "tokenQuoteDecimal": "",
+      "tokenBaseDecimal": ""
+    }
   },
   {
     "network": "Solana Devnet",
@@ -53,6 +95,48 @@
       "migrationThreshold": true,
       "readback": true
     },
-    "deployedAt": "2026-10-01T12:14:54.000Z"
+    "deployedAt": "2026-10-01T12:14:54.000Z",
+    "canonicalConfig": "5732507132835280\n8106982002830079:1146502892631305408434029899800899,79226673521066979257578248091:251597944820584590345740875\n8000245007\n12000000:90:160:94444:0\n:1:1844674407370955:334:10:120:5000:14460000\n40\n100\n0\n0\n0\nfalse\n0\n1\n\n",
+    "expected": {
+      "sqrtStartPrice": "5732507132835280",
+      "migrationQuoteThreshold": "8000245007",
+      "curve": [
+        {
+          "sqrtPrice": "8106982002830079",
+          "liquidity": "1146502892631305408434029899800899"
+        },
+        {
+          "sqrtPrice": "79226673521066979257578248091",
+          "liquidity": "251597944820584590345740875"
+        }
+      ],
+      "baseFee": {
+        "cliffFeeNumerator": "12000000",
+        "firstFactor": "90",
+        "secondFactor": "160",
+        "thirdFactor": "94444",
+        "baseFeeMode": "0"
+      },
+      "dynamicFee": {
+        "initialized": "",
+        "binStep": "1",
+        "binStepU128": "1844674407370955",
+        "variableFeeControl": "334",
+        "filterPeriod": "10",
+        "decayPeriod": "120",
+        "reductionFactor": "5000",
+        "maxVolatilityAccumulator": "14460000"
+      },
+      "creatorTradingFeePercentage": "40",
+      "partnerPermanentLockedLiquidityPercentage": "100",
+      "partnerLiquidityPercentage": "0",
+      "creatorPermanentLockedLiquidityPercentage": "0",
+      "creatorLiquidityPercentage": "0",
+      "enableFirstSwapWithMinFee": "false",
+      "collectFeeMode": "0",
+      "migrationOption": "1",
+      "tokenQuoteDecimal": "",
+      "tokenBaseDecimal": ""
+    }
   }
 ]

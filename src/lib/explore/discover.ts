@@ -1,13 +1,14 @@
 import { PublicKey } from "@solana/web3.js";
-import { getCluster, getOptionalPoolConfigKey } from "@/lib/constants";
+import { WSOL_MINT, getCluster, getOptionalPoolConfigKey, knownUsdcMints } from "@/lib/constants";
 import { getServerConnection } from "@/lib/connection";
 import { getDbcClient } from "@/lib/dbc/client";
+import { compareDeploymentReadback } from "@/lib/dbc/deploymentReadback";
 import { lookupPoolOnChain } from "@/lib/dbc/migrate";
 import { unwrapPoolState } from "@/lib/dbc/poolAccount";
 import type { PresetId } from "@/lib/dbc/types";
 import { entryFromChain, type ChainLookupResult } from "@/lib/registry/authorize";
 import { USDC_MINTS } from "@/lib/registry/chain";
-import { getPublicDeployment } from "@/lib/registry/publicDeployments";
+import { getRecordedDeployment } from "@/lib/registry/publicDeployments";
 import { getRegistryMeta, listRegistryLaunches, putRegistryLaunch } from "@/lib/registry/store";
 import type { RegistryLaunch } from "@/lib/registry/types";
 import { isRateLimitError, mapWithConcurrency, withRpcRetry, withTimeout } from "@/lib/rpc";
@@ -58,7 +59,7 @@ function registryToOffering(r: RegistryLaunch, cluster: string): ExploreOffering
       cluster: r.cluster,
       illustrative: false,
       source: "registry",
-      deploymentVerified: getPublicDeployment(r.pool) != null,
+      deploymentVerified: false,
     },
     cluster,
   );
@@ -167,6 +168,48 @@ async function discoverBySharedConfig(
   }
 }
 
+function quoteMintFor(quote: string): string | null {
+  if (quote === "SOL") return WSOL_MINT.toBase58();
+  if (quote === "USDC") return knownUsdcMints()[0] ?? null;
+  return null;
+}
+
+/** The Explore chip follows the same live comparison as the market page. */
+async function markLiveDeployments(
+  offerings: ExploreOffering[],
+  lookups: Map<string, ChainLookupResult>,
+  connection: ReturnType<typeof getServerConnection>,
+): Promise<void> {
+  for (const offering of offerings) {
+    offering.deploymentVerified = false;
+    const row = getRecordedDeployment(offering.pool);
+    const lookup = lookups.get(offering.pool);
+    const quoteMint = row ? quoteMintFor(row.quote) : null;
+    if (!row?.expected || !row.canonicalConfig || !quoteMint || lookup?.status !== "verified") continue;
+    try {
+      const onChain = await getDbcClient(connection).state.getPoolConfig(new PublicKey(row.config));
+      if (!onChain) continue;
+      const verdict = compareDeploymentReadback({
+        expected: row.expected,
+        canonicalConfig: row.canonicalConfig,
+        fingerprint: row.fingerprint,
+        identity: {
+          pool: row.pool,
+          config: row.config,
+          mint: row.mint,
+          threshold: row.migrationQuoteThresholdAtoms,
+          quoteMint,
+        },
+        snapshot: lookup.snapshot,
+        chain: onChain as unknown as Record<string, unknown>,
+      });
+      offering.deploymentVerified = verdict.verified;
+    } catch {
+      offering.deploymentVerified = false;
+    }
+  }
+}
+
 /** Persist chain-derived status changes back to the registry (best-effort). */
 async function persistStatusChanges(registry: RegistryLaunch[], offerings: ExploreOffering[], lookups: Map<string, ChainLookupResult>) {
   const byPool = new Map(registry.map((r) => [r.pool, r]));
@@ -224,6 +267,7 @@ export async function buildExploreResponse(
     },
   });
   offerings = enrich.offerings;
+  await markLiveDeployments(offerings, lookups, connection);
   void persistStatusChanges(registry, offerings, lookups);
 
   const vc = countVerification(offerings);

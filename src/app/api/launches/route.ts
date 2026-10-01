@@ -54,7 +54,15 @@ export async function POST(req: Request) {
     usdcMints: USDC_MINTS,
   });
   if (!result.ok) return err(result.status, result.error, result.code);
-  await putRegistryLaunch(result.entry);
+  try {
+    await putRegistryLaunch(result.entry);
+  } catch {
+    return err(
+      503,
+      "Registry storage is unavailable. The pool was not saved for Explore.",
+      "storage_unavailable",
+    );
+  }
   invalidateExploreCache();
   return NextResponse.json({
     ok: true,
@@ -81,7 +89,11 @@ export async function PATCH(req: Request) {
     verifyDamm: serverVerifyDamm,
   });
   if (!result.ok) return err(result.status, result.error, result.code);
-  await putRegistryLaunch(result.entry);
+  try {
+    await putRegistryLaunch(result.entry);
+  } catch {
+    return err(503, "Registry storage is unavailable. The refresh was not saved.", "storage_unavailable");
+  }
   invalidateExploreCache();
   return NextResponse.json({ ok: true, launch: toPublicLaunch(result.entry), registry: getRegistryMeta() });
 }

@@ -1,4 +1,5 @@
 import type { Sector } from "@/lib/demo/offerings";
+import { recordedFingerprintMatches, type ExpectedMarketConfig } from "@/lib/dbc/deploymentReadback";
 import type { PresetId, QuoteLabel } from "@/lib/dbc/types";
 import type { RegistryLaunch } from "./types";
 import records from "./publicDeployments.json";
@@ -33,16 +34,23 @@ export type PublicDeployment = {
   constraintsPassed: boolean;
   readbackPassed: boolean;
   checks: DeploymentChecks;
+  /** Canonical config string whose sha256 prefix is `fingerprint`. */
+  canonicalConfig: string;
+  /** Field snapshot the live readback compares to the chain. */
+  expected: ExpectedMarketConfig;
   deployedAt: string;
 };
 
 function isVerified(row: PublicDeployment): boolean {
   return (
-    row.readbackPassed &&
-    row.checks.fingerprint &&
-    row.checks.poolConfiguration &&
-    row.checks.migrationThreshold &&
-    row.checks.readback
+    row.readbackPassed === true &&
+    row.checks?.fingerprint === true &&
+    row.checks?.poolConfiguration === true &&
+    row.checks?.migrationThreshold === true &&
+    row.checks?.readback === true &&
+    typeof row.canonicalConfig === "string" &&
+    recordedFingerprintMatches(row.canonicalConfig, row.fingerprint) &&
+    row.expected?.migrationQuoteThreshold === row.migrationQuoteThresholdAtoms
   );
 }
 
@@ -52,6 +60,11 @@ export function listPublicDeployments(): PublicDeployment[] {
 
 export function getPublicDeployment(pool: string): PublicDeployment | null {
   return listPublicDeployments().find((row) => row.pool === pool) ?? null;
+}
+
+/** Catalog row before the live chain comparison. Null when the pool was never recorded. */
+export function getRecordedDeployment(pool: string): PublicDeployment | null {
+  return (records as PublicDeployment[]).find((row) => row.pool === pool) ?? null;
 }
 
 /** Registry row for Explore. Chain fields are the recorded readback, not a client claim. */

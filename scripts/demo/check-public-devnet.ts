@@ -535,6 +535,7 @@ async function main() {
     (policy.chosen.feasible
       ? "Public-devnet deployment. The selected design met the issuer constraints, and the on-chain readback matched it."
       : "Public-devnet deployment. The preferred candidate missed an issuer constraint. The on-chain readback matched that design.");
+  const { canonicalConfigText, expectedFromConfig } = await import("@/lib/dbc/deploymentReadback");
   const recorded = {
     network: "Solana Devnet" as const,
     cluster: "devnet" as const,
@@ -561,6 +562,8 @@ async function main() {
       migrationThreshold: true,
       readback: true,
     },
+    canonicalConfig: canonicalConfigText(builtConfig),
+    expected: expectedFromConfig(builtConfig),
     deployedAt,
   };
   const catalogPath = resolve(ROOT, "src/lib/registry/publicDeployments.json");

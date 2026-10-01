@@ -5,17 +5,22 @@ import type { LaunchRegistryStore, RegistryFilePayload, RegistryLaunch } from ".
 /** Single Redis key holding the whole registry JSON blob (same shape as the file). */
 export const UPSTASH_REGISTRY_KEY = "equicurve:launches:registry";
 
+function upstashRestUrl(): string {
+  return process.env.UPSTASH_REDIS_REST_URL?.trim() || process.env.KV_REST_API_URL?.trim() || "";
+}
+
+function upstashRestToken(): string {
+  return process.env.UPSTASH_REDIS_REST_TOKEN?.trim() || process.env.KV_REST_API_TOKEN?.trim() || "";
+}
+
 export function isUpstashConfigured(): boolean {
-  return Boolean(
-    process.env.UPSTASH_REDIS_REST_URL?.trim() && process.env.UPSTASH_REDIS_REST_TOKEN?.trim(),
-  );
+  return Boolean(upstashRestUrl() && upstashRestToken());
 }
 
 export function createUpstashClient(): Redis {
-  const url = process.env.UPSTASH_REDIS_REST_URL?.trim();
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN?.trim();
-  if (!url || !token) throw new Error("Upstash Redis env not configured");
-  return new Redis({ url, token });
+  if (!isUpstashConfigured()) throw new Error("Upstash Redis env not configured");
+  // Redis.fromEnv reads UPSTASH_REDIS_REST_* and falls back to KV_REST_API_*.
+  return Redis.fromEnv();
 }
 
 export function createUpstashStore(redis: Redis): LaunchRegistryStore {
@@ -30,10 +35,16 @@ export function createUpstashStore(redis: Redis): LaunchRegistryStore {
       return (await read()).launches.find((l) => l.pool === pool) ?? null;
     },
     async put(entry: RegistryLaunch): Promise<RegistryLaunch> {
-      // Note: read-modify-write on one key; concurrent writers on different
-      // instances can race (last write wins). Acceptable for the MVP registry.
-      await redis.set(UPSTASH_REGISTRY_KEY, mergeEntry(await read(), entry));
-      return entry;
+      // One JSON blob. Retry when another writer replaces the key mid-update
+      // so a successful response means this pool is actually stored.
+      for (let attempt = 0; attempt < 4; attempt++) {
+        await redis.set(UPSTASH_REGISTRY_KEY, mergeEntry(await read(), entry));
+        const stored = (await read()).launches.find((row) => row.pool === entry.pool);
+        if (stored && stored.updatedAt === entry.updatedAt && stored.authIssuedAt === entry.authIssuedAt) {
+          return entry;
+        }
+      }
+      throw new Error("Registry write lost a concurrent update");
     },
   };
 }

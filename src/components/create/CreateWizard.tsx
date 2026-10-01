@@ -322,7 +322,6 @@ export function CreateWizard() {
         `Transactions to sign: ${transactions.length}`,
       ]);
 
-      const qDec = prepared.summary.quoteDecimals;
       let r0: LaunchReceipt = { cluster: getClusterLabel(), items: [] };
       r0 = upsertReceiptItem(r0, { key: "config", label: prepared.mode === "pool-only" ? "Config (shared)" : "Config", value: prepared.configPubkey, kind: "address", state: "estimate", note: "Planned address; confirmed once read back from chain." });
       r0 = upsertReceiptItem(r0, { key: "pool", label: "DBC pool", value: prepared.poolPubkey, kind: "address", state: "estimate", note: "Derived from quote mint + base mint + config." });
@@ -362,28 +361,47 @@ export function CreateWizard() {
         setLaunchLog((l) => [...l, `TX ${i + 1}: ${lastSig}`]);
       }
 
-      // Read the pool back from chain before calling anything "confirmed".
+      // A confirmed signature is not a verified deployment until readback matches.
+      let snap;
       try {
-        const snap = await fetchPoolSnapshot(connection, new PublicKey(prepared.poolPubkey));
-        let r = receiptRef;
-        r = setReceiptState(r, "pool", "confirmed", "DBC pool account read back from chain.");
-        r = setReceiptState(r, "mint", snap.baseMint === prepared.baseMintPubkey ? "confirmed" : "failed", snap.baseMint === prepared.baseMintPubkey ? "Pool's base mint matches." : `Pool reports base mint ${snap.baseMint}.`);
-        r = setReceiptState(r, "config", snap.config === prepared.configPubkey && snap.configRead ? "confirmed" : "failed", snap.configRead ? "Config account read back from chain." : "Config could not be read.");
-        if (snap.migrationQuoteThreshold && snap.quoteDecimals != null) {
-          r = upsertReceiptItem(r, { key: "threshold", label: "Migration threshold", value: `${formatAtomsExact(snap.migrationQuoteThreshold, snap.quoteDecimals)} ${prepared.quoteLabel}`, kind: "text", state: "confirmed", note: "Read from the on-chain config." });
-        }
-        const dest = expectedDammDestination(snap);
-        if (dest) {
-          r = upsertReceiptItem(r, { key: "damm", label: "DAMM v2 pool after graduation", value: dest.dammPool.toBase58(), kind: "address", state: "estimate", note: "Derived address; the pool only exists after migration." });
-        }
-        rec(r);
+        snap = await fetchPoolSnapshot(connection, new PublicKey(prepared.poolPubkey));
       } catch (e) {
         let r = receiptRef;
-        for (const k of ["pool", "mint", "config"]) r = setReceiptState(r, k, "pending", `Not read back yet (${toUserMessage(e)}). Refresh the offering page.`);
-        if (prepared.summary.migrationQuoteThresholdAtoms) {
-          r = upsertReceiptItem(r, { key: "threshold", label: "Migration threshold", value: `${formatAtomsExact(prepared.summary.migrationQuoteThresholdAtoms, qDec)} ${prepared.quoteLabel}`, kind: "text", state: "estimate", note: "Computed from the preset; not yet read from chain." });
+        for (const k of ["pool", "mint", "config"]) {
+          r = setReceiptState(r, k, "failed", `Not read back (${toUserMessage(e)}).`);
         }
         rec(r);
+        throw new Error(
+          `Transaction confirmed (${lastSig}), but chain readback failed. It was not registered and is not marked verified. Check the explorer before launching again.`,
+        );
+      }
+      const mintOk = snap.baseMint === prepared.baseMintPubkey;
+      const configOk = snap.config === prepared.configPubkey && snap.configRead;
+      const expectedThreshold = prepared.summary.migrationQuoteThresholdAtoms;
+      const thresholdOk = !expectedThreshold || snap.migrationQuoteThreshold === expectedThreshold;
+      let r = receiptRef;
+      r = setReceiptState(r, "pool", "confirmed", "DBC pool account read back from chain.");
+      r = setReceiptState(r, "mint", mintOk ? "confirmed" : "failed", mintOk ? "Pool's base mint matches." : `Pool reports base mint ${snap.baseMint}.`);
+      r = setReceiptState(r, "config", configOk ? "confirmed" : "failed", configOk ? "Config account read back from chain." : "Config does not match this deployment.");
+      if (snap.migrationQuoteThreshold && snap.quoteDecimals != null) {
+        r = upsertReceiptItem(r, {
+          key: "threshold",
+          label: "Migration threshold",
+          value: `${formatAtomsExact(snap.migrationQuoteThreshold, snap.quoteDecimals)} ${prepared.quoteLabel}`,
+          kind: "text",
+          state: thresholdOk ? "confirmed" : "failed",
+          note: thresholdOk ? "Read from the on-chain config." : "On-chain threshold does not match the built config.",
+        });
+      }
+      const dest = expectedDammDestination(snap);
+      if (dest) {
+        r = upsertReceiptItem(r, { key: "damm", label: "DAMM v2 pool after graduation", value: dest.dammPool.toBase58(), kind: "address", state: "estimate", note: "Derived address; the pool only exists after migration." });
+      }
+      rec(r);
+      if (!mintOk || !configOk || !thresholdOk) {
+        throw new Error(
+          `Transaction confirmed (${lastSig}), but on-chain readback does not match this deployment. It was not registered and is not marked verified.`,
+        );
       }
       rec(upsertReceiptItem(receiptRef, { key: "metadata", label: "Token metadata", value: meta.source === "hosted" ? meta.uri : meta.source === "custom" ? meta.uri : "inline data: URI", kind: "text", state: meta.source === "hosted" ? "confirmed" : meta.source === "custom" ? "estimate" : "local", note: meta.source === "hosted" ? "Hosted JSON written with your signature." : meta.source === "custom" ? "Custom URI; not fetched by EquiCurve." : meta.note }));
 
