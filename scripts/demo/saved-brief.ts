@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import type { AssetKind, MarketObjective } from "@/lib/market/types";
 
 export type SavedBriefFile = {
   label: string;
@@ -7,8 +8,8 @@ export type SavedBriefFile = {
   clusterNote: string;
   rpc: string;
   brief: {
-    asset: "private-company";
-    objective: "controlled-discovery";
+    asset: AssetKind;
+    objective: MarketObjective;
     quote: "SOL" | "USDC";
     targetRaise: string;
     typicalTrade: string;
@@ -27,8 +28,11 @@ export type SavedBriefFile = {
     transferProfile: "open-spl" | "token-2022" | "transfer-hook";
     mintRenounce: boolean;
     seedBuyAmount: string;
+    thesis?: string;
+    sector?: "Equity" | "RWA" | "Fund" | "Private Co" | "Other";
   };
-  expect: {
+  /** Present when this file pins a previously recorded search. */
+  expect?: {
     candidateCount: number;
     feasibleCount: number;
     profileId: string;
@@ -60,28 +64,37 @@ export type PolicyShape = {
   };
 };
 
-export function loadSavedBrief(root: string): SavedBriefFile {
-  const path = resolve(root, "scripts/demo/local-brief.json");
+export function loadBriefAt(path: string): SavedBriefFile {
   const raw = readFileSync(path, "utf8");
   const file = JSON.parse(raw) as SavedBriefFile;
-  if (!file.brief || !file.launch || !file.expect) {
-    throw new Error(`Saved brief ${path} is missing brief, launch, or expect. Refusing to continue.`);
+  if (!file.brief || !file.launch) {
+    throw new Error(`Saved brief ${path} is missing brief or launch. Refusing to continue.`);
   }
-  if (file.launch.uri !== file.expect.metadataUri) {
+  if (file.expect && file.launch.uri !== file.expect.metadataUri) {
     throw new Error(
       `Saved brief metadata URI (${JSON.stringify(file.launch.uri)}) does not match expect.metadataUri (${JSON.stringify(file.expect.metadataUri)}). Refusing to substitute a URI.`,
     );
   }
-  if (file.launch.seedBuyAmount !== file.expect.seedBuyAmount) {
+  if (file.expect && file.launch.seedBuyAmount !== file.expect.seedBuyAmount) {
     throw new Error(
       `Saved brief seed buy (${JSON.stringify(file.launch.seedBuyAmount)}) does not match expect.seedBuyAmount. Refusing to substitute a seed buy.`,
     );
   }
+  if (!file.launch.uri.startsWith("https://")) {
+    throw new Error("Saved brief metadata URI must be an https URL. Refusing to inline a data URI.");
+  }
   return file;
 }
 
+export function loadSavedBrief(root: string): SavedBriefFile {
+  return loadBriefAt(resolve(root, "scripts/demo/local-brief.json"));
+}
+
 /** Differences between a fresh search and the pinned expect block. Empty means the selected design is the saved one. */
-export function expectMismatches(policy: PolicyShape, expect: SavedBriefFile["expect"]): string[] {
+export function expectMismatches(
+  policy: PolicyShape,
+  expect: NonNullable<SavedBriefFile["expect"]>,
+): string[] {
   const whale = policy.chosen.scenarios.find((item) => item.id === "whale");
   const feasible = policy.candidates.filter((row) => row.feasible).length;
   const mismatches: string[] = [];

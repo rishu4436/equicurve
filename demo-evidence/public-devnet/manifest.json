@@ -1,0 +1,18 @@
+{
+  "network": "Solana Devnet",
+  "rpc": "https://api.devnet.solana.com",
+  "cluster": "devnet",
+  "result": "All readback assertions passed.",
+  "slot": 506262571,
+  "blockTime": "2026-10-01T11:50:07.000Z",
+  "pool": "Eq57sdFYg5UFg4rtV7W3mPWYGFi97ovWAYiLYLX8hejF",
+  "config": "FigS23YEaaQZH2VJZkqGVsRCpgsJN5HztuvbfGMo6Zmf",
+  "mint": "31wt342XAZMbdiwcd4Uyxf7UxQVBskZ44GYTNV6XH44c",
+  "transaction": "5H79kPYiaEVzShy6LCg4V9af6zdRkNb6Nyt63vVNT11k2jT4gZkkC5zY5o7zGTY3Wpd6icALTyTRt4Qi5M3hNLZM",
+  "fingerprint": "16ac1e49b68f4a4c",
+  "profileName": "Exponential · 3×",
+  "constraintsPassed": false,
+  "migrationQuoteThresholdAtoms": "99999604415",
+  "metadataUri": "https://example.com/jrny.json",
+  "files": ["README.md", "manifest.json", "assertions.json", "deployment.json", "readback.json"]
+}

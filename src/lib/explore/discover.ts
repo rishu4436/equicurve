@@ -7,6 +7,7 @@ import { unwrapPoolState } from "@/lib/dbc/poolAccount";
 import type { PresetId } from "@/lib/dbc/types";
 import { entryFromChain, type ChainLookupResult } from "@/lib/registry/authorize";
 import { USDC_MINTS } from "@/lib/registry/chain";
+import { getPublicDeployment } from "@/lib/registry/publicDeployments";
 import { getRegistryMeta, listRegistryLaunches, putRegistryLaunch } from "@/lib/registry/store";
 import type { RegistryLaunch } from "@/lib/registry/types";
 import { isRateLimitError, mapWithConcurrency, withRpcRetry, withTimeout } from "@/lib/rpc";
@@ -57,6 +58,7 @@ function registryToOffering(r: RegistryLaunch, cluster: string): ExploreOffering
       cluster: r.cluster,
       illustrative: false,
       source: "registry",
+      deploymentVerified: getPublicDeployment(r.pool) != null,
     },
     cluster,
   );

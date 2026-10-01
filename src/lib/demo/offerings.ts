@@ -36,6 +36,8 @@ export type DemoOffering = {
   verification?: import("@/lib/explore/types").OfferingVerification;
   /** "chain" only when verified in this response. */
   statusSource?: "chain" | "registry" | "local";
+  /** Recorded public-devnet readback passed for this pool. */
+  deploymentVerified?: boolean;
 };
 
 /**

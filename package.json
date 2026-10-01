@@ -13,7 +13,8 @@
     "e2e:devnet": "tsx scripts/e2e-devnet.ts",
     "e2e:report": "tsx scripts/e2e/report.ts",
     "demo:local": "tsx scripts/demo/run-local-journey.ts",
-    "demo:devnet": "tsx scripts/demo/check-public-devnet.ts"
+    "demo:devnet": "tsx scripts/demo/check-public-devnet.ts",
+    "demo:devnet:send": "tsx scripts/demo/check-public-devnet.ts --send"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.31.1",

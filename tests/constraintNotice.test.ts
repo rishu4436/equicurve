@@ -121,6 +121,7 @@ describe("constraint failure copy", () => {
     };
     expect(raw.brief).toEqual(saved.brief);
     const policy = designPolicy(saved.brief);
+    if (!saved.expect) throw new Error("Saved brief is missing its expect pin.");
     expect(expectMismatches(policy as PolicyShape, saved.expect)).toEqual([]);
     expect(constraintFailureCopy(policy)).toEqual(REQUIRED_LINES);
     const designed = toDesignedMarket(policy);

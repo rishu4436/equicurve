@@ -1,0 +1,58 @@
+[
+  {
+    "network": "Solana Devnet",
+    "cluster": "devnet",
+    "pool": "Eq57sdFYg5UFg4rtV7W3mPWYGFi97ovWAYiLYLX8hejF",
+    "config": "FigS23YEaaQZH2VJZkqGVsRCpgsJN5HztuvbfGMo6Zmf",
+    "mint": "31wt342XAZMbdiwcd4Uyxf7UxQVBskZ44GYTNV6XH44c",
+    "creator": "4upqVDwyy3mSgwdZptY3PUG4jGNLd35XsXX3tEkEoEX5",
+    "transaction": "5H79kPYiaEVzShy6LCg4V9af6zdRkNb6Nyt63vVNT11k2jT4gZkkC5zY5o7zGTY3Wpd6icALTyTRt4Qi5M3hNLZM",
+    "fingerprint": "16ac1e49b68f4a4c",
+    "migrationQuoteThresholdAtoms": "99999604415",
+    "profileName": "Exponential · 3×",
+    "name": "Journey",
+    "ticker": "JRNY",
+    "thesis": "Preferred candidate for the saved brief. The retail-progress constraint was not met. On-chain readback matched this design.",
+    "sector": "Private Co",
+    "presetId": "exponential",
+    "raiseTarget": 100,
+    "quote": "SOL",
+    "constraintsPassed": false,
+    "readbackPassed": true,
+    "checks": {
+      "fingerprint": true,
+      "poolConfiguration": true,
+      "migrationThreshold": true,
+      "readback": true
+    },
+    "deployedAt": "2026-10-01T11:50:07.000Z"
+  },
+  {
+    "network": "Solana Devnet",
+    "cluster": "devnet",
+    "pool": "FhxqSm5YQKyKhgqFwd8dMyYb2WGAA9HsQDrBSy3G4KWd",
+    "config": "EHjciQc9cV2wC1QfVvfx3j9rJ8v1nnR9jRTRsPZBfpCs",
+    "mint": "686TmVg9rP6QbmXRiVRt84e3DTwVkr4ksPDviSxFpkbP",
+    "creator": "4upqVDwyy3mSgwdZptY3PUG4jGNLd35XsXX3tEkEoEX5",
+    "transaction": "4rHbKKkE8Q4WYybAiGv69rc3sTDC5Ht8r3HzDRq2oQxLH5xRjarzxAwUUdTL715TwhaapD1g4pr899wZKRMbjPjz",
+    "fingerprint": "e1bfccfe19434469",
+    "migrationQuoteThresholdAtoms": "8000245007",
+    "profileName": "Equity-tuned · 2×",
+    "name": "Northline",
+    "ticker": "NLIN",
+    "thesis": "Public-devnet trial of a different brief: an RWA assumption, a participation objective, and an 8 SOL target.",
+    "sector": "RWA",
+    "presetId": "equity",
+    "raiseTarget": 8,
+    "quote": "SOL",
+    "constraintsPassed": false,
+    "readbackPassed": true,
+    "checks": {
+      "fingerprint": true,
+      "poolConfiguration": true,
+      "migrationThreshold": true,
+      "readback": true
+    },
+    "deployedAt": "2026-10-01T12:14:54.000Z"
+  }
+]

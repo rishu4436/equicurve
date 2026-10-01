@@ -32,6 +32,7 @@ import { toUserMessage } from "@/lib/errors";
 import { pushActivity } from "@/lib/local/launches";
 import { hasSelfAttested } from "@/lib/local/eligibility";
 import { signAndSendTransaction } from "@/lib/send";
+import { VerifiedDeployment } from "@/components/VerifiedDeployment";
 
 type Props = {
   poolAddress: string;
@@ -224,6 +225,7 @@ export function TradePanel({
 
   const body = (
     <div className={clsx("space-y-4", !compact && "space-y-6")}>
+      <VerifiedDeployment pool={poolAddress} />
       {!compact && (
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>

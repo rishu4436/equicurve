@@ -1,0 +1,30 @@
+{
+  "label": "Northline public-devnet trial",
+  "clusterLabel": "devnet",
+  "clusterNote": "Second public-devnet deployment. Different brief from the Journey proof. Not the local validator.",
+  "rpc": "https://api.devnet.solana.com",
+  "brief": {
+    "asset": "rwa",
+    "objective": "participation",
+    "quote": "SOL",
+    "targetRaise": "8",
+    "typicalTrade": "0.5",
+    "participants": 12,
+    "totalSupply": 100000000,
+    "creatorPct": 40,
+    "lpLockPct": 100,
+    "antiSniper": false,
+    "stressPaths": 4,
+    "seed": 22017
+  },
+  "launch": {
+    "name": "Northline",
+    "symbol": "NLIN",
+    "uri": "https://example.com/nlin.json",
+    "transferProfile": "open-spl",
+    "mintRenounce": true,
+    "seedBuyAmount": "0",
+    "thesis": "Public-devnet trial of a different brief: an RWA assumption, a participation objective, and an 8 SOL target.",
+    "sector": "RWA"
+  }
+}

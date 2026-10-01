@@ -1,0 +1,24 @@
+{
+  "network": "Solana Devnet",
+  "rpc": "https://api.devnet.solana.com",
+  "cluster": "devnet",
+  "result": "All readback assertions passed.",
+  "slot": 506268926,
+  "blockTime": "2026-10-01T12:14:54.000Z",
+  "pool": "FhxqSm5YQKyKhgqFwd8dMyYb2WGAA9HsQDrBSy3G4KWd",
+  "config": "EHjciQc9cV2wC1QfVvfx3j9rJ8v1nnR9jRTRsPZBfpCs",
+  "mint": "686TmVg9rP6QbmXRiVRt84e3DTwVkr4ksPDviSxFpkbP",
+  "transaction": "4rHbKKkE8Q4WYybAiGv69rc3sTDC5Ht8r3HzDRq2oQxLH5xRjarzxAwUUdTL715TwhaapD1g4pr899wZKRMbjPjz",
+  "fingerprint": "e1bfccfe19434469",
+  "profileName": "Equity-tuned · 2×",
+  "constraintsPassed": false,
+  "migrationQuoteThresholdAtoms": "8000245007",
+  "metadataUri": "https://example.com/nlin.json",
+  "files": [
+    "README.md",
+    "manifest.json",
+    "assertions.json",
+    "deployment.json",
+    "readback.json"
+  ]
+}

@@ -365,6 +365,9 @@ async function main() {
   const { launchCurveConfig } = await import("@/lib/dbc/create");
   const { buildLaunchReview } = await import("@/lib/dbc/launchReview");
   const policy = designPolicy(saved.brief);
+  if (!saved.expect) {
+    throw new Error("Local journey brief is missing its expect pin.");
+  }
   const mismatches = expectMismatches(policy, saved.expect);
   const failureLines = constraintFailureCopy(policy);
   const designed = toDesignedMarket(policy);

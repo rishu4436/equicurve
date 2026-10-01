@@ -5,6 +5,7 @@ import type {
   RegistryLaunch,
   RegistryMeta,
 } from "./types";
+import { deploymentToRegistryLaunch, listPublicDeployments } from "./publicDeployments";
 import {
   createUpstashClient,
   createUpstashStore,
@@ -63,13 +64,21 @@ async function maybeSeedFromFile(store: LaunchRegistryStore): Promise<void> {
 export async function listRegistryLaunches(): Promise<RegistryLaunch[]> {
   const store = getLaunchRegistryStore();
   await maybeSeedFromFile(store);
-  return store.list();
+  const stored = await store.list();
+  const seen = new Set(stored.map((row) => row.pool));
+  const recorded = listPublicDeployments()
+    .filter((row) => !seen.has(row.pool))
+    .map(deploymentToRegistryLaunch);
+  return [...recorded, ...stored];
 }
 
 export async function getRegistryLaunch(
   pool: string,
 ): Promise<RegistryLaunch | null> {
-  return getLaunchRegistryStore().get(pool);
+  const stored = await getLaunchRegistryStore().get(pool);
+  if (stored) return stored;
+  const recorded = listPublicDeployments().find((row) => row.pool === pool);
+  return recorded ? deploymentToRegistryLaunch(recorded) : null;
 }
 
 export async function putRegistryLaunch(entry: RegistryLaunch): Promise<RegistryLaunch> {

@@ -1,0 +1,18 @@
+{
+  "environment": "public-devnet",
+  "rpc": "https://api.devnet.solana.com",
+  "signatures": [
+    "4rHbKKkE8Q4WYybAiGv69rc3sTDC5Ht8r3HzDRq2oQxLH5xRjarzxAwUUdTL715TwhaapD1g4pr899wZKRMbjPjz"
+  ],
+  "explorer": [
+    "https://explorer.solana.com/tx/4rHbKKkE8Q4WYybAiGv69rc3sTDC5Ht8r3HzDRq2oQxLH5xRjarzxAwUUdTL715TwhaapD1g4pr899wZKRMbjPjz?cluster=devnet"
+  ],
+  "pool": "FhxqSm5YQKyKhgqFwd8dMyYb2WGAA9HsQDrBSy3G4KWd",
+  "poolExplorer": "https://explorer.solana.com/address/FhxqSm5YQKyKhgqFwd8dMyYb2WGAA9HsQDrBSy3G4KWd?cluster=devnet",
+  "config": "EHjciQc9cV2wC1QfVvfx3j9rJ8v1nnR9jRTRsPZBfpCs",
+  "baseMint": "686TmVg9rP6QbmXRiVRt84e3DTwVkr4ksPDviSxFpkbP",
+  "metadataUri": "https://example.com/nlin.json",
+  "migrationQuoteThresholdAtoms": "8000245007",
+  "selectedFingerprint": "e1bfccfe19434469",
+  "mode": "config-and-pool"
+}

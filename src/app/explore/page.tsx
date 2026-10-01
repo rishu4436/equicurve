@@ -98,6 +98,7 @@ function remoteToOffering(o: ExploreOffering): DemoOffering {
     quoteProgress: o.quoteProgress,
     statusSource: o.statusSource,
     verification: o.verification,
+    deploymentVerified: o.deploymentVerified === true,
   };
 }
 

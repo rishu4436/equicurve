@@ -42,6 +42,8 @@ export type ExploreOffering = {
   cluster: string;
   illustrative: false;
   source: "registry" | "config-gpa";
+  /** Present when this pool has a recorded public-devnet readback. */
+  deploymentVerified?: boolean;
 };
 
 export type ExploreCounts = {

@@ -60,6 +60,11 @@ export function OfferingCard({ offering }: { offering: DemoOffering }) {
             Illustrative · not live
           </span>
         )}
+        {offering.deploymentVerified && (
+          <span className="rounded-pill border border-accent/40 bg-accent/10 px-2 py-0.5 text-[10px] text-accent">
+            Deployment verified
+          </span>
+        )}
       </div>
 
       <div className="space-y-1 text-xs text-fg-secondary">
