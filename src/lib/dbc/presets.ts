@@ -255,9 +255,16 @@ export type BuildPresetOverrides = {
   antiSniper?: boolean;
   /**
    * Quote token decimals (9 = SOL/WSOL, 6 = USDC). Also selects which
-   * quote-denominated market caps the preset uses (SOL vs USDC caps).
+   * quote-denominated market caps the preset uses (SOL vs USDC caps),
+   * unless `marketCaps` is set.
    */
   quoteDecimals?: 6 | 9;
+  /**
+   * Override the preset's start and graduation market caps (quote-token units).
+   * The fee schedule still comes from the preset. Used by the market-design
+   * engine so a searched raise still builds through `buildCurveWithMarketCap`.
+   */
+  marketCaps?: QuoteMarketCaps;
   /** SPL vs Token-2022 base mint. */
   tokenType?: "spl" | "token-2022";
   /**
@@ -303,7 +310,13 @@ export function buildPresetConfig(
   presetId: PresetId,
   opts: BuildPresetOverrides = {},
 ): ConfigParameters {
-  const caps = presetMarketCaps(presetId, presetQuoteForDecimals(opts.quoteDecimals));
+  const caps =
+    opts.marketCaps ?? presetMarketCaps(presetId, presetQuoteForDecimals(opts.quoteDecimals));
+  if (!(caps.initial > 0) || !(caps.migration > caps.initial)) {
+    throw new Error(
+      `Market caps must satisfy 0 < initial < migration (got ${caps.initial} → ${caps.migration}).`,
+    );
+  }
   const feeSpec = FEE_BY_PRESET[presetId];
 
   const creatorPct = Math.min(
