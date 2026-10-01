@@ -26,6 +26,7 @@ import {
   walletSchema,
 } from "@/lib/validation";
 import { getDbcClient } from "./client";
+import { quoteSeedBuy, type SeedBuyQuote } from "./seedQuote";
 import {
   buildPresetConfig,
   getPreset,
@@ -251,6 +252,7 @@ export async function prepareLaunchTransaction(args: {
     }
   }
   const hasSeedBuy = !seedBuyAtoms.isZero();
+  let seedQuote: SeedBuyQuote | null = null;
 
   const client = getDbcClient(connection);
   const existingConfig = getOptionalPoolConfigKey();
@@ -299,10 +301,28 @@ export async function prepareLaunchTransaction(args: {
 
     if (hasSeedBuy) {
       const buyAmount = seedBuyAtoms;
+      let onChainConfig: { enableFirstSwapWithMinFee?: unknown } | null;
+      try {
+        onChainConfig = await client.state.getPoolConfig(existingConfig);
+      } catch (e) {
+        throw new EquiCurveError(
+          "Seed-buy quote rejected: the shared pool config could not be read, so the transaction was not built.",
+          "RPC_UNAVAILABLE",
+          e,
+        );
+      }
+      if (!onChainConfig) {
+        throw new EquiCurveError(
+          "Seed-buy quote rejected: the shared pool config account is missing, so the transaction was not built.",
+          "VALIDATION",
+        );
+      }
+      // Quote the account the program will read, not a freshly built preset.
+      seedQuote = quoteSeedBuy(client, onChainConfig, buyAmount);
       const firstBuyParam = {
         buyer: payer,
         buyAmount,
-        minimumAmountOut: new BN(0),
+        minimumAmountOut: seedQuote.minimumAmountOut,
         referralTokenAccount: null,
       };
       const tx = wantsTransferHook
@@ -371,10 +391,11 @@ export async function prepareLaunchTransaction(args: {
 
     if (hasSeedBuy) {
       const buyAmount = seedBuyAtoms;
+      seedQuote = quoteSeedBuy(client, curveConfig, buyAmount);
       const firstBuyParam = {
         buyer: payer,
         buyAmount,
-        minimumAmountOut: new BN(0),
+        minimumAmountOut: seedQuote.minimumAmountOut,
         referralTokenAccount: null,
       };
       if (wantsTransferHook) {
@@ -400,6 +421,8 @@ export async function prepareLaunchTransaction(args: {
       // A zero buy uses the same config and pool builders as the combined
       // transaction and does not append a swap. creator.createPool would
       // instead read the config account, which does not exist yet.
+      // minimumAmountOut is unused: validateSwapAmount rejects buyAmount <= 0,
+      // so this zero is not a slippage floor.
       const zeroBuy = {
         buyer: payer,
         buyAmount: new BN(0),
@@ -417,6 +440,7 @@ export async function prepareLaunchTransaction(args: {
         },
       );
     } else {
+      // Same unused zero as the transfer-hook split. No swap is appended.
       const zeroBuy = {
         buyer: payer,
         buyAmount: new BN(0),
@@ -500,6 +524,9 @@ export async function prepareLaunchTransaction(args: {
       mintRenounce: effectiveMintRenounce,
       seedBuyAtoms: seedBuyAtoms.toString(10),
       seedBuyDisplay: formatAtomsExact(seedBuyAtoms.toString(10), quoteDecimals),
+      seedBuyExpectedOutAtoms: seedQuote ? seedQuote.outputAmount.toString(10) : "0",
+      seedBuyMinimumOutAtoms: seedQuote ? seedQuote.minimumAmountOut.toString(10) : "0",
+      seedBuySlippageBps: seedQuote ? seedQuote.slippageBps : 0,
       feeClaimer: feeClaimer.toBase58(),
       transferProfile,
       transferHookProgram: transferHookProgramPk?.toBase58(),

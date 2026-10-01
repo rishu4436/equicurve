@@ -1,4 +1,5 @@
 import type { PublicRegistryLaunch, RegistryFilePayload, RegistryLaunch } from "./types";
+import { parseStoredDesign } from "./design";
 import { isValidPublicKey, PRESET_IDS, SECTORS } from "@/lib/validation";
 
 export const MAX_REGISTRY_ENTRIES = 500;
@@ -68,6 +69,7 @@ export function coerceStoredLaunch(raw: unknown): RegistryLaunch | null {
     chainCheckedAt: verified ? (r.chainCheckedAt as string) : null,
     authSigner: verified ? (r.authSigner as string) : null,
     authIssuedAt: verified && typeof r.authIssuedAt === "string" ? r.authIssuedAt : null,
+    design: parseStoredDesign(r.design),
   };
 }
 

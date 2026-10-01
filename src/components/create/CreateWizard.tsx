@@ -13,6 +13,7 @@ import { resolveMetadataUri } from "@/lib/metadata/client";
 import { Keypair, PublicKey } from "@solana/web3.js";
 import { getPreset, MIN_LP_LOCK_PCT, tradingFeeSplit } from "@/lib/dbc/presets";
 import { marketConfigFingerprint } from "@/lib/dbc/configFingerprint";
+import { canonicalConfigText, expectedFromConfig } from "@/lib/dbc/deploymentReadback";
 import { buildLaunchReview, type LaunchReview, type ReviewRow } from "@/lib/dbc/launchReview";
 import { fetchPoolSnapshot, expectedDammDestination } from "@/lib/dbc/migrate";
 import { formatAtomsExact } from "@/lib/amounts";
@@ -174,26 +175,31 @@ export function CreateWizard() {
       );
       return;
     }
-    try {
-      const signedConfig = launchCurveConfig({
-        presetId: state.presetId,
-        totalSupply: state.totalSupply,
-        creatorTradingFeePercentage: state.feeIssuer,
-        lpLockPct: state.lpLockPct,
-        mintRenounce: state.mintRenounce,
-        antiSniper: state.antiSniper,
-        quoteDecimals: state.quote === "USDC" ? 6 : 9,
-        transferProfile: state.transferProfile,
-        marketCaps: state.marketCaps,
-      });
-      if (marketConfigFingerprint(signedConfig) !== state.designed.configFingerprint) {
-        toast.error("The transaction config does not match the simulated design. Rerun the market design before deploying.");
-        return;
+    const signedConfig = (() => {
+      try {
+        const built = launchCurveConfig({
+          presetId: state.presetId,
+          totalSupply: state.totalSupply,
+          creatorTradingFeePercentage: state.feeIssuer,
+          lpLockPct: state.lpLockPct,
+          mintRenounce: state.mintRenounce,
+          antiSniper: state.antiSniper,
+          quoteDecimals: state.quote === "USDC" ? 6 : 9,
+          transferProfile: state.transferProfile,
+          marketCaps: state.marketCaps,
+        });
+        if (marketConfigFingerprint(built) !== state.designed.configFingerprint) {
+          toast.error("The transaction config does not match the simulated design. Rerun the market design before deploying.");
+          return null;
+        }
+        return built;
+      } catch (e) {
+        toast.error(toUserMessage(e));
+        return null;
       }
-    } catch (e) {
-      toast.error(toUserMessage(e));
-      return;
-    }
+    })();
+    if (!signedConfig) return;
+    const expectedDesign = expectedFromConfig(signedConfig);
     if (!wallet.publicKey) {
       toast.error("Connect a wallet to launch on " + getCluster() + ".");
       return;
@@ -244,6 +250,14 @@ export function CreateWizard() {
           description,
           image,
           ...(website ? { external_url: website } : {}),
+        },
+        design: {
+          fingerprint: state.designed.configFingerprint,
+          migrationQuoteThresholdAtoms: expectedDesign.migrationQuoteThreshold,
+          canonicalConfig: canonicalConfigText(signedConfig),
+          expected: expectedDesign,
+          profileName: (state.designed.profileName || state.presetId).slice(0, 80),
+          constraintsPassed: state.designed.constraintsPassed === true,
         },
       };
 
@@ -314,7 +328,7 @@ export function CreateWizard() {
         `Partner LP lock: ${prepared.lpLockPct}%`,
         `Mint: ${prepared.mintRenounce ? "renounced (no mint auth)" : "retained"}`,
         prepared.seedBuyAtoms !== "0"
-          ? `Seed buy: ${prepared.seedBuyDisplay} ${prepared.quoteLabel} (exact, in create TX)`
+          ? `Seed buy: ${prepared.seedBuyDisplay} ${prepared.quoteLabel} → expected ${prepared.seedBuyExpectedOutAtoms} base atoms, minimum ${prepared.seedBuyMinimumOutAtoms} (${prepared.seedBuySlippageBps} bps)`
           : "Seed buy: none",
         `Config: ${prepared.configPubkey}`,
         `Mint: ${prepared.baseMintPubkey}`,

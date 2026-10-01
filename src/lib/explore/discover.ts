@@ -8,6 +8,7 @@ import { unwrapPoolState } from "@/lib/dbc/poolAccount";
 import type { PresetId } from "@/lib/dbc/types";
 import { entryFromChain, type ChainLookupResult } from "@/lib/registry/authorize";
 import { USDC_MINTS } from "@/lib/registry/chain";
+import { resolveDeploymentRecord } from "@/lib/registry/design";
 import { getRecordedDeployment } from "@/lib/registry/publicDeployments";
 import { getRegistryMeta, listRegistryLaunches, putRegistryLaunch } from "@/lib/registry/store";
 import type { RegistryLaunch } from "@/lib/registry/types";
@@ -179,25 +180,31 @@ async function markLiveDeployments(
   offerings: ExploreOffering[],
   lookups: Map<string, ChainLookupResult>,
   connection: ReturnType<typeof getServerConnection>,
+  registry: RegistryLaunch[],
 ): Promise<void> {
+  const byPool = new Map(registry.map((row) => [row.pool, row]));
   for (const offering of offerings) {
     offering.deploymentVerified = false;
-    const row = getRecordedDeployment(offering.pool);
+    const record = resolveDeploymentRecord({
+      pool: offering.pool,
+      registry: byPool.get(offering.pool) ?? null,
+      catalog: getRecordedDeployment(offering.pool),
+    });
     const lookup = lookups.get(offering.pool);
-    const quoteMint = row ? quoteMintFor(row.quote) : null;
-    if (!row?.expected || !row.canonicalConfig || !quoteMint || lookup?.status !== "verified") continue;
+    const quoteMint = record ? quoteMintFor(record.quote) : null;
+    if (!record || !quoteMint || lookup?.status !== "verified") continue;
     try {
-      const onChain = await getDbcClient(connection).state.getPoolConfig(new PublicKey(row.config));
+      const onChain = await getDbcClient(connection).state.getPoolConfig(new PublicKey(record.config));
       if (!onChain) continue;
       const verdict = compareDeploymentReadback({
-        expected: row.expected,
-        canonicalConfig: row.canonicalConfig,
-        fingerprint: row.fingerprint,
+        expected: record.expected,
+        canonicalConfig: record.canonicalConfig,
+        fingerprint: record.fingerprint,
         identity: {
-          pool: row.pool,
-          config: row.config,
-          mint: row.mint,
-          threshold: row.migrationQuoteThresholdAtoms,
+          pool: record.pool,
+          config: record.config,
+          mint: record.mint,
+          threshold: record.migrationQuoteThresholdAtoms,
           quoteMint,
         },
         snapshot: lookup.snapshot,
@@ -243,6 +250,7 @@ export async function buildExploreResponse(
   const limits = [
     "Primary source is the EquiCurve shared registry — not a full DBC chain indexer.",
     "Registry chain fields are written only from server-side on-chain reads; profiles are signed by the on-chain creator.",
+    "Deployment verified compares the chain to the creator-signed design stored with the registration. The static catalog is a fallback for earlier proofs.",
     `On-chain verification is capped at ${MAX_ENRICH} pools per refresh (${ENRICH_CONCURRENCY} concurrent, ${PER_POOL_TIMEOUT_MS / 1000}s timeout each). Others show "Not checked".`,
     `Results are cached ~${CACHE_TTL_MS / 1000}s — see "Last checked" per card.`,
     "Meteora DBC Data API cannot filter EquiCurve-created offerings, so it is not used.",
@@ -267,7 +275,7 @@ export async function buildExploreResponse(
     },
   });
   offerings = enrich.offerings;
-  await markLiveDeployments(offerings, lookups, connection);
+  await markLiveDeployments(offerings, lookups, connection, registry);
   void persistStatusChanges(registry, offerings, lookups);
 
   const vc = countVerification(offerings);

@@ -95,5 +95,6 @@ export function deploymentToRegistryLaunch(row: PublicDeployment): RegistryLaunc
     chainCheckedAt: null,
     authSigner: null,
     authIssuedAt: null,
+    design: null,
   };
 }

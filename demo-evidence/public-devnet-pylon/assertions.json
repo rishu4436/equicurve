@@ -1,0 +1,221 @@
+{
+  "ok": true,
+  "checks": [
+    {
+      "name": "pool",
+      "expected": "3SdvXsHRW7RYrzjGsskJvVUSa8ZFTtiqpQFnAos8zQ5J",
+      "actual": "3SdvXsHRW7RYrzjGsskJvVUSa8ZFTtiqpQFnAos8zQ5J",
+      "ok": true
+    },
+    {
+      "name": "config",
+      "expected": "FrCq17MMverzaWEawFHZViN2NDrmAgw2q3vj4KeAn6sk",
+      "actual": "FrCq17MMverzaWEawFHZViN2NDrmAgw2q3vj4KeAn6sk",
+      "ok": true
+    },
+    {
+      "name": "baseMint",
+      "expected": "55q76Md2Fk8dPwbdPErBPksC4ZzZHYDgVQFXchenqdLf",
+      "actual": "55q76Md2Fk8dPwbdPErBPksC4ZzZHYDgVQFXchenqdLf",
+      "ok": true
+    },
+    {
+      "name": "quoteMint",
+      "expected": "So11111111111111111111111111111111111111112",
+      "actual": "So11111111111111111111111111111111111111112",
+      "ok": true
+    },
+    {
+      "name": "snapshot.quoteMint",
+      "expected": "So11111111111111111111111111111111111111112",
+      "actual": "So11111111111111111111111111111111111111112",
+      "ok": true
+    },
+    {
+      "name": "migrationQuoteThreshold",
+      "expected": "2999905659",
+      "actual": "2999905659",
+      "ok": true
+    },
+    {
+      "name": "snapshot.migrationQuoteThreshold",
+      "expected": "2999905659",
+      "actual": "2999905659",
+      "ok": true
+    },
+    {
+      "name": "sqrtStartPrice",
+      "expected": "3510324129162587",
+      "actual": "3510324129162587",
+      "ok": true
+    },
+    {
+      "name": "creatorTradingFeePercentage",
+      "expected": "55",
+      "actual": "55",
+      "ok": true
+    },
+    {
+      "name": "partnerPermanentLockedLiquidityPercentage",
+      "expected": "100",
+      "actual": "100",
+      "ok": true
+    },
+    {
+      "name": "partnerLiquidityPercentage",
+      "expected": "0",
+      "actual": "0",
+      "ok": true
+    },
+    {
+      "name": "creatorPermanentLockedLiquidityPercentage",
+      "expected": "0",
+      "actual": "0",
+      "ok": true
+    },
+    {
+      "name": "creatorLiquidityPercentage",
+      "expected": "0",
+      "actual": "0",
+      "ok": true
+    },
+    {
+      "name": "enableFirstSwapWithMinFee",
+      "expected": "1",
+      "actual": "1",
+      "ok": true
+    },
+    {
+      "name": "collectFeeMode",
+      "expected": "0",
+      "actual": "0",
+      "ok": true
+    },
+    {
+      "name": "migrationOption",
+      "expected": "1",
+      "actual": "1",
+      "ok": true
+    },
+    {
+      "name": "quoteReserve",
+      "expected": "> 0",
+      "actual": "49496221",
+      "ok": true
+    },
+    {
+      "name": "seedBuy.swapCount",
+      "expected": "1",
+      "actual": "1",
+      "ok": true
+    },
+    {
+      "name": "seedBuy.amountIn",
+      "expected": "50000000",
+      "actual": "50000000",
+      "ok": true
+    },
+    {
+      "name": "seedBuy.minimumAmountOut",
+      "expected": "1357560220843940",
+      "actual": "1357560220843940",
+      "ok": true
+    },
+    {
+      "name": "seedBuy.received",
+      "expected": "1357560220843940",
+      "actual": "1357560220843940",
+      "ok": true
+    },
+    {
+      "name": "isMigrated",
+      "expected": "false",
+      "actual": "false",
+      "ok": true
+    },
+    {
+      "name": "baseFee.cliffFeeNumerator",
+      "expected": "90000000",
+      "actual": "90000000",
+      "ok": true
+    },
+    {
+      "name": "baseFee.firstFactor",
+      "expected": "80",
+      "actual": "80",
+      "ok": true
+    },
+    {
+      "name": "baseFee.secondFactor",
+      "expected": "90",
+      "actual": "90",
+      "ok": true
+    },
+    {
+      "name": "baseFee.thirdFactor",
+      "expected": "270",
+      "actual": "270",
+      "ok": true
+    },
+    {
+      "name": "baseFee.baseFeeMode",
+      "expected": "1",
+      "actual": "1",
+      "ok": true
+    },
+    {
+      "name": "dynamicFee.initialized",
+      "expected": "1",
+      "actual": "1",
+      "ok": true
+    },
+    {
+      "name": "dynamicFee.binStep",
+      "expected": "1",
+      "actual": "1",
+      "ok": true
+    },
+    {
+      "name": "dynamicFee.binStepU128",
+      "expected": "1844674407370955",
+      "actual": "1844674407370955",
+      "ok": true
+    },
+    {
+      "name": "dynamicFee.variableFeeControl",
+      "expected": "956",
+      "actual": "956",
+      "ok": true
+    },
+    {
+      "name": "dynamicFee.filterPeriod",
+      "expected": "10",
+      "actual": "10",
+      "ok": true
+    },
+    {
+      "name": "dynamicFee.decayPeriod",
+      "expected": "120",
+      "actual": "120",
+      "ok": true
+    },
+    {
+      "name": "dynamicFee.reductionFactor",
+      "expected": "5000",
+      "actual": "5000",
+      "ok": true
+    },
+    {
+      "name": "dynamicFee.maxVolatilityAccumulator",
+      "expected": "14460000",
+      "actual": "14460000",
+      "ok": true
+    },
+    {
+      "name": "curve.livePoints",
+      "expected": "4964337233722014:702067261280529917671332908302554,79226673521066979257578248091:251597843595207918038164149",
+      "actual": "4964337233722014:702067261280529917671332908302554,79226673521066979257578248091:251597843595207918038164149",
+      "ok": true
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "ok": true,
+  "status": 200,
+  "body": {
+    "ok": true,
+    "unchanged": false,
+    "launch": {
+      "pool": "3SdvXsHRW7RYrzjGsskJvVUSa8ZFTtiqpQFnAos8zQ5J",
+      "mint": "55q76Md2Fk8dPwbdPErBPksC4ZzZHYDgVQFXchenqdLf",
+      "config": "FrCq17MMverzaWEawFHZViN2NDrmAgw2q3vj4KeAn6sk",
+      "creator": "4upqVDwyy3mSgwdZptY3PUG4jGNLd35XsXX3tEkEoEX5",
+      "quoteMint": "So11111111111111111111111111111111111111112",
+      "quote": "SOL",
+      "feeClaimer": "4upqVDwyy3mSgwdZptY3PUG4jGNLd35XsXX3tEkEoEX5",
+      "lockPct": 100,
+      "creatorFeePct": 55,
+      "status": "raising",
+      "isMigrated": false,
+      "dammPool": null,
+      "name": "Pylon",
+      "ticker": "PYLN",
+      "thesis": "Seed-buy trial: a commodity curve with a nonzero minimum output, registered for Explore.",
+      "sector": "Other",
+      "presetId": "exponential",
+      "raiseTarget": 3,
+      "cluster": "devnet",
+      "createdAt": "2026-10-01T13:34:17.852Z",
+      "registeredAt": "2026-10-01T13:34:17.852Z",
+      "updatedAt": "2026-10-01T13:34:17.852Z",
+      "chainCheckedAt": "2026-10-01T13:34:18.255Z",
+      "authSigner": "4upqVDwyy3mSgwdZptY3PUG4jGNLd35XsXX3tEkEoEX5",
+      "authIssuedAt": "2026-10-01T13:34:16.730Z",
+      "verified": true
+    },
+    "registry": {
+      "backend": "upstash"
+    }
+  }
+}

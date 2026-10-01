@@ -138,5 +138,75 @@
       "tokenQuoteDecimal": "",
       "tokenBaseDecimal": ""
     }
+  },
+  {
+    "network": "Solana Devnet",
+    "cluster": "devnet",
+    "pool": "3SdvXsHRW7RYrzjGsskJvVUSa8ZFTtiqpQFnAos8zQ5J",
+    "config": "FrCq17MMverzaWEawFHZViN2NDrmAgw2q3vj4KeAn6sk",
+    "mint": "55q76Md2Fk8dPwbdPErBPksC4ZzZHYDgVQFXchenqdLf",
+    "creator": "4upqVDwyy3mSgwdZptY3PUG4jGNLd35XsXX3tEkEoEX5",
+    "transaction": "5unU1V6SvcAn2GJNYPCxLYmo7CDkLtEYpxr1q8Wo5A4dvCK4C6qr7ocMSQ7rTwiQLig2oZxDagvuDLnxR1v3V4Ny",
+    "fingerprint": "13a73e7a4dc6d648",
+    "migrationQuoteThresholdAtoms": "2999905659",
+    "profileName": "Exponential · 2×",
+    "name": "Pylon",
+    "ticker": "PYLN",
+    "thesis": "Seed-buy trial: a commodity curve with a nonzero minimum output, registered for Explore.",
+    "sector": "Other",
+    "presetId": "exponential",
+    "raiseTarget": 3,
+    "quote": "SOL",
+    "constraintsPassed": false,
+    "readbackPassed": true,
+    "checks": {
+      "fingerprint": true,
+      "poolConfiguration": true,
+      "migrationThreshold": true,
+      "readback": true
+    },
+    "canonicalConfig": "3510324129162587\n4964337233722014:702067261280529917671332908302554,79226673521066979257578248091:251597843595207918038164149\n2999905659\n90000000:80:90:270:1\n:1:1844674407370955:956:10:120:5000:14460000\n55\n100\n0\n0\n0\ntrue\n0\n1\n\n",
+    "expected": {
+      "sqrtStartPrice": "3510324129162587",
+      "migrationQuoteThreshold": "2999905659",
+      "curve": [
+        {
+          "sqrtPrice": "4964337233722014",
+          "liquidity": "702067261280529917671332908302554"
+        },
+        {
+          "sqrtPrice": "79226673521066979257578248091",
+          "liquidity": "251597843595207918038164149"
+        }
+      ],
+      "baseFee": {
+        "cliffFeeNumerator": "90000000",
+        "firstFactor": "80",
+        "secondFactor": "90",
+        "thirdFactor": "270",
+        "baseFeeMode": "1"
+      },
+      "dynamicFee": {
+        "initialized": "",
+        "binStep": "1",
+        "binStepU128": "1844674407370955",
+        "variableFeeControl": "956",
+        "filterPeriod": "10",
+        "decayPeriod": "120",
+        "reductionFactor": "5000",
+        "maxVolatilityAccumulator": "14460000"
+      },
+      "creatorTradingFeePercentage": "55",
+      "partnerPermanentLockedLiquidityPercentage": "100",
+      "partnerLiquidityPercentage": "0",
+      "creatorPermanentLockedLiquidityPercentage": "0",
+      "creatorLiquidityPercentage": "0",
+      "enableFirstSwapWithMinFee": "true",
+      "collectFeeMode": "0",
+      "migrationOption": "1",
+      "tokenQuoteDecimal": "",
+      "tokenBaseDecimal": ""
+    },
+    "deployedAt": "2026-10-01T13:34:12.000Z"
   }
 ]

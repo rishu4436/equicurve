@@ -9,7 +9,9 @@
  *   - pool must exist on-chain (404 if not, 503 if RPC unavailable)
  *   - on-chain baseMint must equal payload.mint; on-chain creator must equal signer
  *   - replay / stale: issuedAt must be newer than the stored authorization
+ *   - an omitted design keeps the stored design; a different design needs a newer signature
  *   - every chain field (creator, mint, config, quote, status, …) comes from chain
+ *   - design is the creator's config attestation, never a checks or verified flag
  *
  * PATCH (refresh): body `{ pool }` only; re-reads chain, no client fields.
  */
@@ -22,6 +24,7 @@ import {
   verifyLaunchAuth,
 } from "@/lib/auth/launchAuth";
 import { addressSchema, firstIssue, type LaunchProfile } from "@/lib/validation";
+import type { RegistryDesign } from "./design";
 import type { RegistryLaunch } from "./types";
 
 export type ChainLookupResult =
@@ -51,6 +54,8 @@ export function entryFromChain(args: {
   usdcMints: readonly string[];
   auth?: { signer: string; issuedAt: string } | null;
   dammPool?: string | null;
+  /** Undefined keeps the previous design. Null clears nothing by itself; pass the next value. */
+  design?: RegistryDesign | null;
 }): RegistryLaunch {
   const { snapshot: s, profile, prev, cluster, nowIso, usdcMints, auth } = args;
   const status = chainStatusFromCurve(s.curve, s.quoteReserve);
@@ -90,7 +95,12 @@ export function entryFromChain(args: {
     chainCheckedAt: s.checkedAt,
     authSigner: auth?.signer ?? prev?.authSigner ?? null,
     authIssuedAt: auth?.issuedAt ?? prev?.authIssuedAt ?? null,
+    design: args.design !== undefined ? args.design : (prev?.design ?? null),
   };
+}
+
+function sameDesign(a: RegistryDesign | null | undefined, b: RegistryDesign | null | undefined): boolean {
+  return canonicalJson(a ?? null) === canonicalJson(b ?? null);
 }
 
 function sameProfile(prev: RegistryLaunch, p: LaunchProfile): boolean {
@@ -147,11 +157,13 @@ export async function authorizeRegistration(args: {
 
   const existing = await args.getExisting(payload.pool);
   if (existing?.authIssuedAt && Date.parse(existing.authIssuedAt) >= v.issuedAtMs) {
-    if (existing.authSigner === v.signer && sameProfile(existing, payload.profile)) {
+    const designKept = payload.design == null || sameDesign(existing.design, payload.design);
+    if (existing.authSigner === v.signer && sameProfile(existing, payload.profile) && designKept) {
       return { ok: true, entry: existing, unchanged: true };
     }
     return fail(409, "stale_authorization", "A newer authorization for this pool is already stored");
   }
+  const nextDesign = payload.design ?? existing?.design ?? null;
   const entry = entryFromChain({
     snapshot: snap,
     profile: payload.profile,
@@ -160,9 +172,13 @@ export async function authorizeRegistration(args: {
     nowIso: new Date(args.nowMs).toISOString(),
     usdcMints: args.usdcMints,
     auth: { signer: v.signer, issuedAt: body.auth.issuedAt },
+    design: nextDesign,
   });
   const unchanged =
-    !!existing && existing.authSigner === v.signer && sameProfile(existing, payload.profile);
+    !!existing &&
+    existing.authSigner === v.signer &&
+    sameProfile(existing, payload.profile) &&
+    sameDesign(existing.design, nextDesign);
   return { ok: true, entry, unchanged };
 }
 

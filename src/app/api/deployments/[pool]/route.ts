@@ -5,7 +5,9 @@ import { getDbcClient } from "@/lib/dbc/client";
 import { fetchPoolSnapshot } from "@/lib/dbc/migrate";
 import { getServerConnection } from "@/lib/connection";
 import { WSOL_MINT, knownUsdcMints } from "@/lib/constants";
+import { resolveDeploymentRecord } from "@/lib/registry/design";
 import { getRecordedDeployment } from "@/lib/registry/publicDeployments";
+import { getRegistryLaunch } from "@/lib/registry/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,10 +23,14 @@ export async function GET(
   ctx: { params: Promise<{ pool: string }> },
 ) {
   const { pool } = await ctx.params;
-  const deployment = getRecordedDeployment(pool);
-  if (!deployment?.expected || !deployment.canonicalConfig) {
+  const deployment = resolveDeploymentRecord({
+    pool,
+    registry: await getRegistryLaunch(pool),
+    catalog: getRecordedDeployment(pool),
+  });
+  if (!deployment) {
     return NextResponse.json(
-      { ok: false, verified: false, error: "No verified deployment for this pool." },
+      { ok: false, verified: false, error: "No recorded design for this pool." },
       { status: 404 },
     );
   }
@@ -34,6 +40,7 @@ export async function GET(
       ok: true,
       verified: false,
       reason: "record_mismatch",
+      source: deployment.source,
       deployment,
       checks: null,
     });
@@ -48,6 +55,7 @@ export async function GET(
         ok: true,
         verified: false,
         reason: "config_unreadable",
+        source: deployment.source,
         deployment,
         checks: null,
       });
@@ -70,6 +78,7 @@ export async function GET(
       ok: true,
       verified: verdict.verified,
       reason: verdict.verified ? null : "readback_mismatch",
+      source: deployment.source,
       checks: verdict.checks,
       deployment,
     });
@@ -78,6 +87,7 @@ export async function GET(
       ok: true,
       verified: false,
       reason: "rpc_unavailable",
+      source: deployment.source,
       deployment,
       checks: null,
     });

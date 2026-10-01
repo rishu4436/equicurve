@@ -1,5 +1,6 @@
 import type { Sector } from "@/lib/demo/offerings";
 import type { PresetId, QuoteLabel } from "@/lib/dbc/types";
+import type { RegistryDesign } from "./design";
 
 /** Chain-derived status. "unknown" = never verified on-chain (legacy row). */
 export type RegistryStatus = "new" | "raising" | "complete" | "graduated" | "unknown";
@@ -19,6 +20,8 @@ export type RegistryMeta = {
  *   isMigrated / dammPool are written ONLY from on-chain reads by the server.
  * - name / ticker / thesis / sector / preset / raiseTarget / website are an
  *   off-chain profile authored by the on-chain creator (wallet-signed).
+ * - design is that creator's signed config attestation. It is not a
+ *   verification flag. The deployment chip comes from a live chain comparison.
  */
 export type RegistryLaunch = {
   pool: string;
@@ -52,6 +55,11 @@ export type RegistryLaunch = {
   /** Wallet that signed the profile (equals on-chain creator), null for legacy. */
   authSigner: string | null;
   authIssuedAt: string | null;
+  /**
+   * Creator-signed config attestation. Null for rows registered before this
+   * field, and for any stored design that fails its own fingerprint check.
+   */
+  design: RegistryDesign | null;
 };
 
 /**

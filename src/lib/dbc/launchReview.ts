@@ -5,7 +5,10 @@
  */
 import { DAMM_V2_MIGRATION_FEE_ADDRESS } from "@meteora-ag/dynamic-bonding-curve-sdk";
 import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import BN from "bn.js";
 import { AmountError, formatAtoms, formatAtomsExact, parseUiAmount } from "@/lib/amounts";
+import { getDbcClient } from "./client";
+import { quoteSeedBuy, SEED_BUY_SLIPPAGE_BPS } from "./seedQuote";
 import {
   buildPresetConfig,
   DBC_PROTOCOL_POOL_CREATION_FEE_PCT,
@@ -252,24 +255,35 @@ export function buildLaunchReview(i: LaunchReviewInput): LaunchReview {
   // Seed buy
   const seed = i.seedBuy.trim();
   let seedValue = "none: no buy in the create transaction";
+  let seedNote = "No swap is added to the create transaction.";
   if (seed && !/^0*(\.0*)?$/.test(seed)) {
     try {
       const atoms = parseUiAmount(seed, quoteDecimals);
-      seedValue = `${formatAtomsExact(atoms, quoteDecimals)} ${i.quote} exactly (${atoms.toString()} atoms) · minimumAmountOut 0`;
+      const shown = `${formatAtomsExact(atoms, quoteDecimals)} ${i.quote} exactly (${atoms.toString()} atoms)`;
       if (atoms >= BigInt(threshold)) {
         errors.push("Seed buy is at or above the migration threshold: it would complete the curve at launch.");
+        seedValue = `${shown} · not quoted, because it would complete the curve`;
+      } else if (shared) {
+        seedValue = `${shown} · minimum output is quoted from the shared config when the transaction is built (${SEED_BUY_SLIPPAGE_BPS} bps)`;
+        seedNote =
+          "The shared config is read at transaction build. This review does not quote the preset curve in its place.";
+      } else {
+        const quoted = quoteSeedBuy(getDbcClient(), built, new BN(atoms.toString()));
+        seedValue = `${shown} · expected ${formatAtomsExact(quoted.outputAmount.toString(10), baseDecimals)} base · minimumAmountOut ${quoted.minimumAmountOut.toString(10)} atoms (${quoted.slippageBps} bps)`;
+        seedNote =
+          "Same getQuoteFromInputAmount call the transaction uses: buy base with the quote, ExactIn, no referral, current point 0, and this config's first-swap minimum-fee flag. 0 bps sets minimumAmountOut to that output. The buy is in the pool-creation transaction, so another swap cannot move the price first. The program rejects a smaller fill (ExceededSlippage, 6002).";
       }
     } catch (e) {
-      errors.push(`Seed buy: ${e instanceof AmountError ? e.message : "invalid amount"}`);
-      seedValue = "invalid";
+      errors.push(`Seed buy: ${e instanceof AmountError ? e.message : e instanceof Error ? e.message : "invalid amount"}`);
+      seedValue = "quote rejected";
     }
   }
   rows.push({
     group: "Seed buy",
     label: "Creator first buy",
     value: seedValue,
-    field: "firstBuyParam.buyAmount",
-    note: "Executed in the same flow as pool creation, before anyone else can trade.",
+    field: "firstBuyParam.buyAmount, firstBuyParam.minimumAmountOut",
+    note: seedNote,
   });
 
   // Network

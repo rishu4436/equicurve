@@ -46,6 +46,15 @@ export type PreparedLaunch = {
   seedBuyAtoms: string;
   /** Seed buy as entered (exact decimal string) for display. */
   seedBuyDisplay: string;
+  /**
+   * Base atoms the seed-buy quote expects. "0" when there is no seed buy.
+   * The transaction encodes seedBuyMinimumOutAtoms from this same quote.
+   */
+  seedBuyExpectedOutAtoms: string;
+  /** Encoded minimum_amount_out. Equal to the expected output at the documented 0 bps tolerance. */
+  seedBuyMinimumOutAtoms: string;
+  /** Documented seed-buy tolerance in basis points. 0 means the minimum is the quoted output. */
+  seedBuySlippageBps: number;
   feeClaimer: string;
   transferProfile: import("./transferHook").TransferProfile;
   transferHookProgram?: string;

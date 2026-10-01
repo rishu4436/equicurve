@@ -49,6 +49,7 @@ describe("buildLaunchReview", () => {
     expect(val(r, "Fee split")).toBe("creator 56% · partner / fee claimer 24% · Meteora protocol 20%");
     expect(val(r, "Pool creation fee")).toContain("0.001 SOL");
     expect(val(r, "Creator first buy")).toContain("0.25 SOL exactly (250000000 atoms)");
+    expect(val(r, "Creator first buy")).toMatch(/minimumAmountOut [1-9]\d* atoms \(0 bps\)/);
     expect(val(r, "Fee claimer")).toBe(base.wallet);
     expect(r.migrationQuoteThresholdAtoms).toBe(presetMigrationThresholdAtoms("short", "SOL"));
     const token2022 = buildLaunchReview({ ...base, transferProfile: "token-2022" });
@@ -75,6 +76,12 @@ describe("buildLaunchReview", () => {
     expect(val(r, "LP after graduation")).toContain("unlocked 75%");
     expect(val(r, "Fee split")).toBe("creator 0% · partner / fee claimer 80% · Meteora protocol 20%");
     expect(val(r, "Creator first buy")).toMatch(/^none/);
+    const shared = buildLaunchReview({
+      ...base,
+      sharedConfig: "FigS23YEaaQZH2VJZkqGVsRCpgsJN5HztuvbfGMo6Zmf",
+    });
+    expect(val(shared, "Creator first buy")).toContain("quoted from the shared config");
+    expect(val(shared, "Creator first buy")).not.toMatch(/minimumAmountOut 0/);
     expect(val(r, "Migration threshold")).toContain("772.542485 USDC");
   });
 

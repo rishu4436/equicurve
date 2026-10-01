@@ -5,7 +5,7 @@ import {
   verifiedPanelVisible,
   type DeploymentCheckFlags,
 } from "@/lib/dbc/deploymentReadback";
-import type { PublicDeployment } from "@/lib/registry/publicDeployments";
+import type { ResolvedDeployment } from "@/lib/registry/design";
 
 function devnetUrl(kind: "tx" | "address", value: string): string {
   return `https://explorer.solana.com/${kind}/${value}?cluster=devnet`;
@@ -16,7 +16,8 @@ type DeploymentResponse = {
   verified?: boolean;
   reason?: string | null;
   checks?: DeploymentCheckFlags | null;
-  deployment?: PublicDeployment;
+  source?: "registry" | "catalog";
+  deployment?: ResolvedDeployment;
 };
 
 /**
@@ -67,14 +68,16 @@ export function VerifiedDeployment({ pool }: { pool: string }) {
           </p>
         )}
         <div className="flex flex-wrap gap-3 text-xs">
-          <a
-            href={devnetUrl("tx", row.transaction)}
-            target="_blank"
-            rel="noreferrer"
-            className="underline hover:text-accent"
-          >
-            View transaction
-          </a>
+          {row.transaction ? (
+            <a
+              href={devnetUrl("tx", row.transaction)}
+              target="_blank"
+              rel="noreferrer"
+              className="underline hover:text-accent"
+            >
+              View transaction
+            </a>
+          ) : null}
           <a
             href={devnetUrl("address", row.pool)}
             target="_blank"

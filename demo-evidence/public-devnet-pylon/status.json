@@ -1,0 +1,93 @@
+{
+  "environment": "public-devnet",
+  "rpc": "https://api.devnet.solana.com",
+  "note": "This file is a public-devnet readiness check. It is not evidence about the local validator journey. A faucet 429 means funding is an external dependency.",
+  "payer": "4upqVDwyy3mSgwdZptY3PUG4jGNLd35XsXX3tEkEoEX5",
+  "balanceLamports": 9944858560,
+  "minimumLamports": 200000000,
+  "airdrop": {
+    "attempted": false,
+    "ok": false,
+    "error": null
+  },
+  "programs": [
+    {
+      "name": "Meteora Dynamic Bonding Curve",
+      "id": "dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN",
+      "executable": true,
+      "owner": "BPFLoaderUpgradeab1e11111111111111111111111",
+      "dataLength": 36
+    },
+    {
+      "name": "Meteora DAMM v2",
+      "id": "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG",
+      "executable": true,
+      "owner": "BPFLoaderUpgradeab1e11111111111111111111111",
+      "dataLength": 36
+    },
+    {
+      "name": "Metaplex Token Metadata",
+      "id": "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s",
+      "executable": true,
+      "owner": "BPFLoaderUpgradeab1e11111111111111111111111",
+      "dataLength": 36
+    }
+  ],
+  "savedExpect": {
+    "candidateCount": 20,
+    "feasibleCount": 0,
+    "profileId": "exponential-2x",
+    "profileName": "Exponential · 2×",
+    "configFingerprint": "13a73e7a4dc6d648",
+    "policyId": "EQ-d55f9c69d8de",
+    "seed": 44107,
+    "openingBuyImpactBps": 252,
+    "whaleImpactBps": 1030,
+    "stressGraduationRate": 0.25,
+    "stressPaths": 4,
+    "metadataUri": "https://example.com/pyln.json",
+    "seedBuyAmount": "0.05"
+  },
+  "simulation": {
+    "err": null,
+    "logs": [
+      "Program dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN invoke [1]",
+      "Program log: Instruction: CreateConfig",
+      "Program 11111111111111111111111111111111 invoke [2]",
+      "Program 11111111111111111111111111111111 success",
+      "Program dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN invoke [2]",
+      "Program dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN consumed 646 of 167970 compute units",
+      "Program dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN success",
+      "Program dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN invoke [2]",
+      "Program dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN consumed 646 of 162001 compute units",
+      "Program dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN success",
+      "Program dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN consumed 39087 of 200000 compute units",
+      "Program dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN success"
+    ],
+    "unitsConsumed": 39087,
+    "sent": true
+  },
+  "readback": "on-chain pool and config match the selected design",
+  "status": "PUBLIC_DEVNET_OK",
+  "signatures": [
+    "5unU1V6SvcAn2GJNYPCxLYmo7CDkLtEYpxr1q8Wo5A4dvCK4C6qr7ocMSQ7rTwiQLig2oZxDagvuDLnxR1v3V4Ny",
+    "56Gd1KZAXECzgVtueVcY9AfCJpmyReAgeaRTfg85XLF6N3VFF9VcFN79mGszfeooVZ3KEPiukHpAu1uVCFonb9Th"
+  ],
+  "explorer": [
+    "https://explorer.solana.com/tx/5unU1V6SvcAn2GJNYPCxLYmo7CDkLtEYpxr1q8Wo5A4dvCK4C6qr7ocMSQ7rTwiQLig2oZxDagvuDLnxR1v3V4Ny?cluster=devnet",
+    "https://explorer.solana.com/tx/56Gd1KZAXECzgVtueVcY9AfCJpmyReAgeaRTfg85XLF6N3VFF9VcFN79mGszfeooVZ3KEPiukHpAu1uVCFonb9Th?cluster=devnet"
+  ],
+  "pool": "3SdvXsHRW7RYrzjGsskJvVUSa8ZFTtiqpQFnAos8zQ5J",
+  "poolExplorer": "https://explorer.solana.com/address/3SdvXsHRW7RYrzjGsskJvVUSa8ZFTtiqpQFnAos8zQ5J?cluster=devnet",
+  "config": "FrCq17MMverzaWEawFHZViN2NDrmAgw2q3vj4KeAn6sk",
+  "baseMint": "55q76Md2Fk8dPwbdPErBPksC4ZzZHYDgVQFXchenqdLf",
+  "metadataUri": "https://example.com/pyln.json",
+  "migrationQuoteThresholdAtoms": "2999905659",
+  "selectedFingerprint": "13a73e7a4dc6d648",
+  "mode": "config-and-pool",
+  "seedBuyAtoms": "50000000",
+  "seedBuyExpectedOutAtoms": "1357560220843940",
+  "seedBuyMinimumOutAtoms": "1357560220843940",
+  "seedBuySlippageBps": 0,
+  "failedAssertions": []
+}

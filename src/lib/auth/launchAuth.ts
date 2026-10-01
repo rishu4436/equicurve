@@ -10,6 +10,7 @@
 import bs58 from "bs58";
 import nacl from "tweetnacl";
 import { z } from "zod";
+import { registryDesignSchema } from "@/lib/registry/design";
 import {
   addressSchema,
   clusterSchema,
@@ -31,6 +32,8 @@ export const launchAuthPayloadSchema = z
     mint: addressSchema,
     profile: launchProfileSchema.optional(),
     metadata: tokenMetadataSchema.optional(),
+    /** Config attestation. Omitted on a later signature keeps the stored design. */
+    design: registryDesignSchema.optional(),
   })
   .strict();
 

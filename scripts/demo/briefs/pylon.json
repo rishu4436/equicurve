@@ -1,0 +1,45 @@
+{
+  "label": "Pylon public-devnet seed-buy trial",
+  "clusterLabel": "devnet",
+  "clusterNote": "New public-devnet market with a seed buy. The minimum output is the quoted base amount at 0 bps. This is not Journey or Northline.",
+  "rpc": "https://api.devnet.solana.com",
+  "brief": {
+    "asset": "commodity",
+    "objective": "whale-protection",
+    "quote": "SOL",
+    "targetRaise": "3",
+    "typicalTrade": "0.1",
+    "participants": 8,
+    "totalSupply": 100000000,
+    "creatorPct": 55,
+    "lpLockPct": 100,
+    "antiSniper": true,
+    "stressPaths": 4,
+    "seed": 44107
+  },
+  "launch": {
+    "name": "Pylon",
+    "symbol": "PYLN",
+    "uri": "https://example.com/pyln.json",
+    "transferProfile": "open-spl",
+    "mintRenounce": true,
+    "seedBuyAmount": "0.05",
+    "thesis": "Seed-buy trial: a commodity curve with a nonzero minimum output, registered for Explore.",
+    "sector": "Other"
+  },
+  "expect": {
+    "candidateCount": 20,
+    "feasibleCount": 0,
+    "profileId": "exponential-2x",
+    "profileName": "Exponential · 2×",
+    "configFingerprint": "13a73e7a4dc6d648",
+    "policyId": "EQ-d55f9c69d8de",
+    "seed": 44107,
+    "openingBuyImpactBps": 252,
+    "whaleImpactBps": 1030,
+    "stressGraduationRate": 0.25,
+    "stressPaths": 4,
+    "metadataUri": "https://example.com/pyln.json",
+    "seedBuyAmount": "0.05"
+  }
+}

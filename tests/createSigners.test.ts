@@ -3,6 +3,7 @@ import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { describe, expect, it } from "vitest";
 import { EquiCurveError } from "@/lib/errors";
 import { prepareLaunchTransaction } from "@/lib/dbc/create";
+import { decodeTransactionSwaps, SEED_BUY_SLIPPAGE_BPS } from "@/lib/dbc/seedQuote";
 import type { LaunchFormInput } from "@/lib/dbc/types";
 
 /**
@@ -68,6 +69,22 @@ describe("prepareLaunchTransaction signersPerTx", () => {
       expect([...partial].sort()).toEqual([...required].sort());
       expect(wireBytes(tx, payer)).toBeLessThanOrEqual(1232);
     });
+    const swaps = r.transactions.flatMap((tx) => decodeTransactionSwaps(tx));
+    const seed = (patch.seedBuyAmount ?? "").trim();
+    const hasSeed = seed !== "" && !/^0*(\.0*)?$/.test(seed);
+    if (hasSeed) {
+      expect(swaps).toHaveLength(1);
+      expect(swaps[0].kind).toBe("swap");
+      expect(swaps[0].amountIn).toBe(BigInt(r.prepared.seedBuyAtoms));
+      expect(swaps[0].minimumAmountOut > 0n).toBe(true);
+      expect(swaps[0].minimumAmountOut.toString()).toBe(r.prepared.seedBuyMinimumOutAtoms);
+      expect(r.prepared.seedBuyMinimumOutAtoms).toBe(r.prepared.seedBuyExpectedOutAtoms);
+      expect(r.prepared.seedBuySlippageBps).toBe(SEED_BUY_SLIPPAGE_BPS);
+    } else {
+      expect(swaps).toHaveLength(0);
+      expect(r.prepared.seedBuyMinimumOutAtoms).toBe("0");
+      expect(r.prepared.seedBuyExpectedOutAtoms).toBe("0");
+    }
   });
 
   it("splits a wizard-length inline metadata URI and keeps a short https URI in one transaction", async () => {

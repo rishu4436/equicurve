@@ -15,6 +15,7 @@ import { resolve } from "node:path";
 import { Keypair, PublicKey, Transaction, type Connection } from "@solana/web3.js";
 import type { WalletContextState } from "@solana/wallet-adapter-react";
 import type { Sector } from "@/lib/demo/offerings";
+import type { ExpectedMarketConfig } from "@/lib/dbc/deploymentReadback";
 import type { PresetId } from "@/lib/dbc/types";
 import { expectMismatches, loadBriefAt, loadSavedBrief } from "./saved-brief";
 
@@ -109,6 +110,13 @@ async function registerRecordedLaunch(
     sector: Sector;
     presetId: PresetId;
     raiseTarget: number;
+    fingerprint: string;
+    migrationQuoteThresholdAtoms: string;
+    canonicalConfig: string;
+    expected: ExpectedMarketConfig;
+    profileName: string;
+    constraintsPassed: boolean;
+    transaction: string;
   },
 ): Promise<{ ok: boolean; status: number; body: unknown }> {
   const { buildLaunchAuthMessage } = await import("@/lib/auth/launchAuth");
@@ -129,6 +137,15 @@ async function registerRecordedLaunch(
       sector: recorded.sector,
       presetId: recorded.presetId,
       raiseTarget: recorded.raiseTarget,
+    },
+    design: {
+      fingerprint: recorded.fingerprint,
+      migrationQuoteThresholdAtoms: recorded.migrationQuoteThresholdAtoms,
+      canonicalConfig: recorded.canonicalConfig,
+      expected: recorded.expected,
+      profileName: recorded.profileName,
+      constraintsPassed: recorded.constraintsPassed,
+      transaction: recorded.transaction,
     },
   };
   const message = buildLaunchAuthMessage(payload, signer, issuedAt);
@@ -408,12 +425,47 @@ async function main() {
     baseMint: bundle.prepared.baseMintPubkey,
     signatures: [],
   };
+  const { decodeTransactionSwaps } = await import("@/lib/dbc/seedQuote");
+  const { DBC_PROGRAM_ID } = await import("@/lib/constants");
   const signatures: string[] = [];
   for (let i = 0; i < bundle.transactions.length; i++) {
     const tx = bundle.transactions[i];
     const signers = bundle.signersPerTx[i] ?? [];
     await setFreshBlockhash(connection, tx, payer.publicKey);
     if (signers.length > 0) tx.partialSign(...signers);
+    const seedSwaps = decodeTransactionSwaps(tx, DBC_PROGRAM_ID);
+    if (seedSwaps.length > 0) {
+      const simCopy = new Transaction({
+        feePayer: payer.publicKey,
+        recentBlockhash: tx.recentBlockhash,
+      });
+      simCopy.add(...tx.instructions);
+      if (signers.length > 0) simCopy.partialSign(...signers);
+      simCopy.partialSign(payer);
+      const seedSim = await connection.simulateTransaction(simCopy);
+      if (seedSim.value.err) {
+        writeStatus({
+          ...base,
+          status: "SEED_BUY_SIMULATION_FAILED",
+          simulation: {
+            err: seedSim.value.err,
+            logs: seedSim.value.logs,
+            unitsConsumed: seedSim.value.unitsConsumed,
+            sent: false,
+            minimumAmountOut: seedSwaps[0].minimumAmountOut.toString(),
+            expectedOut: bundle.prepared.seedBuyExpectedOutAtoms,
+            slippageBps: bundle.prepared.seedBuySlippageBps,
+          },
+          signatures,
+          pool: bundle.prepared.poolPubkey,
+          config: bundle.prepared.configPubkey,
+        });
+        console.error(
+          `Seed-buy simulation failed before send: ${JSON.stringify(seedSim.value.err)}. minimumAmountOut ${seedSwaps[0].minimumAmountOut.toString()}.`,
+        );
+        process.exit(1);
+      }
+    }
     const signature = await signAndSendTransaction({
       connection,
       wallet: walletFor(payer),
@@ -455,7 +507,58 @@ async function main() {
   check("enableFirstSwapWithMinFee", builtRecord.enableFirstSwapWithMinFee, chain.enableFirstSwapWithMinFee, flag);
   check("collectFeeMode", builtRecord.collectFeeMode, chain.collectFeeMode);
   check("migrationOption", builtRecord.migrationOption, chain.migrationOption);
-  check("quoteReserve", "0", snapshot.quoteReserve);
+  if (bundle.prepared.seedBuyAtoms === "0") {
+    check("quoteReserve", "0", snapshot.quoteReserve);
+  } else {
+    const reserve = text(snapshot.quoteReserve);
+    checks.push({
+      name: "quoteReserve",
+      expected: "> 0",
+      actual: reserve,
+      ok: reserve !== "" && reserve !== "0",
+    });
+    const { getAssociatedTokenAddressSync, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } = await import("@solana/spl-token");
+    const swaps = bundle.transactions.flatMap((tx) => decodeTransactionSwaps(tx, DBC_PROGRAM_ID));
+    const encoded = swaps.length === 1 ? swaps[0] : null;
+    checks.push({
+      name: "seedBuy.swapCount",
+      expected: "1",
+      actual: String(swaps.length),
+      ok: swaps.length === 1,
+    });
+    checks.push({
+      name: "seedBuy.amountIn",
+      expected: bundle.prepared.seedBuyAtoms,
+      actual: encoded ? encoded.amountIn.toString() : "missing",
+      ok: encoded?.amountIn.toString() === bundle.prepared.seedBuyAtoms,
+    });
+    checks.push({
+      name: "seedBuy.minimumAmountOut",
+      expected: bundle.prepared.seedBuyMinimumOutAtoms,
+      actual: encoded ? encoded.minimumAmountOut.toString() : "missing",
+      ok:
+        !!encoded &&
+        encoded.minimumAmountOut > 0n &&
+        encoded.minimumAmountOut.toString() === bundle.prepared.seedBuyMinimumOutAtoms &&
+        bundle.prepared.seedBuyMinimumOutAtoms === bundle.prepared.seedBuyExpectedOutAtoms &&
+        bundle.prepared.seedBuySlippageBps === 0,
+    });
+    const tokenProgram = saved.launch.transferProfile === "open-spl" ? TOKEN_PROGRAM_ID : TOKEN_2022_PROGRAM_ID;
+    const ata = getAssociatedTokenAddressSync(
+      new PublicKey(bundle.prepared.baseMintPubkey),
+      payer.publicKey,
+      false,
+      tokenProgram,
+    );
+    const received = BigInt((await connection.getTokenAccountBalance(ata, "confirmed")).value.amount);
+    const minimum = BigInt(bundle.prepared.seedBuyMinimumOutAtoms);
+    checks.push({
+      name: "seedBuy.received",
+      expected: bundle.prepared.seedBuyExpectedOutAtoms,
+      actual: received.toString(),
+      ok: received >= minimum && received === BigInt(bundle.prepared.seedBuyExpectedOutAtoms),
+    });
+  }
   check("isMigrated", "false", String(snapshot.isMigrated));
   for (const field of ["cliffFeeNumerator", "firstFactor", "secondFactor", "thirdFactor", "baseFeeMode"]) {
     check(`baseFee.${field}`, builtFees.baseFee?.[field], chainFees.baseFee?.[field]);
@@ -495,6 +598,10 @@ async function main() {
     migrationQuoteThresholdAtoms: bundle.prepared.summary.migrationQuoteThresholdAtoms,
     selectedFingerprint: fingerprint,
     mode: bundle.prepared.mode,
+    seedBuyAtoms: bundle.prepared.seedBuyAtoms,
+    seedBuyExpectedOutAtoms: bundle.prepared.seedBuyExpectedOutAtoms,
+    seedBuyMinimumOutAtoms: bundle.prepared.seedBuyMinimumOutAtoms,
+    seedBuySlippageBps: bundle.prepared.seedBuySlippageBps,
   };
   writeNamed("deployment.json", deployment);
   writeNamed("readback.json", { snapshot, config: onChain });
@@ -621,7 +728,7 @@ async function main() {
   );
   const registry = await registerRecordedLaunch(payer, recorded);
   writeNamed("registry.json", registry);
-  console.log(`Registry: ${registry.ok ? "accepted" : "not stored on the server"} (${registry.status}). Explore uses the committed deployment record.`);
+  console.log(`Registry: ${registry.ok ? "accepted" : "not stored on the server"} (${registry.status}). Explore reads the creator-signed design from the registry. The static catalog is a fallback.`);
   console.log("PUBLIC_DEVNET_OK");
   console.log(`Pool ${bundle.prepared.poolPubkey}`);
   console.log(deployment.poolExplorer);
