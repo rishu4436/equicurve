@@ -1,0 +1,88 @@
+{
+  "ok": true,
+  "status": 200,
+  "body": {
+    "ok": true,
+    "unchanged": false,
+    "launch": {
+      "pool": "GgdZmhXbpamyEzNYQjUyN67E2JgEVwBYcTe3YabYx2PA",
+      "mint": "5hi9CKsLwr5JqXmEFbAgYPJjCpWPA76bSLgqfU2E8JTB",
+      "config": "Afq68vjEzEJM41PVaY5yRfhgnCAXn9Q6LX7X1w8pk24h",
+      "creator": "4upqVDwyy3mSgwdZptY3PUG4jGNLd35XsXX3tEkEoEX5",
+      "quoteMint": "So11111111111111111111111111111111111111112",
+      "quote": "SOL",
+      "feeClaimer": "4upqVDwyy3mSgwdZptY3PUG4jGNLd35XsXX3tEkEoEX5",
+      "lockPct": 100,
+      "creatorFeePct": 40,
+      "status": "raising",
+      "isMigrated": false,
+      "dammPool": null,
+      "name": "Cinder",
+      "ticker": "CNDR",
+      "thesis": "Production parity: a small seed buy whose minimum output is the quoted base amount.",
+      "sector": "Other",
+      "presetId": "exponential",
+      "raiseTarget": 1,
+      "cluster": "devnet",
+      "createdAt": "2026-10-01T14:21:21.362Z",
+      "registeredAt": "2026-10-01T14:21:21.362Z",
+      "updatedAt": "2026-10-01T14:21:21.362Z",
+      "chainCheckedAt": "2026-10-01T14:21:21.437Z",
+      "authSigner": "4upqVDwyy3mSgwdZptY3PUG4jGNLd35XsXX3tEkEoEX5",
+      "authIssuedAt": "2026-10-01T14:21:21.121Z",
+      "design": {
+        "fingerprint": "67376f1d3cca7c27",
+        "migrationQuoteThresholdAtoms": "1000030448",
+        "canonicalConfig": "2026747536211382\n2866252458583424:405349294292332344479812627181781,79226673521066979257578248091:251598030808927297647691320\n1000030448\n90000000:80:90:270:1\n:1:1844674407370955:956:10:120:5000:14460000\n40\n100\n0\n0\n0\ntrue\n0\n1\n\n",
+        "expected": {
+          "sqrtStartPrice": "2026747536211382",
+          "migrationQuoteThreshold": "1000030448",
+          "curve": [
+            {
+              "sqrtPrice": "2866252458583424",
+              "liquidity": "405349294292332344479812627181781"
+            },
+            {
+              "sqrtPrice": "79226673521066979257578248091",
+              "liquidity": "251598030808927297647691320"
+            }
+          ],
+          "baseFee": {
+            "cliffFeeNumerator": "90000000",
+            "firstFactor": "80",
+            "secondFactor": "90",
+            "thirdFactor": "270",
+            "baseFeeMode": "1"
+          },
+          "dynamicFee": {
+            "initialized": "",
+            "binStep": "1",
+            "binStepU128": "1844674407370955",
+            "variableFeeControl": "956",
+            "filterPeriod": "10",
+            "decayPeriod": "120",
+            "reductionFactor": "5000",
+            "maxVolatilityAccumulator": "14460000"
+          },
+          "creatorTradingFeePercentage": "40",
+          "partnerPermanentLockedLiquidityPercentage": "100",
+          "partnerLiquidityPercentage": "0",
+          "creatorPermanentLockedLiquidityPercentage": "0",
+          "creatorLiquidityPercentage": "0",
+          "enableFirstSwapWithMinFee": "true",
+          "collectFeeMode": "0",
+          "migrationOption": "1",
+          "tokenQuoteDecimal": "",
+          "tokenBaseDecimal": ""
+        },
+        "profileName": "Exponential · 2×",
+        "constraintsPassed": false,
+        "transaction": "4vp8jJFzZmvSu4p4XQzBm854YxnX69LSd8tEuuE2zSXfJmBzajRnLmgzS8qufq8BrofU6EGVEnEA2m17tu1asSKN"
+      },
+      "verified": true
+    },
+    "registry": {
+      "backend": "upstash"
+    }
+  }
+}

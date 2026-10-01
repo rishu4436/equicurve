@@ -5,10 +5,12 @@ import { toast } from "sonner";
 import { formatAtomsExact } from "@/lib/amounts";
 import { getOptionalPoolConfigKey } from "@/lib/constants";
 import { toUserMessage } from "@/lib/errors";
-import { constraintBudgetChanges, constraintFailureCopy } from "@/lib/market/constraintNotice";
+import { constraintFailureCopy } from "@/lib/market/constraintNotice";
+import { constraintFieldLabel, constraintPolicyFrom, formatConstraintValue } from "@/lib/market/constraintBudget";
 import { scenarioAssumptions } from "@/lib/market/constraints";
 import { deploymentAllowed, designPolicy, toDesignedMarket } from "@/lib/market/policy";
 import type { CandidateReport, ConstraintBudget, LaunchPolicy, ScenarioTracePoint } from "@/lib/market/types";
+import { ConstraintBudgetEditor } from "./ConstraintBudgetEditor";
 import type { WizardState } from "./wizardTypes";
 
 function pct(n: number): string {
@@ -115,16 +117,17 @@ export function MarketDesignStep({
   const [pins, setPins] = useState<string[]>([]);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editorEpoch, setEditorEpoch] = useState(0);
   const shared = getOptionalPoolConfigKey();
   const decimals = state.quote === "USDC" ? 6 : 9;
   const assumptions = scenarioAssumptions(state.assetKind);
-  const currentKey = `${briefKey(state)}|${budgetKey(state.acceptedRelaxation)}`;
+  const currentKey = `${briefKey(state)}|${budgetKey(state.constraintDraft)}`;
   const stale = policy != null && ranKey !== currentKey;
 
   function run(relaxation?: ConstraintBudget | null) {
     setRunning(true);
     setError(null);
-    const accepted = relaxation === undefined ? state.acceptedRelaxation : relaxation;
+    const accepted = relaxation === undefined ? state.constraintDraft : relaxation;
     const key = `${briefKey(state)}|${budgetKey(accepted)}`;
     window.setTimeout(() => {
       try {
@@ -142,7 +145,7 @@ export function MarketDesignStep({
             antiSniper: state.antiSniper,
             stressPaths: state.stressPaths,
           },
-          accepted ? { acceptedRelaxation: accepted } : undefined,
+          accepted ? { acceptedBudget: accepted } : undefined,
         );
         setPolicy(next);
         setRanKey(key);
@@ -172,15 +175,14 @@ export function MarketDesignStep({
     });
   }
 
-  function acceptProposal() {
-    const proposal = policy?.negotiation.proposal;
-    if (!proposal || policy.negotiation.status !== "needs-decision") return;
-    patch({ acceptedRelaxation: proposal });
-    run(proposal);
+  function recalculate(budget: ConstraintBudget) {
+    patch({ constraintDraft: budget });
+    run(budget);
   }
 
   function clearBudget() {
-    patch({ acceptedRelaxation: null });
+    setEditorEpoch((epoch) => epoch + 1);
+    patch({ constraintDraft: null });
     run(null);
   }
 
@@ -224,8 +226,9 @@ export function MarketDesignStep({
           Research mode. The search scores a sample of configs against the hard constraints, then marks one preferred
           candidate among those it evaluated. A row that fails a constraint stays available to inspect and is labeled as
           a tradeoff example, not a design that meets the brief. If nothing passes, EquiCurve does not relax a limit.
-          Deploy stays blocked until you accept an explicit budget and run the search again. Asset kind is a
-          market-design assumption, not a legal claim. The row you deploy is the config the wallet will sign.
+          You choose each limit. Widening one limit leaves the others at the requested value until you change them.
+          Deploy stays blocked until that search admits a curve. Asset kind is a market-design assumption, not a legal
+          claim. The row you deploy is the config the wallet will sign.
         </p>
       </header>
 
@@ -289,54 +292,65 @@ export function MarketDesignStep({
       )}
       {stale && (
         <p className="rounded-input border border-signal-warn/30 bg-signal-warn/10 px-3 py-2 text-xs text-signal-warn">
-          The brief changed after this search. Deploy stays blocked until you run it again.
+          This search is out of date. Deploy stays blocked until you run it again.
         </p>
       )}
 
       {policy && (
         <>
-          {policy.negotiation.status === "needs-decision" && policy.negotiation.proposal && (
+          {policy.negotiation.status !== "satisfied" && (
             <div
               className="space-y-2 rounded-input border border-signal-warn/40 bg-signal-warn/10 px-4 py-3 text-sm"
               role="alert"
-              data-testid="constraint-budget"
+              data-testid={policy.negotiation.status === "accepted" ? "constraint-budget-accepted" : "constraint-budget"}
             >
               <p className="font-semibold text-fg-primary">Constraint decision</p>
-              <p className="text-fg-secondary">
-                No curve passed the requested constraints. Nothing was relaxed. Deploy stays blocked until you accept a
-                wider budget.
-              </p>
-              <p className="text-fg-secondary">
-                This budget admits {policy.chosen.profileName}. It is the smallest loosening of the limits that row missed.
-              </p>
-              <ul className="list-disc space-y-1 pl-5 text-xs text-fg-secondary">
-                {constraintBudgetChanges(policy.negotiation.requested, policy.negotiation.proposal).map((line) => (
-                  <li key={line}>{line}</li>
-                ))}
-              </ul>
-              <button type="button" className="ec-btn-primary" onClick={acceptProposal} disabled={running || stale}>
-                Recalculate with this budget
-              </button>
-            </div>
-          )}
-          {policy.negotiation.status === "accepted" && (
-            <div
-              className="space-y-2 rounded-input border border-signal-warn/40 bg-signal-warn/10 px-4 py-3 text-sm"
-              data-testid="constraint-budget-accepted"
-            >
-              <p className="font-semibold text-fg-primary">Accepted budget</p>
-              <p className="text-fg-secondary">
-                You accepted a wider budget. The original constraints were not met. Review uses this budget, and the
-                design record keeps it.
-              </p>
-              <ul className="list-disc space-y-1 pl-5 text-xs text-fg-secondary">
-                {constraintBudgetChanges(policy.negotiation.requested, policy.negotiation.applied).map((line) => (
-                  <li key={line}>{line}</li>
-                ))}
-              </ul>
-              <button type="button" className="ec-btn-secondary" onClick={clearBudget} disabled={running}>
-                Use the original constraints
-              </button>
+              {policy.negotiation.status === "needs-decision" && (
+                <p className="text-fg-secondary">
+                  No curve passed the requested constraints. Nothing was relaxed. Deploy stays blocked until a wider
+                  budget you choose admits a curve.
+                </p>
+              )}
+              {policy.negotiation.status === "accepted" && (
+                <>
+                  <p className="text-fg-secondary">
+                    You accepted a wider budget. The original constraints were not met. Review uses this budget, and the
+                    design record keeps the requested limits beside it.
+                  </p>
+                  <ul className="list-disc space-y-1 pl-5 text-xs text-fg-secondary">
+                    {constraintPolicyFrom(policy.negotiation.requested, policy.negotiation.applied).relaxed.map((change) => (
+                      <li key={change.field}>
+                        {constraintFieldLabel(change.field)} {formatConstraintValue(change.field, change.from)} →{" "}
+                        {formatConstraintValue(change.field, change.to)}
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+              {policy.negotiation.budgetError && (
+                <p className="text-xs text-signal-danger" data-testid="constraint-budget-error">
+                  {policy.negotiation.budgetError} This budget was not applied.
+                </p>
+              )}
+              {state.constraintDraft &&
+                policy.negotiation.status === "needs-decision" &&
+                !policy.negotiation.budgetError &&
+                !stale && (
+                  <p className="text-xs text-fg-secondary" data-testid="constraint-budget-rejected">
+                    This budget still admits no curve. The requested limits are still in force.
+                  </p>
+                )}
+              <ConstraintBudgetEditor
+                key={`${policy.policyId}|${policy.negotiation.status}|${budgetKey(policy.negotiation.applied)}|${editorEpoch}`}
+                requested={policy.negotiation.requested}
+                start={policy.negotiation.status === "accepted" ? policy.negotiation.applied : policy.negotiation.requested}
+                proposal={policy.negotiation.proposal}
+                profileName={policy.chosen.profileName}
+                running={running}
+                showReset={state.constraintDraft != null || policy.negotiation.status === "accepted"}
+                onRecalculate={recalculate}
+                onReset={clearBudget}
+              />
             </div>
           )}
           {failure && (

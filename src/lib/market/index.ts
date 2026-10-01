@@ -9,7 +9,6 @@ export {
   MARKET_MODEL_VERSION,
   deploymentAllowed,
   designPolicy,
-  loosenConstraintBudget,
   materializeRecipe,
   parseBrief,
   passesConstraintBudget,
@@ -18,12 +17,31 @@ export {
 } from "./policy";
 export { namedScenarios, referenceBuy, replay } from "./scenarios";
 export { constraintBudgetChanges, constraintFailureCopy, constraintFailureFromDesigned } from "./constraintNotice";
+export {
+  CONSTRAINT_FIELDS,
+  budgetOnlyLoosens,
+  constraintBudgetError,
+  constraintFieldLabel,
+  constraintFieldProposal,
+  constraintPolicyFrom,
+  explicitBudgetDecision,
+  formatConstraintInput,
+  loosenConstraintBudget,
+  formatConstraintValue,
+  isFractionConstraint,
+  parseConstraintInput,
+  sameConstraintChanges,
+} from "./constraintBudget";
+export type { ExplicitBudgetDecision } from "./constraintBudget";
 export { objectiveLabel } from "./score";
 export type {
   AssetKind,
   CandidateReport,
   ConstraintBudget,
+  ConstraintChange,
+  ConstraintField,
   ConstraintNegotiation,
+  ConstraintPolicy,
   DesignedMarket,
   DynamicFeeStatus,
   LaunchBrief,

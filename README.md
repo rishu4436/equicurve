@@ -163,7 +163,8 @@ If Upstash is empty and a local registry file exists on that instance, the serve
 - **Register (`POST /api/launches`)** takes only a wallet-signed payload `{ payload: { v, action, cluster, pool, mint, profile, metadata }, auth: { signer, signature, issuedAt } }` (strict schema — unknown keys such as `status` or `creator` are rejected). The server verifies the ed25519 signature (≤20 min old), re-reads the pool on-chain, requires `payload.mint` = on-chain base mint and signer = on-chain pool creator, and derives **every** chain field (creator, config, quote, lock, status, migration) from chain. Older authorizations are rejected (409).
 - **Refresh (`PATCH /api/launches`)** accepts only `{ pool }`; the server re-reads chain state (status / graduation / DAMM v2 pool). Clients can never set status.
 - **Metadata (`PUT /api/metadata/<mint>`)** uses the same signed payload. Before launch (mint not on-chain) the signer becomes the owner; afterwards only the owner / on-chain creator can edit.
-- Wallets without `signMessage` (or a declined prompt) still launch; the offering stays local-only and metadata is inlined as a `data:` URI.
+- On a public cluster, Create refuses to send the launch unless the creator signs the registry message. A wallet without `signMessage`, or a declined prompt, stops the launch before the create transaction is sent.
+- On a local validator, the same missing signature still launches. The offering stays local-only and metadata is inlined as a `data:` URI.
 - Rate limits are in-memory per server instance (best-effort, not a WAF).
 
 ## Verification states (Explore / offering page)

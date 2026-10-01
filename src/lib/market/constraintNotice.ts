@@ -1,4 +1,5 @@
-import type { ConstraintBudget, DesignedMarket, LaunchPolicy } from "./types";
+import { constraintFieldLabel, constraintPolicyFrom, formatConstraintValue } from "./constraintBudget";
+import type { ConstraintBudget, ConstraintPolicy, DesignedMarket, LaunchPolicy } from "./types";
 
 function pct(n: number): string {
   return `${Math.round(n * 1000) / 10}%`;
@@ -31,10 +32,13 @@ export function constraintBudgetChanges(requested: ConstraintBudget, next: Const
   return lines;
 }
 
-function acceptedBudgetLines(budget: ConstraintBudget): string[] {
+function acceptedPolicyLines(policy: ConstraintPolicy): string[] {
   return [
     "The issuer accepted a wider budget. The original constraints were not met.",
-    `Accepted threshold gap ${(budget.maxThresholdGap * 100).toFixed(2)}%, typical impact ${budget.maxReferenceImpactBps} bps, whale impact ${budget.maxWhaleImpactBps} bps, concentration ${Math.round(budget.maxConcentration * 100)}%, retail progress ${Math.round(budget.minRetailProgress * 100)}%.`,
+    ...policy.relaxed.map(
+      (change) =>
+        `${constraintFieldLabel(change.field)} ${formatConstraintValue(change.field, change.from)} → ${formatConstraintValue(change.field, change.to)}.`,
+    ),
   ];
 }
 
@@ -73,7 +77,9 @@ export function constraintFailureCopy(policy: LaunchPolicy): string[] | null {
       ? "This is a tradeoff example, not a fully feasible recommendation."
       : "Other evaluated candidates passed the constraints. This row is not one of them.",
   );
-  if (policy.negotiation.status === "accepted") lines.push(...acceptedBudgetLines(policy.negotiation.applied));
+  if (policy.negotiation.status === "accepted") {
+    lines.push(...acceptedPolicyLines(constraintPolicyFrom(policy.negotiation.requested, policy.negotiation.applied)));
+  }
   return lines;
 }
 
@@ -108,6 +114,8 @@ export function constraintFailureFromDesigned(designed: DesignedMarket): string[
       ? "This is a tradeoff example, not a fully feasible recommendation."
       : "Other evaluated candidates passed the constraints. This row is not one of them.",
   );
-  if (designed.acceptedRelaxation) lines.push(...acceptedBudgetLines(designed.acceptedRelaxation));
+  if (designed.constraintPolicy && designed.constraintPolicy.relaxed.length > 0) {
+    lines.push(...acceptedPolicyLines(designed.constraintPolicy));
+  }
   return lines;
 }

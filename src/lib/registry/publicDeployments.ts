@@ -1,6 +1,7 @@
 import type { Sector } from "@/lib/demo/offerings";
 import { recordedFingerprintMatches, type ExpectedMarketConfig } from "@/lib/dbc/deploymentReadback";
 import type { PresetId, QuoteLabel } from "@/lib/dbc/types";
+import type { ConstraintPolicy } from "@/lib/market/types";
 import type { RegistryLaunch } from "./types";
 import records from "./publicDeployments.json";
 
@@ -32,6 +33,8 @@ export type PublicDeployment = {
   quote: QuoteLabel;
   /** False when the preferred candidate missed an issuer constraint. */
   constraintsPassed: boolean;
+  /** Present when the signed design recorded the requested and applied budgets. */
+  constraintPolicy?: ConstraintPolicy;
   readbackPassed: boolean;
   checks: DeploymentChecks;
   /** Canonical config string whose sha256 prefix is `fingerprint`. */

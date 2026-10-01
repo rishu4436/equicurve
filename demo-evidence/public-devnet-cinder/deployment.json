@@ -1,0 +1,24 @@
+{
+  "environment": "public-devnet",
+  "rpc": "https://api.devnet.solana.com",
+  "signatures": [
+    "4vp8jJFzZmvSu4p4XQzBm854YxnX69LSd8tEuuE2zSXfJmBzajRnLmgzS8qufq8BrofU6EGVEnEA2m17tu1asSKN",
+    "5PkNaCJLLscSugkWDHRQ2t81qN3tFoe3aaD7uksPCkth2mfrxAzqsVd8UegnSCoQSSuudUqs91v81uqqSKKzdcMg"
+  ],
+  "explorer": [
+    "https://explorer.solana.com/tx/4vp8jJFzZmvSu4p4XQzBm854YxnX69LSd8tEuuE2zSXfJmBzajRnLmgzS8qufq8BrofU6EGVEnEA2m17tu1asSKN?cluster=devnet",
+    "https://explorer.solana.com/tx/5PkNaCJLLscSugkWDHRQ2t81qN3tFoe3aaD7uksPCkth2mfrxAzqsVd8UegnSCoQSSuudUqs91v81uqqSKKzdcMg?cluster=devnet"
+  ],
+  "pool": "GgdZmhXbpamyEzNYQjUyN67E2JgEVwBYcTe3YabYx2PA",
+  "poolExplorer": "https://explorer.solana.com/address/GgdZmhXbpamyEzNYQjUyN67E2JgEVwBYcTe3YabYx2PA?cluster=devnet",
+  "config": "Afq68vjEzEJM41PVaY5yRfhgnCAXn9Q6LX7X1w8pk24h",
+  "baseMint": "5hi9CKsLwr5JqXmEFbAgYPJjCpWPA76bSLgqfU2E8JTB",
+  "metadataUri": "https://example.com/cndr.json",
+  "migrationQuoteThresholdAtoms": "1000030448",
+  "selectedFingerprint": "67376f1d3cca7c27",
+  "mode": "config-and-pool",
+  "seedBuyAtoms": "20000000",
+  "seedBuyExpectedOutAtoms": "1626766561940780",
+  "seedBuyMinimumOutAtoms": "1626766561940780",
+  "seedBuySlippageBps": 0
+}

@@ -12,7 +12,7 @@ import { runCohortStress } from "@/lib/market/cohorts";
 import { constraintsFor, scenarioAssumptions } from "@/lib/market/constraints";
 import { sha256Hex } from "@/lib/market/hash";
 import { prefer } from "@/lib/market/pareto";
-import { DBC_SDK_VERSION, deploymentAllowed, designPolicy, materializeRecipe } from "@/lib/market/policy";
+import { DBC_SDK_VERSION, deploymentAllowed, designPolicy, materializeRecipe, toDesignedMarket } from "@/lib/market/policy";
 import type { LaunchPolicy } from "@/lib/market/types";
 import { namedScenarios } from "@/lib/market/scenarios";
 import { updateReferences } from "@/lib/market/volatility";
@@ -345,14 +345,20 @@ describe("launch policy", () => {
     expect(first.search.candidateCount).toBe(first.candidates.length);
     expect(first.why.join(" ")).toMatch(/preferred (feasible design|candidate) among/i);
     expect(first.why.join(" ")).not.toMatch(/optimal curve/i);
+    const designed = toDesignedMarket(first);
     if (!first.chosen.feasible) {
       expect(first.why.join(" ")).toMatch(/tradeoff example/i);
       expect(first.why.join(" ")).not.toMatch(/preferred feasible design/i);
       expect(first.negotiation.status).toBe("needs-decision");
+      expect(first.negotiation.budgetError).toBeNull();
       expect(deploymentAllowed(first)).toBe(false);
+      expect(designed.constraintPolicy).toBeUndefined();
     } else {
       expect(first.negotiation.status).toBe("satisfied");
       expect(deploymentAllowed(first)).toBe(true);
+      expect(designed.constraintPolicy?.relaxed).toEqual([]);
+      expect(designed.constraintPolicy?.requested).toEqual(first.negotiation.requested);
+      expect(designed.constraintPolicy?.applied).toEqual(first.negotiation.applied);
     }
     expect(first.limits.join(" ")).not.toMatch(/were relaxed/i);
     expect(first.limits.join(" ")).not.toMatch(/closest curves are shown/i);

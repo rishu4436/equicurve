@@ -12,7 +12,8 @@ import {
   type ExpectedMarketConfig,
 } from "@/lib/dbc/deploymentReadback";
 import type { QuoteLabel } from "@/lib/dbc/types";
-import type { ConstraintBudget } from "@/lib/market/types";
+import { budgetOnlyLoosens, constraintPolicyFrom, sameConstraintChanges } from "@/lib/market/constraintBudget";
+import type { ConstraintPolicy } from "@/lib/market/types";
 import type { PublicDeployment } from "./publicDeployments";
 import type { RegistryLaunch } from "./types";
 
@@ -76,13 +77,38 @@ export const expectedMarketConfigSchema = z
   })
   .strict();
 
+const unitInterval = z.number().finite().min(0).max(1);
+const nonNegative = z.number().finite().min(0);
+
 const constraintBudgetSchema = z
   .object({
-    maxThresholdGap: z.number().finite(),
-    maxReferenceImpactBps: z.number().finite(),
-    maxWhaleImpactBps: z.number().finite(),
-    maxConcentration: z.number().finite(),
-    minRetailProgress: z.number().finite(),
+    maxThresholdGap: unitInterval,
+    maxReferenceImpactBps: nonNegative,
+    maxWhaleImpactBps: nonNegative,
+    maxConcentration: unitInterval,
+    minRetailProgress: unitInterval,
+  })
+  .strict();
+
+const constraintChangeSchema = z
+  .object({
+    field: z.enum([
+      "maxThresholdGap",
+      "maxReferenceImpactBps",
+      "maxWhaleImpactBps",
+      "maxConcentration",
+      "minRetailProgress",
+    ]),
+    from: z.number().finite(),
+    to: z.number().finite(),
+  })
+  .strict();
+
+export const constraintPolicySchema = z
+  .object({
+    requested: constraintBudgetSchema,
+    applied: constraintBudgetSchema,
+    relaxed: z.array(constraintChangeSchema).max(5),
   })
   .strict();
 
@@ -96,8 +122,11 @@ export const registryDesignSchema = z
     expected: expectedMarketConfigSchema,
     profileName: z.string().min(1).max(80),
     constraintsPassed: z.boolean(),
-    /** Present only when the issuer accepted a wider budget. Omitted on older designs. */
-    acceptedRelaxation: constraintBudgetSchema.optional(),
+    /**
+     * Requested budget, the budget the search used, and the fields that moved.
+     * Omitted on older designs and on an unresolved search.
+     */
+    constraintPolicy: constraintPolicySchema.optional(),
     transaction: z
       .string()
       .regex(/^[1-9A-HJ-NP-Za-km-z]{64,100}$/, "transaction must be a base58 signature")
@@ -117,6 +146,29 @@ export const registryDesignSchema = z
         code: z.ZodIssueCode.custom,
         path: ["migrationQuoteThresholdAtoms"],
         message: "migration threshold does not match the canonical config",
+      });
+    }
+    const policy = design.constraintPolicy;
+    if (!policy) return;
+    if (!budgetOnlyLoosens(policy.requested, policy.applied)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["constraintPolicy", "applied"],
+        message: "applied budget tightens a requested limit",
+      });
+    }
+    if (!sameConstraintChanges(policy.relaxed, constraintPolicyFrom(policy.requested, policy.applied).relaxed)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["constraintPolicy", "relaxed"],
+        message: "relaxed fields do not match the requested and applied budgets",
+      });
+    }
+    if (policy.relaxed.length > 0 && design.constraintsPassed) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["constraintsPassed"],
+        message: "a relaxed budget cannot be marked as meeting the original constraints",
       });
     }
   });
@@ -144,8 +196,18 @@ export type ResolvedDeployment = {
   transaction: string | null;
   constraintsPassed: boolean;
   profileName: string;
-  acceptedRelaxation?: ConstraintBudget;
+  constraintPolicy?: ConstraintPolicy;
 };
+
+function catalogPolicy(value: ConstraintPolicy | undefined): { constraintPolicy: ConstraintPolicy } | Record<string, never> {
+  const parsed = constraintPolicySchema.safeParse(value);
+  if (!parsed.success) return {};
+  if (!budgetOnlyLoosens(parsed.data.requested, parsed.data.applied)) return {};
+  if (!sameConstraintChanges(parsed.data.relaxed, constraintPolicyFrom(parsed.data.requested, parsed.data.applied).relaxed)) {
+    return {};
+  }
+  return { constraintPolicy: parsed.data };
+}
 
 export function designIsConsistent(design: RegistryDesign): boolean {
   return (
@@ -179,7 +241,7 @@ export function resolveDeploymentRecord(args: {
       transaction: reg.design.transaction ?? null,
       constraintsPassed: reg.design.constraintsPassed,
       profileName: reg.design.profileName,
-      acceptedRelaxation: reg.design.acceptedRelaxation,
+      ...(reg.design.constraintPolicy ? { constraintPolicy: reg.design.constraintPolicy } : {}),
     };
   }
   const cat = args.catalog;
@@ -204,6 +266,7 @@ export function resolveDeploymentRecord(args: {
       transaction: cat.transaction,
       constraintsPassed: cat.constraintsPassed === true,
       profileName: cat.profileName,
+      ...catalogPolicy(cat.constraintPolicy),
     };
   }
   return null;

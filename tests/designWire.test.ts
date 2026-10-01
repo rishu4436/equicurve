@@ -74,10 +74,10 @@ describe("wizard design wiring", () => {
       maxConcentration: 0.5,
       minRetailProgress: 0.1,
     };
-    const accepted = applyWizardPatch(selected, { acceptedRelaxation: budget });
+    const accepted = applyWizardPatch(selected, { constraintDraft: budget });
     expect(accepted.designed).toBeNull();
-    expect(accepted.acceptedRelaxation).toEqual(budget);
-    expect(applyWizardPatch(accepted, { participants: 12 }).acceptedRelaxation).toBeNull();
+    expect(accepted.constraintDraft).toEqual(budget);
+    expect(applyWizardPatch(accepted, { participants: 12 }).constraintDraft).toBeNull();
   });
 
   it("refuses a shared config when the review is showing searched caps", () => {

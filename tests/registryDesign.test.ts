@@ -9,6 +9,8 @@ import {
   verifiedPanelVisible,
 } from "@/lib/dbc/deploymentReadback";
 import { authorizeRegistration, refreshFromChain } from "@/lib/registry/authorize";
+import { constraintPolicyFrom } from "@/lib/market/constraintBudget";
+import type { ConstraintBudget } from "@/lib/market/types";
 import { registryDesignSchema, resolveDeploymentRecord, type RegistryDesign } from "@/lib/registry/design";
 import { coerceStoredLaunch, toPublicLaunch } from "@/lib/registry/normalize";
 import { getRecordedDeployment } from "@/lib/registry/publicDeployments";
@@ -244,6 +246,78 @@ describe("resolveDeploymentRecord", () => {
     expect(verdict.verified).toBe(false);
     expect(verifiedPanelVisible({ verified: verdict.verified, checks: verdict.checks })).toBe(false);
     expect(verifiedPanelVisible({ verified: true, checks: { ...verdict.checks, readback: true, migrationThreshold: true } })).toBe(false);
+  });
+
+  it("stores a one-field relaxation and rejects an invalid or incomplete policy", () => {
+    const requested: ConstraintBudget = {
+      maxThresholdGap: 0.05,
+      maxReferenceImpactBps: 1200,
+      maxWhaleImpactBps: 1800,
+      maxConcentration: 0.55,
+      minRetailProgress: 0.25,
+    };
+    const whale = constraintPolicyFrom(requested, { ...requested, maxWhaleImpactBps: 2000 });
+    const withWhale = registryDesignSchema.safeParse({ ...attest(), constraintPolicy: whale });
+    expect(withWhale.success).toBe(true);
+    if (!withWhale.success) return;
+    expect(withWhale.data.constraintPolicy?.relaxed).toEqual([{ field: "maxWhaleImpactBps", from: 1800, to: 2000 }]);
+    const resolved = resolveDeploymentRecord({
+      pool: POOL,
+      registry: {
+        pool: POOL,
+        config: "Config1111111111111111111111111111111111111",
+        mint: MINT,
+        quote: "SOL",
+        design: withWhale.data,
+      },
+      catalog: null,
+    });
+    expect(resolved?.constraintPolicy?.requested.maxWhaleImpactBps).toBe(1800);
+    expect(resolved?.constraintPolicy?.applied.maxWhaleImpactBps).toBe(2000);
+    expect(resolved?.constraintPolicy?.applied.minRetailProgress).toBe(0.25);
+
+    const older = registryDesignSchema.safeParse(attest());
+    expect(older.success).toBe(true);
+    if (older.success) expect(older.data.constraintPolicy).toBeUndefined();
+
+    expect(
+      registryDesignSchema.safeParse({
+        ...attest(),
+        constraintPolicy: constraintPolicyFrom(requested, { ...requested, maxConcentration: 12 }),
+      }).success,
+    ).toBe(false);
+    expect(
+      registryDesignSchema.safeParse({
+        ...attest(),
+        constraintPolicy: constraintPolicyFrom(requested, { ...requested, minRetailProgress: -5 }),
+      }).success,
+    ).toBe(false);
+    expect(
+      registryDesignSchema.safeParse({
+        ...attest(),
+        constraintPolicy: constraintPolicyFrom(requested, { ...requested, maxThresholdGap: 100 }),
+      }).success,
+    ).toBe(false);
+    expect(
+      registryDesignSchema.safeParse({
+        ...attest(),
+        constraintPolicy: { ...whale, relaxed: [] },
+      }).success,
+    ).toBe(false);
+    expect(
+      registryDesignSchema.safeParse({
+        ...attest(),
+        constraintPolicy: constraintPolicyFrom(requested, { ...requested, maxWhaleImpactBps: 1000 }),
+      }).success,
+    ).toBe(false);
+    expect(
+      registryDesignSchema.safeParse({
+        ...attest(),
+        constraintsPassed: true,
+        constraintPolicy: whale,
+      }).success,
+    ).toBe(false);
+    expect(registryDesignSchema.safeParse({ ...attest(), acceptedRelaxation: requested }).success).toBe(false);
   });
 
   it("accepts the recorded Pylon design", () => {

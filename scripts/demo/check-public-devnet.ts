@@ -17,6 +17,7 @@ import type { WalletContextState } from "@solana/wallet-adapter-react";
 import type { Sector } from "@/lib/demo/offerings";
 import type { ExpectedMarketConfig } from "@/lib/dbc/deploymentReadback";
 import type { PresetId } from "@/lib/dbc/types";
+import type { ConstraintPolicy } from "@/lib/market/types";
 import { expectMismatches, loadBriefAt, loadSavedBrief } from "./saved-brief";
 
 const ROOT = process.cwd();
@@ -117,13 +118,7 @@ async function registerRecordedLaunch(
     profileName: string;
     constraintsPassed: boolean;
     transaction: string;
-    acceptedRelaxation?: {
-      maxThresholdGap: number;
-      maxReferenceImpactBps: number;
-      maxWhaleImpactBps: number;
-      maxConcentration: number;
-      minRetailProgress: number;
-    };
+    constraintPolicy?: ConstraintPolicy;
   },
 ): Promise<{ ok: boolean; status: number; body: unknown }> {
   const { buildLaunchAuthMessage } = await import("@/lib/auth/launchAuth");
@@ -153,7 +148,7 @@ async function registerRecordedLaunch(
       profileName: recorded.profileName,
       constraintsPassed: recorded.constraintsPassed,
       transaction: recorded.transaction,
-      ...(recorded.acceptedRelaxation ? { acceptedRelaxation: recorded.acceptedRelaxation } : {}),
+      ...(recorded.constraintPolicy ? { constraintPolicy: recorded.constraintPolicy } : {}),
     },
   };
   const message = buildLaunchAuthMessage(payload, signer, issuedAt);
@@ -281,7 +276,7 @@ async function main() {
     process.exit(2);
   }
 
-  const { designPolicy, materializeRecipe, parseBrief } = await import("@/lib/market");
+  const { designPolicy, materializeRecipe, parseBrief, constraintPolicyFrom } = await import("@/lib/market");
   const { marketConfigFingerprint } = await import("@/lib/dbc/configFingerprint");
   const { launchCurveConfig, prepareLaunchTransaction } = await import("@/lib/dbc/create");
   const { buildLaunchReview } = await import("@/lib/dbc/launchReview");
@@ -295,10 +290,15 @@ async function main() {
       console.error("The brief asked to accept a budget, but the search had no proposal. Nothing was sent.");
       process.exit(1);
     }
-    policy = designPolicy(saved.brief, { acceptedRelaxation: proposal });
+    policy = designPolicy(saved.brief, { acceptedBudget: proposal });
     if (policy.negotiation.status !== "accepted") {
-      writeStatus({ ...base, status: "CONSTRAINT_UNRESOLVED", simulation: "not run" });
-      console.error("The explicit budget still admits no curve. Nothing was sent.");
+      writeStatus({
+        ...base,
+        status: "CONSTRAINT_UNRESOLVED",
+        simulation: "not run",
+        budgetError: policy.negotiation.budgetError,
+      });
+      console.error(policy.negotiation.budgetError ?? "The explicit budget still admits no curve. Nothing was sent.");
       process.exit(1);
     }
   }
@@ -697,7 +697,9 @@ async function main() {
     raiseTarget: Number(saved.brief.targetRaise),
     quote: saved.brief.quote,
     constraintsPassed: policy.chosen.feasible,
-    ...(policy.negotiation.status === "accepted" ? { acceptedRelaxation: policy.negotiation.applied } : {}),
+    ...(policy.negotiation.status === "needs-decision"
+      ? {}
+      : { constraintPolicy: constraintPolicyFrom(policy.negotiation.requested, policy.negotiation.applied) }),
     readbackPassed: true,
     checks: {
       fingerprint: true,

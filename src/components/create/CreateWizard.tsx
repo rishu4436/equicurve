@@ -169,9 +169,10 @@ export function CreateWizard() {
       toast.error("Design a market before deploying. The transaction builds that design's market caps.");
       return;
     }
-    if (state.designed.constraintsPassed !== true && !state.designed.acceptedRelaxation) {
+    const acceptedWider = (state.designed.constraintPolicy?.relaxed.length ?? 0) > 0;
+    if (state.designed.constraintsPassed !== true && !acceptedWider) {
       toast.error(
-        "This design does not meet the requested constraints. Accept an explicit budget in Market design before deploying.",
+        "This design does not meet the requested constraints. Widen a limit in Market design and rerun the search before deploying.",
       );
       return;
     }
@@ -264,12 +265,12 @@ export function CreateWizard() {
           expected: expectedDesign,
           profileName: (state.designed.profileName || state.presetId).slice(0, 80),
           constraintsPassed: state.designed.constraintsPassed === true,
-          ...(state.designed.acceptedRelaxation ? { acceptedRelaxation: state.designed.acceptedRelaxation } : {}),
+          ...(state.designed.constraintPolicy ? { constraintPolicy: state.designed.constraintPolicy } : {}),
         },
       };
 
       // Creator signs the registry + metadata payload (binds pool + mint).
-      // Wallets without signMessage (or a declined prompt) → local-only record.
+      // A public cluster stops here when that signature is missing. Local RPC still launches local-only.
       let signed: SignedLaunchBody | null = null;
       if (wallet.signMessage) {
         try {

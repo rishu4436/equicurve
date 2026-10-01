@@ -1,0 +1,30 @@
+{
+  "label": "Cinder public-devnet production-parity seed buy",
+  "clusterLabel": "devnet",
+  "clusterNote": "Fresh devnet market after the production deploy. The seed-buy minimum is the quoted base output. This is not Journey, Northline, or Pylon.",
+  "rpc": "https://api.devnet.solana.com",
+  "brief": {
+    "asset": "commodity",
+    "objective": "whale-protection",
+    "quote": "SOL",
+    "targetRaise": "1",
+    "typicalTrade": "0.05",
+    "participants": 4,
+    "totalSupply": 100000000,
+    "creatorPct": 40,
+    "lpLockPct": 100,
+    "antiSniper": true,
+    "stressPaths": 4,
+    "seed": 90211
+  },
+  "launch": {
+    "name": "Cinder",
+    "symbol": "CNDR",
+    "uri": "https://example.com/cndr.json",
+    "transferProfile": "open-spl",
+    "mintRenounce": true,
+    "seedBuyAmount": "0.02",
+    "thesis": "Production parity: a small seed buy whose minimum output is the quoted base amount.",
+    "sector": "Other"
+  }
+}

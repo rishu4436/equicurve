@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { FEE_BY_PRESET } from "@/lib/dbc/presets";
 import { openBook } from "@/lib/market/book";
 import { describeCohortPaths, runCohortStress } from "@/lib/market/cohorts";
+import { constraintPolicyFrom } from "@/lib/market/constraintBudget";
 import { constraintFailureCopy, constraintFailureFromDesigned } from "@/lib/market/constraintNotice";
 import { scenarioAssumptions } from "@/lib/market/constraints";
 import { deploymentAllowed, designPolicy, materializeRecipe, parseBrief, toDesignedMarket } from "@/lib/market/policy";
@@ -116,6 +117,7 @@ function stubPolicy(): LaunchPolicy {
       },
       proposal: null,
       blocking: ["retail sample fills 4%"],
+      budgetError: null,
     },
     observedLaunches: null,
     observedNote: "",
@@ -177,25 +179,81 @@ describe("constraint failure copy", () => {
     expect(stress.seed).toBe(60428);
     expect(stress.graduationRate).toBe(0);
     expect(policy.negotiation.status).toBe("needs-decision");
+    expect(policy.negotiation.budgetError).toBeNull();
     expect(policy.limits.join(" ")).not.toMatch(/were relaxed/i);
     expect(policy.limits.join(" ")).not.toMatch(/closest curves are shown/i);
     expect(deploymentAllowed(policy)).toBe(false);
     expect(policy.negotiation.proposal).not.toBeNull();
+    expect(toDesignedMarket(policy).constraintPolicy).toBeUndefined();
+    const proposalChanges = constraintPolicyFrom(policy.negotiation.requested, policy.negotiation.proposal!).relaxed;
+    expect(proposalChanges.map((change) => change.field)).toEqual(["minRetailProgress"]);
 
-    const accepted = designPolicy(saved.brief, { acceptedRelaxation: policy.negotiation.proposal! });
+    const accepted = designPolicy(saved.brief, { acceptedBudget: policy.negotiation.proposal! });
     expect(accepted.negotiation.status).toBe("accepted");
     expect(accepted.chosen.feasible).toBe(false);
     expect(deploymentAllowed(accepted)).toBe(true);
     const designedAccepted = toDesignedMarket(accepted);
     expect(designedAccepted.constraintsPassed).toBe(false);
-    expect(designedAccepted.acceptedRelaxation).toEqual(accepted.negotiation.applied);
+    expect(designedAccepted.constraintPolicy).toEqual(
+      constraintPolicyFrom(accepted.negotiation.requested, accepted.negotiation.applied),
+    );
+    expect(designedAccepted.constraintPolicy?.requested).toEqual(policy.negotiation.requested);
+    expect(designedAccepted.constraintPolicy?.relaxed.map((change) => change.field)).toEqual(["minRetailProgress"]);
     expect(constraintFailureFromDesigned(designedAccepted)?.join(" ")).toMatch(/accepted a wider budget/i);
+    expect(constraintFailureFromDesigned(designedAccepted)?.join(" ")).toMatch(/Minimum retail fill/);
+
+    const retailOnly = designPolicy(saved.brief, {
+      acceptedBudget: {
+        ...policy.negotiation.requested,
+        minRetailProgress: policy.negotiation.proposal!.minRetailProgress,
+      },
+    });
+    expect(retailOnly.negotiation.status).toBe("accepted");
+    expect(retailOnly.negotiation.applied).toEqual({
+      ...policy.negotiation.requested,
+      minRetailProgress: policy.negotiation.proposal!.minRetailProgress,
+    });
+    expect(toDesignedMarket(retailOnly).constraintPolicy?.relaxed).toEqual([
+      {
+        field: "minRetailProgress",
+        from: policy.negotiation.requested.minRetailProgress,
+        to: policy.negotiation.proposal!.minRetailProgress,
+      },
+    ]);
+    expect(retailOnly.chosen.feasible).toBe(false);
+    expect(deploymentAllowed(retailOnly)).toBe(true);
+
+    const whaleOnly = designPolicy(saved.brief, {
+      acceptedBudget: { ...policy.negotiation.requested, maxWhaleImpactBps: 2000 },
+    });
+    expect(whaleOnly.negotiation.status).toBe("needs-decision");
+    expect(whaleOnly.negotiation.applied).toEqual(policy.negotiation.requested);
+    expect(whaleOnly.negotiation.budgetError).toBeNull();
+    expect(toDesignedMarket(whaleOnly).constraintPolicy).toBeUndefined();
+    expect(deploymentAllowed(whaleOnly)).toBe(false);
 
     const tightened = designPolicy(saved.brief, {
-      acceptedRelaxation: { ...policy.negotiation.requested, minRetailProgress: 1 },
+      acceptedBudget: { ...policy.negotiation.requested, minRetailProgress: 1 },
     });
     expect(tightened.negotiation.status).toBe("needs-decision");
+    expect(tightened.negotiation.applied).toEqual(policy.negotiation.requested);
+    expect(tightened.negotiation.budgetError).toBeNull();
     expect(tightened.chosen.configFingerprint).toBe(policy.chosen.configFingerprint);
     expect(deploymentAllowed(tightened)).toBe(false);
+
+    const invalid = designPolicy(saved.brief, {
+      acceptedBudget: {
+        ...policy.negotiation.requested,
+        maxThresholdGap: 100,
+        maxConcentration: 12,
+        minRetailProgress: -5,
+      },
+    });
+    expect(invalid.negotiation.budgetError).toBe("Threshold gap must be from 0 to 1.");
+    expect(invalid.negotiation.status).toBe("needs-decision");
+    expect(invalid.negotiation.applied).toEqual(policy.negotiation.requested);
+    expect(invalid.chosen.configFingerprint).toBe(policy.chosen.configFingerprint);
+    expect(toDesignedMarket(invalid).constraintPolicy).toBeUndefined();
+    expect(deploymentAllowed(invalid)).toBe(false);
   }, 400_000);
 });

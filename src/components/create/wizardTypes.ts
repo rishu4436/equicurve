@@ -67,8 +67,8 @@ export type WizardState = {
   designed: DesignedMarket | null;
   designWhy: string[];
   designLimits: string[];
-  /** Wider budget the issuer accepted. Null until they explicitly accept one. */
-  acceptedRelaxation: ConstraintBudget | null;
+  /** Limits the issuer edited. Null until they explicitly widen one and rerun the search. */
+  constraintDraft: ConstraintBudget | null;
   /** Creator (issuer) share of trading fees; platform/partner gets remainder. */
   feeIssuer: number;
   antiSniper: boolean;
@@ -115,7 +115,7 @@ export const INITIAL_WIZARD: WizardState = {
   designed: null,
   designWhy: [],
   designLimits: [],
-  acceptedRelaxation: null,
+  constraintDraft: null,
   feeIssuer: 70,
   antiSniper: true,
   lpLockPct: 100,
@@ -166,13 +166,13 @@ export function applyWizardPatch(s: WizardState, p: Partial<WizardState>): Wizar
     !("marketCaps" in p) &&
     (touched.some((k) => (DESIGN_INPUT_KEYS as readonly string[]).includes(k)) ||
       "presetId" in p ||
-      "acceptedRelaxation" in p);
+      "constraintDraft" in p);
   if (clears) {
     next.marketCaps = null;
     next.designed = null;
     next.designWhy = [];
     next.designLimits = [];
-    if (!("acceptedRelaxation" in p)) next.acceptedRelaxation = null;
+    if (!("constraintDraft" in p)) next.constraintDraft = null;
   }
   if (typeof p.targetRaise === "string") {
     const n = Number(p.targetRaise);

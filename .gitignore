@@ -33,3 +33,6 @@ data/
 
 # Vercel link metadata (created by `vercel link`)
 .vercel
+
+# Local validator process output. Public proof files under demo-evidence stay tracked.
+demo-evidence/validator-process.log

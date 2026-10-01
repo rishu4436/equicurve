@@ -109,13 +109,36 @@ export type DynamicFeeStatus = "simulated" | "base-only" | "not-used";
  * is a loosening. The search may apply a loosening only after the issuer accepts it.
  */
 export type ConstraintBudget = {
+  /** 0..1. Graduation threshold may land this far from the requested raise. */
   maxThresholdGap: number;
+  /** Basis points. Zero or greater. */
   maxReferenceImpactBps: number;
+  /** Basis points. Zero or greater. */
   maxWhaleImpactBps: number;
   /** 0..1. Largest buy's share of filled quote. */
   maxConcentration: number;
   /** 0..1. Retail sample must fill at least this much of the threshold. */
   minRetailProgress: number;
+};
+
+export type ConstraintField = keyof ConstraintBudget;
+
+/** One limit the issuer widened. `from` is the original budget. `to` is the value used. */
+export type ConstraintChange = {
+  field: ConstraintField;
+  from: number;
+  to: number;
+};
+
+/**
+ * Historical constraint decision stored with a launch.
+ * `requested` is the asset and objective budget. `applied` is what the search used.
+ * `relaxed` lists only the fields that moved. It is empty when the original budget passed.
+ */
+export type ConstraintPolicy = {
+  requested: ConstraintBudget;
+  applied: ConstraintBudget;
+  relaxed: ConstraintChange[];
 };
 
 /**
@@ -134,6 +157,8 @@ export type ConstraintNegotiation = {
   proposal: ConstraintBudget | null;
   /** Why the chosen row misses the requested budget. Empty when status is satisfied. */
   blocking: string[];
+  /** Set when the issuer's budget was outside the allowed ranges and was not applied. */
+  budgetError: string | null;
 };
 
 /** Compact record stored with a launch so a later chain read can be compared. */
@@ -166,8 +191,11 @@ export type DesignedMarket = {
    * Missing on older local records.
    */
   constraintsPassed?: boolean;
-  /** Set when the issuer accepted a wider budget. Absent when the original constraints passed. */
-  acceptedRelaxation?: ConstraintBudget;
+  /**
+   * Requested budget, applied budget, and the fields that changed.
+   * Absent on older records and on an unresolved search.
+   */
+  constraintPolicy?: ConstraintPolicy;
   candidateCount?: number;
   fullyFeasibleCount?: number;
   rejected?: string[];

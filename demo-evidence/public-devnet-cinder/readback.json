@@ -1,0 +1,268 @@
+{
+  "snapshot": {
+    "pool": "GgdZmhXbpamyEzNYQjUyN67E2JgEVwBYcTe3YabYx2PA",
+    "config": "Afq68vjEzEJM41PVaY5yRfhgnCAXn9Q6LX7X1w8pk24h",
+    "baseMint": "5hi9CKsLwr5JqXmEFbAgYPJjCpWPA76bSLgqfU2E8JTB",
+    "quoteMint": "So11111111111111111111111111111111111111112",
+    "creator": "4upqVDwyy3mSgwdZptY3PUG4jGNLd35XsXX3tEkEoEX5",
+    "kind": "standard",
+    "feeClaimer": "4upqVDwyy3mSgwdZptY3PUG4jGNLd35XsXX3tEkEoEX5",
+    "quoteReserve": "19798488",
+    "migrationQuoteThreshold": "1000030448",
+    "isMigrated": false,
+    "migrationProgress": 0,
+    "migrationOption": 1,
+    "migrationFeeOption": 2,
+    "baseDecimals": 9,
+    "quoteDecimals": 9,
+    "lockPct": 100,
+    "creatorFeePct": 40,
+    "curve": {
+      "phase": "raising",
+      "progress": 0.019797
+    },
+    "quoteProgress": 0.019797,
+    "baseProgress": 0.02777,
+    "configRead": true,
+    "checkedAt": "2026-10-01T14:21:20.363Z"
+  },
+  "config": {
+    "quoteMint": "So11111111111111111111111111111111111111112",
+    "feeClaimer": "4upqVDwyy3mSgwdZptY3PUG4jGNLd35XsXX3tEkEoEX5",
+    "leftoverReceiver": "4upqVDwyy3mSgwdZptY3PUG4jGNLd35XsXX3tEkEoEX5",
+    "poolFees": {
+      "baseFee": {
+        "cliffFeeNumerator": "90000000",
+        "secondFactor": "90",
+        "thirdFactor": "270",
+        "firstFactor": 80,
+        "baseFeeMode": 1,
+        "padding0": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "dynamicFee": {
+        "initialized": 1,
+        "padding": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "maxVolatilityAccumulator": 14460000,
+        "variableFeeControl": 956,
+        "binStep": 1,
+        "filterPeriod": 10,
+        "decayPeriod": 120,
+        "reductionFactor": 5000,
+        "padding2": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "binStepU128": "1844674407370955"
+      }
+    },
+    "partnerLiquidityVestingInfo": {
+      "isInitialized": 0,
+      "vestingPercentage": 0,
+      "padding": [
+        0,
+        0
+      ],
+      "bpsPerPeriod": 0,
+      "numberOfPeriods": 0,
+      "frequency": 0,
+      "cliffDurationFromMigrationTime": 0
+    },
+    "creatorLiquidityVestingInfo": {
+      "isInitialized": 0,
+      "vestingPercentage": 0,
+      "padding": [
+        0,
+        0
+      ],
+      "bpsPerPeriod": 0,
+      "numberOfPeriods": 0,
+      "frequency": 0,
+      "cliffDurationFromMigrationTime": 0
+    },
+    "padding0": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "padding1": 0,
+    "collectFeeMode": 0,
+    "migrationOption": 1,
+    "activationType": 1,
+    "tokenDecimal": 9,
+    "version": 0,
+    "tokenType": 0,
+    "quoteTokenFlag": 0,
+    "partnerPermanentLockedLiquidityPercentage": 100,
+    "partnerLiquidityPercentage": 0,
+    "creatorPermanentLockedLiquidityPercentage": 0,
+    "creatorLiquidityPercentage": 0,
+    "migrationFeeOption": 2,
+    "fixedTokenSupplyFlag": 1,
+    "creatorTradingFeePercentage": 40,
+    "tokenUpdateAuthority": 0,
+    "migrationFeePercentage": 0,
+    "creatorMigrationFeePercentage": 0,
+    "padding2": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "swapBaseAmount": "58578544177082350",
+    "migrationQuoteThreshold": "1000030448",
+    "migrationBaseThreshold": "41421368043479361",
+    "migrationSqrtPrice": "2866252458583424",
+    "lockedVestingConfig": {
+      "amountPerPeriod": "0",
+      "cliffDurationFromMigrationTime": "0",
+      "frequency": "0",
+      "numberOfPeriod": "0",
+      "cliffUnlockAmount": "0",
+      "padding": "0"
+    },
+    "preMigrationTokenSupply": "100000000000000000",
+    "postMigrationTokenSupply": "100000000000000000",
+    "migratedCollectFeeMode": 0,
+    "migratedDynamicFee": 0,
+    "migratedPoolFeeBps": 0,
+    "migratedPoolBaseFeeMode": 0,
+    "enableFirstSwapWithMinFee": 1,
+    "migratedCompoundingFeeBps": 0,
+    "poolCreationFee": "1000000",
+    "migratedPoolBaseFeeBytes": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "sqrtStartPrice": "2026747536211382",
+    "curve": [
+      {
+        "sqrtPrice": "2866252458583424",
+        "liquidity": "405349294292332344479812627181781"
+      },
+      {
+        "sqrtPrice": "79226673521066979257578248091",
+        "liquidity": "251598030808927297647691320"
+      },
+      {
+        "sqrtPrice": "0",
+        "liquidity": "0"
+      },
+      {
+        "sqrtPrice": "0",
+        "liquidity": "0"
+      },
+      {
+        "sqrtPrice": "0",
+        "liquidity": "0"
+      },
+      {
+        "sqrtPrice": "0",
+        "liquidity": "0"
+      },
+      {
+        "sqrtPrice": "0",
+        "liquidity": "0"
+      },
+      {
+        "sqrtPrice": "0",
+        "liquidity": "0"
+      },
+      {
+        "sqrtPrice": "0",
+        "liquidity": "0"
+      },
+      {
+        "sqrtPrice": "0",
+        "liquidity": "0"
+      },
+      {
+        "sqrtPrice": "0",
+        "liquidity": "0"
+      },
+      {
+        "sqrtPrice": "0",
+        "liquidity": "0"
+      },
+      {
+        "sqrtPrice": "0",
+        "liquidity": "0"
+      },
+      {
+        "sqrtPrice": "0",
+        "liquidity": "0"
+      },
+      {
+        "sqrtPrice": "0",
+        "liquidity": "0"
+      },
+      {
+        "sqrtPrice": "0",
+        "liquidity": "0"
+      },
+      {
+        "sqrtPrice": "0",
+        "liquidity": "0"
+      },
+      {
+        "sqrtPrice": "0",
+        "liquidity": "0"
+      },
+      {
+        "sqrtPrice": "0",
+        "liquidity": "0"
+      },
+      {
+        "sqrtPrice": "0",
+        "liquidity": "0"
+      }
+    ]
+  }
+}

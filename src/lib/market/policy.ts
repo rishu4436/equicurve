@@ -13,6 +13,7 @@ import { EquiCurveError } from "@/lib/errors";
 import { openBook } from "./book";
 import { runCohortStress } from "./cohorts";
 import { sha256Hex } from "./hash";
+import { constraintBudgetError, constraintPolicyFrom, loosenConstraintBudget } from "./constraintBudget";
 import { constraintsFor, multiplesIn, refineMultiples, scenarioAssumptions, type DesignConstraints } from "./constraints";
 import { objectivePriorities, paretoFrontier, prefer, type FrontierMetrics } from "./pareto";
 import { namedScenarios, referenceBuy } from "./scenarios";
@@ -460,24 +461,6 @@ function budgetFrom(limits: DesignConstraints): ConstraintBudget {
   };
 }
 
-function finiteOr(value: number, fallback: number): number {
-  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
-}
-
-/** A field that would tighten the requested budget is ignored. Acceptance can only loosen. */
-export function loosenConstraintBudget(requested: ConstraintBudget, accepted: ConstraintBudget): ConstraintBudget {
-  return {
-    maxThresholdGap: Math.max(requested.maxThresholdGap, finiteOr(accepted.maxThresholdGap, requested.maxThresholdGap)),
-    maxReferenceImpactBps: Math.max(
-      requested.maxReferenceImpactBps,
-      finiteOr(accepted.maxReferenceImpactBps, requested.maxReferenceImpactBps),
-    ),
-    maxWhaleImpactBps: Math.max(requested.maxWhaleImpactBps, finiteOr(accepted.maxWhaleImpactBps, requested.maxWhaleImpactBps)),
-    maxConcentration: Math.max(requested.maxConcentration, finiteOr(accepted.maxConcentration, requested.maxConcentration)),
-    minRetailProgress: Math.min(requested.minRetailProgress, finiteOr(accepted.minRetailProgress, requested.minRetailProgress)),
-  };
-}
-
 function sameBudget(a: ConstraintBudget, b: ConstraintBudget): boolean {
   return (
     a.maxThresholdGap === b.maxThresholdGap &&
@@ -545,7 +528,7 @@ function promisingMultiples(rows: CandidateReport[], presets: PresetId[]): numbe
 
 export function designPolicy(
   input: LaunchBrief,
-  options?: { acceptedRelaxation?: ConstraintBudget },
+  options?: { acceptedBudget?: ConstraintBudget },
 ): LaunchPolicy {
   const parsed = parseBrief(input);
   const limitsSpec = constraintsFor(parsed.brief.asset, parsed.brief.objective);
@@ -592,15 +575,19 @@ export function designPolicy(
   let applied = requested;
   let pool = inspection;
   const proposal = status === "satisfied" ? null : proposalFor(inspection[0], requested);
-  const accepted = options?.acceptedRelaxation;
+  const accepted = options?.acceptedBudget;
+  let budgetError: string | null = null;
   if (status === "needs-decision" && accepted) {
-    const widened = loosenConstraintBudget(requested, accepted);
-    if (!sameBudget(widened, requested)) {
-      const passing = rows.filter((row) => passesConstraintBudget(row, widened));
-      if (passing.length > 0) {
-        pool = passing;
-        applied = widened;
-        status = "accepted";
+    budgetError = constraintBudgetError(accepted);
+    if (!budgetError) {
+      const widened = loosenConstraintBudget(requested, accepted);
+      if (!sameBudget(widened, requested)) {
+        const passing = rows.filter((row) => passesConstraintBudget(row, widened));
+        if (passing.length > 0) {
+          pool = passing;
+          applied = widened;
+          status = "accepted";
+        }
       }
     }
   }
@@ -617,6 +604,7 @@ export function designPolicy(
     applied,
     proposal,
     blocking: status === "satisfied" ? [] : chosen.rejected,
+    budgetError,
   };
   const alternatives = frontier.slice(1);
   const priorities = objectivePriorities(parsed.brief.objective);
@@ -720,7 +708,10 @@ export function toDesignedMarket(policy: LaunchPolicy, picked: CandidateReport =
     stressWorstProgress: picked.stressWorstProgress,
     configFingerprint: picked.configFingerprint,
     constraintsPassed: policy.negotiation.status === "satisfied" && picked.feasible,
-    acceptedRelaxation: policy.negotiation.status === "accepted" ? policy.negotiation.applied : undefined,
+    constraintPolicy:
+      policy.negotiation.status === "needs-decision"
+        ? undefined
+        : constraintPolicyFrom(policy.negotiation.requested, policy.negotiation.applied),
     candidateCount: policy.candidates.length,
     fullyFeasibleCount: policy.candidates.filter((row) => row.feasible).length,
     rejected: picked.rejected,

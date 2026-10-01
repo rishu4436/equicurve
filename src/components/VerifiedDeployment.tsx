@@ -5,10 +5,23 @@ import {
   verifiedPanelVisible,
   type DeploymentCheckFlags,
 } from "@/lib/dbc/deploymentReadback";
+import { constraintFieldLabel, formatConstraintValue } from "@/lib/market/constraintBudget";
+import type { ConstraintPolicy } from "@/lib/market/types";
 import type { ResolvedDeployment } from "@/lib/registry/design";
 
 function devnetUrl(kind: "tx" | "address", value: string): string {
   return `https://explorer.solana.com/${kind}/${value}?cluster=devnet`;
+}
+
+function relaxationSentence(policy: ConstraintPolicy | undefined): string {
+  if (!policy || policy.relaxed.length === 0) return "";
+  const changes = policy.relaxed
+    .map(
+      (change) =>
+        `${constraintFieldLabel(change.field)} ${formatConstraintValue(change.field, change.from)} → ${formatConstraintValue(change.field, change.to)}`,
+    )
+    .join("; ");
+  return ` The issuer accepted a wider budget: ${changes}.`;
 }
 
 type DeploymentResponse = {
@@ -65,9 +78,7 @@ export function VerifiedDeployment({ pool }: { pool: string }) {
         {row.constraintsPassed === false && (
           <p className="text-xs text-fg-secondary">
             This design did not meet every issuer constraint. The checks above are the on-chain match.
-            {row.acceptedRelaxation
-              ? ` The issuer accepted a wider budget: whale impact ${row.acceptedRelaxation.maxWhaleImpactBps} bps, retail progress ${Math.round(row.acceptedRelaxation.minRetailProgress * 100)}%.`
-              : ""}
+            {relaxationSentence(row.constraintPolicy)}
           </p>
         )}
         <div className="flex flex-wrap gap-3 text-xs">
