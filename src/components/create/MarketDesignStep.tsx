@@ -11,6 +11,7 @@ import { scenarioAssumptions } from "@/lib/market/constraints";
 import { deploymentAllowed, designPolicy, toDesignedMarket } from "@/lib/market/policy";
 import type { CandidateReport, ConstraintBudget, LaunchPolicy, ScenarioTracePoint } from "@/lib/market/types";
 import { ConstraintBudgetEditor } from "./ConstraintBudgetEditor";
+import { RobustnessPanel } from "./RobustnessPanel";
 import type { WizardState } from "./wizardTypes";
 
 function pct(n: number): string {
@@ -395,6 +396,15 @@ export function MarketDesignStep({
             </ul>
             <p className="text-xs text-fg-muted">{policy.observedNote}</p>
           </div>
+
+          <RobustnessPanel
+            key={`${policy.chosen.configFingerprint}|${budgetKey(policy.negotiation.applied)}`}
+            chosen={policy.chosen}
+            brief={policy.brief}
+            budget={policy.negotiation.applied}
+            budgetLabel={policy.negotiation.status === "accepted" ? "accepted" : "requested"}
+            disabled={running || stale}
+          />
 
           <div className="overflow-x-auto">
             <table className="w-full min-w-[980px] text-left text-xs" data-testid="market-design-table">

@@ -115,11 +115,13 @@ export function namedScenarios(args: {
   participants: number;
   feeDurationSec: number;
   asset?: AssetKind;
+  /** When set, the five whale buys use this size instead of typical × the asset multiple. */
+  whaleSizeAtoms?: bigint;
 }): ScenarioReport[] {
   const { book, typicalAtoms, participants, feeDurationSec } = args;
   const assumptions = scenarioAssumptions(args.asset ?? "private-company");
   const sample = Math.min(SAMPLE_CAP, Math.max(1, participants));
-  const whaleSize = typicalAtoms * BigInt(assumptions.whaleMultiple);
+  const whaleSize = args.whaleSizeAtoms ?? typicalAtoms * BigInt(assumptions.whaleMultiple);
   const duration = Math.max(0, feeDurationSec);
   const lateAt = Math.floor(duration * assumptions.lateStart);
 
@@ -141,7 +143,9 @@ export function namedScenarios(args: {
     book,
     "whale",
     "Whale",
-    `Five buys at ${assumptions.whaleMultiple}× the typical size, placed at launch while the early fee is highest.`,
+    args.whaleSizeAtoms == null
+      ? `Five buys at ${assumptions.whaleMultiple}× the typical size, placed at launch while the early fee is highest.`
+      : "Five buys of a fixed size, placed at launch while the early fee is highest.",
     null,
     spreadBuys(5, whaleSize, Math.min(duration, 300), 0),
   );

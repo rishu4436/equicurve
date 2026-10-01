@@ -265,7 +265,7 @@ function metricsOf(c: CandidateReport): FrontierMetrics {
   };
 }
 
-function violations(c: CandidateReport, limits: ConstraintBudget): string[] {
+export function constraintViolations(c: CandidateReport, limits: ConstraintBudget): string[] {
   const m = metricsOf(c);
   const out: string[] = [];
   if (c.thresholdGap > limits.maxThresholdGap) {
@@ -503,7 +503,7 @@ function inspectionPool(rows: CandidateReport[], limits: DesignConstraints): Can
 }
 
 export function passesConstraintBudget(row: CandidateReport, budget: ConstraintBudget): boolean {
-  return violations(row, budget).length === 0;
+  return constraintViolations(row, budget).length === 0;
 }
 
 /** True when this row may be signed. An unresolved search is never deployable. */
@@ -548,7 +548,7 @@ export function designPolicy(
   }
   const mark = () => {
     for (const row of rows) {
-      row.rejected = violations(row, limitsSpec);
+      row.rejected = constraintViolations(row, limitsSpec);
       row.feasible = row.rejected.length === 0;
     }
   };
