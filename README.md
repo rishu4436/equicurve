@@ -110,6 +110,8 @@ npm run build
 
 On-chain end-to-end suite (drives the same `src/lib` functions the UI uses, signing with local keypairs): `npm run e2e:devnet`. Needs an app instance for the `/api` routes (`E2E_APP_URL`, default `http://localhost:3011`) and keypairs under `E2E_KEYS_DIR` (default `/workspace/equicurve-e2e/keys`, never committed). `E2E_RPC_URL=http://127.0.0.1:8899` runs it against a local validator with the Meteora programs cloned from devnet. Evidence: [docs/e2e-devnet-evidence.md](docs/e2e-devnet-evidence.md).
 
+One saved market-design journey, including deploy and on-chain readback: `npm run demo:local`. It connects to the WSL validator at `127.0.0.1:8899` and does not reset the ledger. The brief is `scripts/demo/local-brief.json`. A search that disagrees with that file stops before deployment. Evidence is written to `demo-evidence/local-validator/` and zipped beside it. `npm run demo:devnet` is a separate public-devnet readiness check. A faucet 429 there is an external funding block, not a failure of the local journey.
+
 ### E2E evidence
 
 The committed evidence ran on a **local `solana-test-validator` with the Meteora DBC / DAMM v2 programs and configs cloned from devnet** (identical program binaries), because the public devnet faucet was rate-limited for the whole session. It is **not** a public-devnet run and its explorer links only resolve against that local ledger; the raw logs of every transaction are committed in `docs/e2e-evidence/`. Latest run: 25 steps, 24 PASS, 1 SKIPPED (transfer-hook: no hook program available), 40 of 40 signatures re-fetched. See [docs/WALKTHROUGH.md](docs/WALKTHROUGH.md) to reproduce.

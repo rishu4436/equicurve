@@ -343,8 +343,12 @@ describe("launch policy", () => {
     expect(first.search.stage).toBe("coarse-to-fine");
     expect(first.search.multiples.length).toBeGreaterThan(3);
     expect(first.search.candidateCount).toBe(first.candidates.length);
-    expect(first.why.join(" ")).toMatch(/preferred feasible design among/i);
+    expect(first.why.join(" ")).toMatch(/preferred (feasible design|candidate) among/i);
     expect(first.why.join(" ")).not.toMatch(/optimal curve/i);
+    if (!first.chosen.feasible) {
+      expect(first.why.join(" ")).toMatch(/tradeoff example/i);
+      expect(first.why.join(" ")).not.toMatch(/preferred feasible design/i);
+    }
     expect(first.chosen.stressWorstProgress).toBeLessThanOrEqual(first.chosen.stressP10Progress);
     expect(first.chosen.stressP10Progress).toBeLessThanOrEqual(first.chosen.stressMedianProgress);
     expect(first.limits.join(" ")).toMatch(/representative sample/i);

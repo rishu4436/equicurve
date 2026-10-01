@@ -1,0 +1,21 @@
+{
+  "recipe": {
+    "presetId": "exponential",
+    "quote": "SOL",
+    "initialMarketCap": 91.068,
+    "migrationMarketCap": 273.204,
+    "totalSupply": 1000000000,
+    "creatorTradingFeePercentage": 70,
+    "lpLockPct": 100,
+    "antiSniper": true
+  },
+  "profileId": "exponential-3x",
+  "profileName": "Exponential · 3×",
+  "configFingerprint": "16ac1e49b68f4a4c",
+  "configHash": "42d281749872",
+  "canonical": "5566765500564248\n9641913906080476:8350150398310008660181938192139124,79226673521066979257578248091:2722949887333023254426086695\n99999604415\n90000000:80:90:270:1\n:1:1844674407370955:956:10:120:5000:14460000\n70\n100\n0\n0\n0\ntrue\n0\n1\n\n",
+  "feasible": false,
+  "rejected": [
+    "retail sample fills 4%"
+  ]
+}

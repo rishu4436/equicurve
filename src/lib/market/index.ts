@@ -1,5 +1,6 @@
 export { applyBuy, applySell, initialState, moveBps, openBook, priceString } from "./book";
-export { runCohortStress } from "./cohorts";
+export { describeCohortPaths, runCohortStress } from "./cohorts";
+export type { CohortPathReport } from "./cohorts";
 export { constraintsFor, multiplesIn, refineMultiples, scenarioAssumptions } from "./constraints";
 export { sha256Hex } from "./hash";
 export { dominates, objectivePriorities, paretoFrontier, prefer } from "./pareto";
@@ -13,6 +14,7 @@ export {
   toDesignedMarket,
 } from "./policy";
 export { namedScenarios, referenceBuy, replay } from "./scenarios";
+export { constraintFailureCopy, constraintFailureFromDesigned } from "./constraintNotice";
 export { objectiveLabel } from "./score";
 export type {
   AssetKind,

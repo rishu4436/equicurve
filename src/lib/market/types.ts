@@ -114,6 +114,8 @@ export type DesignedMarket = {
   asset: AssetKind;
   objective: MarketObjective;
   presetId: PresetId;
+  /** Display name of the selected row, for example "Exponential · 3×". */
+  profileName?: string;
   thresholdAtoms: string;
   referenceImpactBps: number;
   retailProgress: number;
@@ -126,6 +128,11 @@ export type DesignedMarket = {
   stressWorstProgress: number;
   /** Fingerprint of the config the simulator scored. Must match review and deploy. */
   configFingerprint: string;
+  /** False when this row failed a hard constraint. Missing on older local records. */
+  constraintsPassed?: boolean;
+  candidateCount?: number;
+  fullyFeasibleCount?: number;
+  rejected?: string[];
 };
 
 export type MarketProfileId =

@@ -90,10 +90,73 @@ export function launchCurveConfig(args: {
   return buildPresetConfig(args.presetId, launchPresetOverrides(args));
 }
 
+/** Solana packet limit. web3.js rejects a serialized transaction above this. */
+const SOLANA_PACKET_DATA_SIZE = 1232;
+
+/**
+ * Wire size, or "unencodable" when web3.js throws instead of returning a length.
+ * Message.compile uses a 1232-byte instruction buffer, so an oversized create
+ * throws RangeError ("encoding overruns Buffer" / offset 1232) before the
+ * "Transaction too large: N > 1232" assert can report N.
+ */
+function transactionWireBytes(tx: Transaction, feePayer: PublicKey): number | "unencodable" {
+  const measured = new Transaction({
+    feePayer,
+    recentBlockhash: PublicKey.default.toBase58(),
+  });
+  measured.add(...tx.instructions);
+  try {
+    return measured.serialize({ requireAllSignatures: false, verifySignatures: false }).length;
+  } catch (e) {
+    const overflow = packetOverflowBytes(e);
+    if (overflow === undefined) throw e;
+    return overflow ?? "unencodable";
+  }
+}
+
+function packetOverflowBytes(e: unknown): number | null | undefined {
+  if (!(e instanceof Error)) return undefined;
+  const tooLarge = /Transaction too large: (\d+)/.exec(e.message);
+  if (tooLarge) return Number(tooLarge[1]);
+  if (e instanceof RangeError || /encoding overruns|out of range/i.test(e.message)) return null;
+  return undefined;
+}
+
+function exceedsPacket(size: number | "unencodable"): boolean {
+  return size === "unencodable" || size > SOLANA_PACKET_DATA_SIZE;
+}
+
+function packetLimitError(size: number | "unencodable"): EquiCurveError {
+  const shown = size === "unencodable" ? `more than ${SOLANA_PACKET_DATA_SIZE}` : String(size);
+  return new EquiCurveError(
+    `Create transaction is ${shown} bytes. Solana accepts ${SOLANA_PACKET_DATA_SIZE}. Use a shorter https metadata URI.`,
+    "VALIDATION",
+  );
+}
+
+function sameInstruction(
+  a: Transaction["instructions"][number],
+  b: Transaction["instructions"][number],
+): boolean {
+  if (!a.programId.equals(b.programId) || a.data.length !== b.data.length || a.keys.length !== b.keys.length) {
+    return false;
+  }
+  for (let i = 0; i < a.data.length; i++) if (a.data[i] !== b.data[i]) return false;
+  return a.keys.every(
+    (k, i) =>
+      k.pubkey.equals(b.keys[i].pubkey) &&
+      k.isSigner === b.keys[i].isSigner &&
+      k.isWritable === b.keys[i].isWritable,
+  );
+}
+
 /**
  * Build real DBC createConfigAndPool (optionally with first buy).
  * Supports Open SPL, Token-2022 (no hook), and Token-2022 transfer-hook
  * via dedicated SDK builders when NEXT_PUBLIC_TRANSFER_HOOK_PROGRAM is set.
+ * A combined config+pool transaction that would exceed 1232 bytes is sent as
+ * createConfig, then createPool. Both use the same curve config. A piece that
+ * still does not fit is rejected before signing.
  */
 export async function prepareLaunchTransaction(args: {
   connection: Connection;
@@ -334,16 +397,87 @@ export async function prepareLaunchTransaction(args: {
       // config tx already landed (proven on-chain in the devnet e2e run).
       signersPerTx.push([keypairs.config], [keypairs.baseMint]);
     } else if (wantsTransferHook) {
-      const tx = await client.partner.createConfigAndPoolWithTransferHook(
-        baseParams as never,
+      // A zero buy uses the same config and pool builders as the combined
+      // transaction and does not append a swap. creator.createPool would
+      // instead read the config account, which does not exist yet.
+      const zeroBuy = {
+        buyer: payer,
+        buyAmount: new BN(0),
+        minimumAmountOut: new BN(0),
+        referralTokenAccount: null,
+      };
+      await addConfigAndPool(
+        () => client.partner.createConfigAndPoolWithTransferHook(baseParams as never),
+        async () => {
+          const split = await client.partner.createConfigAndPoolWithFirstBuyWithTransferHook({
+            ...baseParams,
+            firstBuyParam: zeroBuy,
+          } as never);
+          return { configTx: split.createConfigTx, poolTx: split.createPoolWithFirstBuyTx };
+        },
       );
-      transactions.push(tx);
-      signersPerTx.push([keypairs.config, keypairs.baseMint]);
     } else {
-      const tx = await client.partner.createConfigAndPool(baseParams);
-      transactions.push(tx);
-      signersPerTx.push([keypairs.config, keypairs.baseMint]);
+      const zeroBuy = {
+        buyer: payer,
+        buyAmount: new BN(0),
+        minimumAmountOut: new BN(0),
+        referralTokenAccount: null,
+      };
+      await addConfigAndPool(
+        () => client.partner.createConfigAndPool(baseParams),
+        async () => {
+          const split = await client.partner.createConfigAndPoolWithFirstBuy({
+            ...baseParams,
+            firstBuyParam: zeroBuy,
+          });
+          return { configTx: split.createConfigTx, poolTx: split.createPoolWithFirstBuyTx };
+        },
+      );
     }
+  }
+
+  for (const tx of transactions) {
+    const bytes = transactionWireBytes(tx, payer);
+    if (exceedsPacket(bytes)) throw packetLimitError(bytes);
+  }
+
+  async function addConfigAndPool(
+    buildCombined: () => Promise<Transaction>,
+    split: () => Promise<{ configTx: Transaction; poolTx: Transaction }>,
+  ) {
+    let combined: Transaction | undefined;
+    try {
+      combined = await buildCombined();
+    } catch (e) {
+      if (packetOverflowBytes(e) === undefined) throw e;
+    }
+    if (combined && !exceedsPacket(transactionWireBytes(combined, payer))) {
+      transactions.push(combined);
+      signersPerTx.push([keypairs.config, keypairs.baseMint]);
+      return;
+    }
+    let parts: { configTx: Transaction; poolTx: Transaction };
+    try {
+      parts = await split();
+    } catch (e) {
+      const overflow = packetOverflowBytes(e);
+      if (overflow === undefined) throw e;
+      throw packetLimitError(overflow ?? "unencodable");
+    }
+    if (combined) {
+      const merged = new Transaction().add(parts.configTx, parts.poolTx);
+      const same =
+        merged.instructions.length === combined.instructions.length &&
+        merged.instructions.every((ix, i) => sameInstruction(ix, combined.instructions[i]));
+      if (!same) {
+        throw new EquiCurveError(
+          "Could not split the create transaction without changing its instructions.",
+          "VALIDATION",
+        );
+      }
+    }
+    transactions.push(parts.configTx, parts.poolTx);
+    signersPerTx.push([keypairs.config], [keypairs.baseMint]);
   }
 
   const pool = deriveDbcPoolAddress(

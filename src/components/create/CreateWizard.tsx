@@ -18,6 +18,7 @@ import { fetchPoolSnapshot, expectedDammDestination } from "@/lib/dbc/migrate";
 import { formatAtomsExact } from "@/lib/amounts";
 import { setReceiptState, upsertReceiptItem, type LaunchReceipt } from "@/lib/dbc/receipt";
 import { FeeSplitAnswer, LpLockAnswer } from "@/components/issuer/IssuerAnswers";
+import { constraintFailureFromDesigned } from "@/lib/market/constraintNotice";
 import { MarketDesignStep } from "./MarketDesignStep";
 import { LaunchReceiptCard } from "./LaunchReceiptCard";
 import { ImageUrlField } from "./ImageUrlField";
@@ -1108,6 +1109,19 @@ function StepReview({
   const claimer = state.feeClaimer.trim() || walletAddr;
   return (
     <section className="space-y-4">
+      {state.designed?.constraintsPassed === false && (
+        <div
+          className="space-y-1 rounded-input border border-signal-warn/40 bg-signal-warn/10 px-4 py-3 text-sm"
+          role="alert"
+          data-testid="constraint-failure-review"
+        >
+          {(constraintFailureFromDesigned(state.designed) ?? []).map((line) => (
+            <p key={line} className={line === "Constraint failure" ? "font-semibold text-fg-primary" : "text-fg-secondary"}>
+              {line}
+            </p>
+          ))}
+        </div>
+      )}
       {state.designWhy.length > 0 && (
         <div className="ec-card space-y-2 p-4 text-sm">
           <p className="font-medium text-fg-primary">Why this design</p>

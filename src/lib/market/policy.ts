@@ -432,7 +432,9 @@ function whyLines(
     chosen.feasible
       ? "This design passed all five constraints."
       : `This design did not pass every constraint${chosen.rejected.length ? `: ${chosen.rejected.join("; ")}` : "."}`,
-    `This is the preferred feasible design among ${coverage.candidateCount} candidates evaluated, for ${objectiveLabel(parsed.brief.objective)}. It is not a proof that no better curve exists.`,
+    chosen.feasible
+      ? `This is the preferred feasible design among ${coverage.candidateCount} candidates evaluated, for ${objectiveLabel(parsed.brief.objective)}. It is not a proof that no better curve exists.`
+      : `This is the preferred candidate among ${coverage.candidateCount} candidates evaluated, for ${objectiveLabel(parsed.brief.objective)}. It does not satisfy every issuer constraint, so it is a tradeoff example, not a fully feasible recommendation. It is not a proof that no better curve exists.`,
     `Search range: presets ${coverage.presets.join(", ")} at price multiples ${coverage.multiples.join(", ")}. ${coverage.note}`,
     next ? compareLine(chosen, next) : "No other frontier point was available to compare.",
     `Preference order: ${priorities.join(", ")}.`,
@@ -589,6 +591,7 @@ export function toDesignedMarket(policy: LaunchPolicy, picked: CandidateReport =
     asset: policy.brief.asset,
     objective: policy.brief.objective,
     presetId: picked.recipe.presetId,
+    profileName: picked.profileName,
     thresholdAtoms: picked.thresholdAtoms,
     referenceImpactBps: picked.reference.impactBps,
     retailProgress: retail?.progress ?? 0,
@@ -598,5 +601,9 @@ export function toDesignedMarket(policy: LaunchPolicy, picked: CandidateReport =
     stressP10Progress: picked.stressP10Progress,
     stressWorstProgress: picked.stressWorstProgress,
     configFingerprint: picked.configFingerprint,
+    constraintsPassed: picked.feasible,
+    candidateCount: policy.candidates.length,
+    fullyFeasibleCount: policy.candidates.filter((row) => row.feasible).length,
+    rejected: picked.rejected,
   };
 }

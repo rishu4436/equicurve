@@ -1,0 +1,685 @@
+{
+  "seed": 60428,
+  "paths": [
+    {
+      "index": 0,
+      "seed": 60428,
+      "progress": 0.0369,
+      "graduated": false,
+      "orders": [
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 0,
+          "quoteAtoms": "262000000"
+        },
+        {
+          "cohort": "whale",
+          "side": "buy",
+          "atSec": 312,
+          "quoteAtoms": "2352000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 514,
+          "quoteAtoms": "98000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 1028,
+          "quoteAtoms": "134000000"
+        },
+        {
+          "cohort": "whale",
+          "side": "buy",
+          "atSec": 1271,
+          "quoteAtoms": "1434000000"
+        },
+        {
+          "cohort": "whale",
+          "side": "buy",
+          "atSec": 1429,
+          "quoteAtoms": "1502000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 1542,
+          "quoteAtoms": "156000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 2057,
+          "quoteAtoms": "84000000"
+        },
+        {
+          "cohort": "momentum",
+          "side": "buy",
+          "atSec": 2160,
+          "quoteAtoms": "100000000"
+        },
+        {
+          "cohort": "momentum",
+          "side": "buy",
+          "atSec": 2175,
+          "quoteAtoms": "200000000"
+        },
+        {
+          "cohort": "momentum",
+          "side": "buy",
+          "atSec": 2190,
+          "quoteAtoms": "300000000"
+        },
+        {
+          "cohort": "momentum",
+          "side": "buy",
+          "atSec": 2205,
+          "quoteAtoms": "400000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 2571,
+          "quoteAtoms": "102000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 3085,
+          "quoteAtoms": "170000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 3600,
+          "quoteAtoms": "234000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 4114,
+          "quoteAtoms": "256000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 4628,
+          "quoteAtoms": "108000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 5142,
+          "quoteAtoms": "232000000"
+        },
+        {
+          "cohort": "late",
+          "side": "buy",
+          "atSec": 5400,
+          "quoteAtoms": "376000000"
+        },
+        {
+          "cohort": "late",
+          "side": "buy",
+          "atSec": 5401,
+          "quoteAtoms": "190000000"
+        },
+        {
+          "cohort": "late",
+          "side": "buy",
+          "atSec": 5402,
+          "quoteAtoms": "386000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 5657,
+          "quoteAtoms": "236000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 6171,
+          "quoteAtoms": "228000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 6685,
+          "quoteAtoms": "106000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "sell",
+          "atSec": 7200,
+          "fractionBps": 6360
+        },
+        {
+          "cohort": "whale",
+          "side": "sell",
+          "atSec": 7200,
+          "fractionBps": 6471
+        },
+        {
+          "cohort": "momentum",
+          "side": "sell",
+          "atSec": 7200,
+          "fractionBps": 6209
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "seed": 61425,
+      "progress": 0.0391,
+      "graduated": false,
+      "orders": [
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 0,
+          "quoteAtoms": "284000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 553,
+          "quoteAtoms": "132000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 1107,
+          "quoteAtoms": "148000000"
+        },
+        {
+          "cohort": "whale",
+          "side": "buy",
+          "atSec": 1421,
+          "quoteAtoms": "2186000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 1661,
+          "quoteAtoms": "296000000"
+        },
+        {
+          "cohort": "momentum",
+          "side": "buy",
+          "atSec": 2160,
+          "quoteAtoms": "100000000"
+        },
+        {
+          "cohort": "momentum",
+          "side": "buy",
+          "atSec": 2175,
+          "quoteAtoms": "200000000"
+        },
+        {
+          "cohort": "momentum",
+          "side": "buy",
+          "atSec": 2190,
+          "quoteAtoms": "300000000"
+        },
+        {
+          "cohort": "momentum",
+          "side": "buy",
+          "atSec": 2205,
+          "quoteAtoms": "400000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 2215,
+          "quoteAtoms": "106000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 2769,
+          "quoteAtoms": "126000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 3323,
+          "quoteAtoms": "292000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 3876,
+          "quoteAtoms": "184000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 4430,
+          "quoteAtoms": "220000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 4984,
+          "quoteAtoms": "126000000"
+        },
+        {
+          "cohort": "late",
+          "side": "buy",
+          "atSec": 5400,
+          "quoteAtoms": "204000000"
+        },
+        {
+          "cohort": "late",
+          "side": "buy",
+          "atSec": 5401,
+          "quoteAtoms": "394000000"
+        },
+        {
+          "cohort": "late",
+          "side": "buy",
+          "atSec": 5402,
+          "quoteAtoms": "188000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 5538,
+          "quoteAtoms": "150000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 6092,
+          "quoteAtoms": "208000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 6646,
+          "quoteAtoms": "258000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "sell",
+          "atSec": 7200,
+          "fractionBps": 1852
+        },
+        {
+          "cohort": "whale",
+          "side": "sell",
+          "atSec": 7200,
+          "fractionBps": 6891
+        },
+        {
+          "cohort": "momentum",
+          "side": "sell",
+          "atSec": 7200,
+          "fractionBps": 3573
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "seed": 62422,
+      "progress": 0.0599,
+      "graduated": false,
+      "orders": [
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 0,
+          "quoteAtoms": "308000000"
+        },
+        {
+          "cohort": "whale",
+          "side": "buy",
+          "atSec": 187,
+          "quoteAtoms": "1242000000"
+        },
+        {
+          "cohort": "whale",
+          "side": "buy",
+          "atSec": 459,
+          "quoteAtoms": "2008000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 480,
+          "quoteAtoms": "98000000"
+        },
+        {
+          "cohort": "whale",
+          "side": "buy",
+          "atSec": 735,
+          "quoteAtoms": "2062000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 960,
+          "quoteAtoms": "260000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 1440,
+          "quoteAtoms": "116000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 1920,
+          "quoteAtoms": "92000000"
+        },
+        {
+          "cohort": "momentum",
+          "side": "buy",
+          "atSec": 2160,
+          "quoteAtoms": "100000000"
+        },
+        {
+          "cohort": "momentum",
+          "side": "buy",
+          "atSec": 2175,
+          "quoteAtoms": "200000000"
+        },
+        {
+          "cohort": "momentum",
+          "side": "buy",
+          "atSec": 2190,
+          "quoteAtoms": "300000000"
+        },
+        {
+          "cohort": "momentum",
+          "side": "buy",
+          "atSec": 2205,
+          "quoteAtoms": "400000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 2400,
+          "quoteAtoms": "116000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 2880,
+          "quoteAtoms": "212000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 3360,
+          "quoteAtoms": "218000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 3840,
+          "quoteAtoms": "240000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 4320,
+          "quoteAtoms": "198000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 4800,
+          "quoteAtoms": "296000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 5280,
+          "quoteAtoms": "220000000"
+        },
+        {
+          "cohort": "late",
+          "side": "buy",
+          "atSec": 5400,
+          "quoteAtoms": "482000000"
+        },
+        {
+          "cohort": "late",
+          "side": "buy",
+          "atSec": 5401,
+          "quoteAtoms": "370000000"
+        },
+        {
+          "cohort": "late",
+          "side": "buy",
+          "atSec": 5402,
+          "quoteAtoms": "436000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 5760,
+          "quoteAtoms": "108000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 6240,
+          "quoteAtoms": "162000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 6720,
+          "quoteAtoms": "116000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "sell",
+          "atSec": 7200,
+          "fractionBps": 3774
+        },
+        {
+          "cohort": "whale",
+          "side": "sell",
+          "atSec": 7200,
+          "fractionBps": 4930
+        },
+        {
+          "cohort": "momentum",
+          "side": "sell",
+          "atSec": 7200,
+          "fractionBps": 1564
+        }
+      ]
+    },
+    {
+      "index": 3,
+      "seed": 63419,
+      "progress": 0.0481,
+      "graduated": false,
+      "orders": [
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 0,
+          "quoteAtoms": "302000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 423,
+          "quoteAtoms": "232000000"
+        },
+        {
+          "cohort": "whale",
+          "side": "buy",
+          "atSec": 561,
+          "quoteAtoms": "1750000000"
+        },
+        {
+          "cohort": "whale",
+          "side": "buy",
+          "atSec": 726,
+          "quoteAtoms": "2362000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 847,
+          "quoteAtoms": "282000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 1270,
+          "quoteAtoms": "166000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 1694,
+          "quoteAtoms": "164000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 2117,
+          "quoteAtoms": "242000000"
+        },
+        {
+          "cohort": "momentum",
+          "side": "buy",
+          "atSec": 2160,
+          "quoteAtoms": "100000000"
+        },
+        {
+          "cohort": "momentum",
+          "side": "buy",
+          "atSec": 2175,
+          "quoteAtoms": "200000000"
+        },
+        {
+          "cohort": "momentum",
+          "side": "buy",
+          "atSec": 2190,
+          "quoteAtoms": "300000000"
+        },
+        {
+          "cohort": "momentum",
+          "side": "buy",
+          "atSec": 2205,
+          "quoteAtoms": "400000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 2541,
+          "quoteAtoms": "96000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 2964,
+          "quoteAtoms": "208000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 3388,
+          "quoteAtoms": "256000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 3811,
+          "quoteAtoms": "288000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 4235,
+          "quoteAtoms": "134000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 4658,
+          "quoteAtoms": "130000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 5082,
+          "quoteAtoms": "228000000"
+        },
+        {
+          "cohort": "late",
+          "side": "buy",
+          "atSec": 5400,
+          "quoteAtoms": "398000000"
+        },
+        {
+          "cohort": "late",
+          "side": "buy",
+          "atSec": 5401,
+          "quoteAtoms": "302000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 5505,
+          "quoteAtoms": "160000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 5929,
+          "quoteAtoms": "182000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 6352,
+          "quoteAtoms": "138000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "buy",
+          "atSec": 6776,
+          "quoteAtoms": "292000000"
+        },
+        {
+          "cohort": "retail",
+          "side": "sell",
+          "atSec": 7200,
+          "fractionBps": 4368
+        },
+        {
+          "cohort": "whale",
+          "side": "sell",
+          "atSec": 7200,
+          "fractionBps": 3989
+        },
+        {
+          "cohort": "late",
+          "side": "sell",
+          "atSec": 7200,
+          "fractionBps": 6082
+        },
+        {
+          "cohort": "momentum",
+          "side": "sell",
+          "atSec": 7200,
+          "fractionBps": 4789
+        }
+      ]
+    }
+  ]
+}

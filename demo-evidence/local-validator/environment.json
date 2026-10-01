@@ -1,0 +1,91 @@
+{
+  "label": "local validator",
+  "note": "Local validator at 127.0.0.1:8899. Meteora programs on this ledger were cloned from devnet when the ledger was created. This is not a public-devnet deployment.",
+  "notPublicDevnet": true,
+  "rpc": "http://127.0.0.1:8899",
+  "genesisHash": "E2iKie2UMdaTzLLpmH1PJxNYL1VGKbq5zfGgkpKg2ndi",
+  "slot": 525,
+  "validatorVersion": "solana-test-validator 3.1.10 (src:7bc9c805; feat:1620780344, client:Agave)",
+  "programs": [
+    {
+      "name": "Meteora Dynamic Bonding Curve",
+      "id": "dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN",
+      "exists": true,
+      "executable": true,
+      "owner": "BPFLoaderUpgradeab1e11111111111111111111111",
+      "dataLength": 36
+    },
+    {
+      "name": "Meteora DAMM v2",
+      "id": "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG",
+      "exists": true,
+      "executable": true,
+      "owner": "BPFLoaderUpgradeab1e11111111111111111111111",
+      "dataLength": 36
+    },
+    {
+      "name": "Metaplex Token Metadata",
+      "id": "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s",
+      "exists": true,
+      "executable": true,
+      "owner": "BPFLoaderUpgradeab1e11111111111111111111111",
+      "dataLength": 36
+    }
+  ],
+  "supportingAccounts": [
+    {
+      "id": "7F6dnUcRuyM2TwR8myT1dYypFXpPSxqwKNSFNkxyNESd",
+      "exists": true,
+      "owner": "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG",
+      "dataLength": 328
+    },
+    {
+      "id": "2nHK1kju6XjphBLbNxpM5XRGFj7p9U8vvNzyZiha1z6k",
+      "exists": true,
+      "owner": "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG",
+      "dataLength": 328
+    },
+    {
+      "id": "Hv8Lmzmnju6m7kcokVKvwqz7QPmdX9XfKjJsXz8RXcjp",
+      "exists": true,
+      "owner": "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG",
+      "dataLength": 328
+    },
+    {
+      "id": "2c4cYd4reUYVRAB9kUUkrq55VPyy2FNQ3FDL4o12JXmq",
+      "exists": true,
+      "owner": "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG",
+      "dataLength": 328
+    },
+    {
+      "id": "AkmQWebAwFvWk55wBoCr5D62C6VVDTzi84NJuD9H7cFD",
+      "exists": true,
+      "owner": "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG",
+      "dataLength": 328
+    },
+    {
+      "id": "DbCRBj8McvPYHJG1ukj8RE15h2dCNUdTAESG49XpQ44u",
+      "exists": true,
+      "owner": "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG",
+      "dataLength": 328
+    },
+    {
+      "id": "A8gMrEPJkacWkcb3DGwtJwTe16HktSEfvwtuDh2MCtck",
+      "exists": true,
+      "owner": "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG",
+      "dataLength": 328
+    },
+    {
+      "id": "FhVo3mqL8PW5pH5U2CN4XE33DokiyZnUwuGpH2hmHLuM",
+      "exists": true,
+      "owner": "11111111111111111111111111111111",
+      "dataLength": 0
+    },
+    {
+      "id": "HLnpSz9h2S4hiLQ43rnSD9XkcUThA7B8hQMKmDaiTLcC",
+      "exists": true,
+      "owner": "11111111111111111111111111111111",
+      "dataLength": 0
+    }
+  ]
+}

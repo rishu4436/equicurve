@@ -1,0 +1,32 @@
+{
+  "modelVersion": "0.3.0",
+  "sdkVersion": "1.5.12",
+  "brief": {
+    "asset": "private-company",
+    "objective": "controlled-discovery",
+    "quote": "SOL",
+    "targetRaise": "100",
+    "typicalTrade": "0.2",
+    "participants": 20,
+    "totalSupply": 1000000000,
+    "creatorPct": 70,
+    "lpLockPct": 100,
+    "antiSniper": true,
+    "stressPaths": 4,
+    "seed": 60428
+  },
+  "targetRaiseAtoms": "100000000000",
+  "typicalTrade": "0.2",
+  "scenarioAssumptions": {
+    "whaleMultiple": 8,
+    "sellFractionBps": 3500,
+    "lateStart": 0.65,
+    "cohortWhaleHundredths": 600
+  },
+  "feeDurationSec": 7200,
+  "stressPaths": 4,
+  "seed": 60428,
+  "pathSeedRule": "path i uses (seed + i * 997) >>> 0",
+  "retailSampleCap": 64,
+  "note": "Cohort flow is synthetic. Graduation here is a simulated frequency, not a real-world probability."
+}

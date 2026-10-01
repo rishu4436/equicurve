@@ -1,0 +1,43 @@
+{
+  "label": "EquiCurve local-validator journey",
+  "clusterLabel": "local validator",
+  "clusterNote": "Local validator at 127.0.0.1:8899. Meteora programs on this ledger were cloned from devnet when the ledger was created. This is not a public-devnet deployment.",
+  "rpc": "http://127.0.0.1:8899",
+  "brief": {
+    "asset": "private-company",
+    "objective": "controlled-discovery",
+    "quote": "SOL",
+    "targetRaise": "100",
+    "typicalTrade": "0.2",
+    "participants": 20,
+    "totalSupply": 1000000000,
+    "creatorPct": 70,
+    "lpLockPct": 100,
+    "antiSniper": true,
+    "stressPaths": 4,
+    "seed": 60428
+  },
+  "launch": {
+    "name": "Journey",
+    "symbol": "JRNY",
+    "uri": "https://example.com/jrny.json",
+    "transferProfile": "open-spl",
+    "mintRenounce": true,
+    "seedBuyAmount": "0"
+  },
+  "expect": {
+    "candidateCount": 20,
+    "feasibleCount": 0,
+    "profileId": "exponential-3x",
+    "profileName": "Exponential · 3×",
+    "configFingerprint": "16ac1e49b68f4a4c",
+    "policyId": "EQ-af7ef6d94314",
+    "seed": 60428,
+    "openingBuyImpactBps": 26,
+    "whaleImpactBps": 214,
+    "stressGraduationRate": 0,
+    "stressPaths": 4,
+    "metadataUri": "https://example.com/jrny.json",
+    "seedBuyAmount": "0"
+  }
+}

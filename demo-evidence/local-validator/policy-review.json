@@ -1,0 +1,92 @@
+{
+  "policyId": "EQ-af7ef6d94314",
+  "modelVersion": "0.3.0",
+  "sdkVersion": "1.5.12",
+  "seed": 60428,
+  "configHash": "42d281749872",
+  "search": {
+    "stage": "coarse-to-fine",
+    "presets": [
+      "short",
+      "flat",
+      "exponential",
+      "long",
+      "equity"
+    ],
+    "multiples": [
+      3,
+      5.5,
+      8,
+      12
+    ],
+    "candidateCount": 20,
+    "note": "Coarse anchors are the minimum, midpoint, and maximum of the permitted price-multiple range. One finer midpoint is then scored beside each promising anchor. This sample does not prove a global optimum."
+  },
+  "why": [
+    "This design did not pass every constraint: retail sample fills 4%",
+    "This is the preferred candidate among 20 candidates evaluated, for controlled price discovery. It does not satisfy every issuer constraint, so it is a tradeoff example, not a fully feasible recommendation. It is not a proof that no better curve exists.",
+    "Search range: presets short, flat, exponential, long, equity at price multiples 3, 5.5, 8, 12. Coarse anchors are the minimum, midpoint, and maximum of the permitted price-multiple range. One finer midpoint is then scored beside each promising anchor. This sample does not prove a global optimum.",
+    "Compared with Flat · 3×, it had lower whale impact and slower retail progress.",
+    "Preference order: whaleImpactBps, referenceImpactBps, retailProgress, lateProgress, drawdownBps, stressGraduation.",
+    "The chosen threshold is 0.00% away from your requested raise (99.999604415 SOL). Creator fee share 70% and LP lock 100% are the values that will be deployed.",
+    "Dynamic fee behavior was simulated.",
+    "Typical impact is the opening buy of 0.2 SOL: 26 bps.",
+    "Whale impact uses a 8× order, as five buys at launch (214 bps on this design).",
+    "Sell drawdown is the price move from the peak to the end of the sell-pressure path, not a reduction in the quote reserve.",
+    "Retail fill is how far a capped sample moved toward the migration threshold. It is not a forecast of who will buy.",
+    "4 cohort paths, seed 60428: graduation 0% is a simulated frequency, not a real-world probability. Median progress 4.8%, 10th percentile 3.7%, worst path 3.7%."
+  ],
+  "limits": [
+    "Order flow is synthetic. It is not a prediction of who will trade or what the price will be.",
+    "No live launches are attached. Every score on this policy comes from the simulator.",
+    "Hard constraints come from the asset profile (private-company) and the objective (controlled-discovery).",
+    "Impact, concentration, and participation limits were relaxed because none of the curves passed them.",
+    "Cohort retail orders scale with the 20 participants in the brief and are capped at 64. That is a representative sample, not one order per participant.",
+    "Named retail and sell-pressure scenarios also run at most 64 typical orders and say so on the report.",
+    "The creator seed buy's first-swap minimum-fee exemption is not part of the market scenarios. Anti-sniper is still written on the config that deploys.",
+    "The dynamic fee is replayed inside the simulator. It is a model of the program, not a quote from a live pool."
+  ],
+  "observedLaunches": null,
+  "observedNote": "No live launches are attached. Every score on this policy comes from the simulator.",
+  "constraintFailure": [
+    "Constraint failure",
+    "No candidate meets all constraints",
+    "20 candidates evaluated · 0 fully feasible",
+    "Selected for comparison: Exponential · 3×",
+    "Retail-progress constraint: Failed",
+    "Opening buy impact: 26 bps",
+    "Whale sample impact: 214 bps",
+    "Simulated graduation: 0% across 4 paths",
+    "This is a tradeoff example, not a fully feasible recommendation."
+  ],
+  "designed": {
+    "policyId": "EQ-af7ef6d94314",
+    "modelVersion": "0.3.0",
+    "sdkVersion": "1.5.12",
+    "seed": 60428,
+    "configHash": "42d281749872",
+    "asset": "private-company",
+    "objective": "controlled-discovery",
+    "presetId": "exponential",
+    "profileName": "Exponential · 3×",
+    "thresholdAtoms": "99999604415",
+    "referenceImpactBps": 26,
+    "retailProgress": 0.0384,
+    "whaleImpactBps": 214,
+    "stressGraduationRate": 0,
+    "stressPaths": 4,
+    "stressP10Progress": 0.0369,
+    "stressWorstProgress": 0.0369,
+    "configFingerprint": "16ac1e49b68f4a4c",
+    "constraintsPassed": false,
+    "candidateCount": 20,
+    "fullyFeasibleCount": 0,
+    "rejected": [
+      "retail sample fills 4%"
+    ]
+  },
+  "chosenRejected": [
+    "retail sample fills 4%"
+  ],
+  "feasibleCount": 0
+}

@@ -1,0 +1,55 @@
+{
+  "environment": "public-devnet",
+  "rpc": "https://api.devnet.solana.com",
+  "note": "This file is a public-devnet readiness check. It is not evidence about the local validator journey. A faucet 429 means funding is an external dependency.",
+  "payer": "4upqVDwyy3mSgwdZptY3PUG4jGNLd35XsXX3tEkEoEX5",
+  "balanceLamports": 0,
+  "minimumLamports": 200000000,
+  "airdrop": {
+    "attempted": true,
+    "ok": false,
+    "error": "429 Too Many Requests:  {\"jsonrpc\":\"2.0\",\"error\":{\"code\": 429, \"message\":\"You've either reached your airdrop limit today or the airdrop faucet has run dry. Please visit https://faucet.solana.com for alternate sources of test SOL\"}, \"id\": \"4e108a25-df2e-4e14-a5db-83da70857d7e\" } \r\n"
+  },
+  "programs": [
+    {
+      "name": "Meteora Dynamic Bonding Curve",
+      "id": "dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN",
+      "executable": true,
+      "owner": "BPFLoaderUpgradeab1e11111111111111111111111",
+      "dataLength": 36
+    },
+    {
+      "name": "Meteora DAMM v2",
+      "id": "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG",
+      "executable": true,
+      "owner": "BPFLoaderUpgradeab1e11111111111111111111111",
+      "dataLength": 36
+    },
+    {
+      "name": "Metaplex Token Metadata",
+      "id": "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s",
+      "executable": true,
+      "owner": "BPFLoaderUpgradeab1e11111111111111111111111",
+      "dataLength": 36
+    }
+  ],
+  "savedExpect": {
+    "candidateCount": 20,
+    "feasibleCount": 0,
+    "profileId": "exponential-3x",
+    "profileName": "Exponential · 3×",
+    "configFingerprint": "16ac1e49b68f4a4c",
+    "policyId": "EQ-af7ef6d94314",
+    "seed": 60428,
+    "openingBuyImpactBps": 26,
+    "whaleImpactBps": 214,
+    "stressGraduationRate": 0,
+    "stressPaths": 4,
+    "metadataUri": "https://example.com/jrny.json",
+    "seedBuyAmount": "0"
+  },
+  "simulation": null,
+  "readback": "not run — no public-devnet transaction was sent",
+  "status": "FUNDING_BLOCKED",
+  "detail": "The payer cannot pay for a public-devnet deployment. If the faucet returned 429, that rate limit is outside this repo. The local validator journey is a separate result."
+}

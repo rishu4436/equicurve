@@ -176,6 +176,63 @@ export function runCohortStress(args: {
   };
 }
 
+export type CohortPathReport = {
+  index: number;
+  seed: number;
+  progress: number;
+  graduated: boolean;
+  orders: {
+    cohort: CohortId;
+    side: "buy" | "sell";
+    atSec: number;
+    quoteAtoms?: string;
+    fractionBps?: number;
+  }[];
+};
+
+/** The same paths runCohortStress scores, kept so a demo can show each one. */
+export function describeCohortPaths(args: {
+  book: CurveBook;
+  typicalAtoms: bigint;
+  feeDurationSec: number;
+  paths: number;
+  seed: number;
+  whaleHundredths?: number;
+  participants?: number;
+}): CohortPathReport[] {
+  const paths = Math.max(1, Math.min(5_000, Math.floor(args.paths)));
+  const reports: CohortPathReport[] = [];
+  for (let i = 0; i < paths; i++) {
+    const seed = (args.seed + i * 997) >>> 0;
+    const orders = buildCohortPath({
+      typicalAtoms: args.typicalAtoms,
+      feeDurationSec: args.feeDurationSec,
+      seed,
+      whaleHundredths: args.whaleHundredths,
+      participants: args.participants,
+    });
+    const state = replayCohorts(args.book, orders);
+    const progress =
+      args.book.threshold <= 0n
+        ? 0
+        : state.quoteReserve >= args.book.threshold
+          ? 1
+          : Number((state.quoteReserve * 10_000n) / args.book.threshold) / 10_000;
+    reports.push({
+      index: i,
+      seed,
+      progress,
+      graduated: state.quoteReserve >= args.book.threshold,
+      orders: orders.map((order) =>
+        order.side === "buy"
+          ? { cohort: order.cohort, side: "buy", atSec: order.atSec, quoteAtoms: order.quoteAtoms.toString(10) }
+          : { cohort: order.cohort, side: "sell", atSec: order.atSec, fractionBps: order.fractionBps },
+      ),
+    });
+  }
+  return reports;
+}
+
 function percentile(sorted: number[], p: number): number {
   if (sorted.length === 0) return 0;
   const idx = Math.min(sorted.length - 1, Math.max(0, Math.ceil(p * sorted.length) - 1));

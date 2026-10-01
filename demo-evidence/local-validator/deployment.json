@@ -1,0 +1,12 @@
+{
+  "signatures": [
+    "3RW2xbnrAy6MGrzU6wRjtEhRihUVQg7KKqyaoAq3ciKfZneuVFWtiaAcEjVwdjnTChCYaawLTdjxiv3e1aY1HrY4"
+  ],
+  "mode": "config-and-pool",
+  "pool": "49HFTn2aj6JWqr1gsKQTKSdvCuLFVUB1FxYcPoWRCk1k",
+  "config": "AXx3X81e9p9zBBRPN8q1B9GtMVLMbBfvkQNWnPsogp32",
+  "baseMint": "FxJGxZPPxZ6yP4cKtwLgX4nwZPQjjSn9cVX3NYxiWmGV",
+  "quoteMint": "So11111111111111111111111111111111111111112",
+  "metadataUri": "https://example.com/jrny.json",
+  "migrationQuoteThresholdAtoms": "99999604415"
+}

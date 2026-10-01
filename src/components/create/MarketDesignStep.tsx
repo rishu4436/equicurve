@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { formatAtomsExact } from "@/lib/amounts";
 import { getOptionalPoolConfigKey } from "@/lib/constants";
 import { toUserMessage } from "@/lib/errors";
+import { constraintFailureCopy } from "@/lib/market/constraintNotice";
 import { scenarioAssumptions } from "@/lib/market/constraints";
 import { designPolicy, toDesignedMarket } from "@/lib/market/policy";
 import type { CandidateReport, LaunchPolicy, ScenarioTracePoint } from "@/lib/market/types";
@@ -159,10 +160,12 @@ export function MarketDesignStep({
   function deploy(row: CandidateReport) {
     if (!policy || stale) return;
     const designed = toDesignedMarket(policy, row);
-    const picked =
-      row.profileId === policy.chosen.profileId
+    const failure = constraintFailureCopy(policy);
+    const picked = !row.feasible
+      ? `Selected for comparison: ${row.profileName}. This is a tradeoff example, not a fully feasible recommendation.`
+      : row.profileId === policy.chosen.profileId
         ? `Selected ${row.profileName}. This is the preferred feasible design among ${policy.search.candidateCount} candidates evaluated for this objective.`
-        : `Selected ${row.profileName}. The preferred design for this objective was ${policy.chosen.profileName}.`;
+        : `Selected ${row.profileName}. The preferred feasible design for this objective was ${policy.chosen.profileName}.`;
     patch({
       presetId: row.recipe.presetId,
       marketCaps: {
@@ -170,7 +173,7 @@ export function MarketDesignStep({
         migration: row.recipe.migrationMarketCap,
       },
       designed,
-      designWhy: [picked, ...policy.why, ...row.rejected.map((reason) => `Constraint: ${reason}`)],
+      designWhy: [...(failure ?? []), picked, ...policy.why, ...row.rejected.map((reason) => `Constraint: ${reason}`)],
       designLimits: policy.limits,
     });
     onDeploy(row.recipe.presetId);
@@ -179,6 +182,7 @@ export function MarketDesignStep({
   const pinned = (policy ? pins.map((id) => policy.candidates.find((row) => row.profileId === id)) : []).filter(
     (row): row is CandidateReport => row != null,
   );
+  const failure = policy ? constraintFailureCopy(policy) : null;
   const chartSeries = pinned.map((row) => ({
     name: row.profileName,
     points: scenario(row, "retail")?.trace ?? [],
@@ -190,9 +194,10 @@ export function MarketDesignStep({
         <p className="text-[10px] font-semibold uppercase tracking-wider text-fg-muted">EquiCurve · Market design</p>
         <h1 className="text-2xl font-semibold text-fg-primary">Compare candidate policies</h1>
         <p className="mt-1 text-sm text-fg-secondary">
-          Research mode. The search keeps configs that pass the hard constraints, then prefers one feasible design among
-          the candidates it evaluated. Asset kind is a market-design assumption, not a legal claim. The row you deploy is
-          the config the wallet will sign.
+          Research mode. The search scores a sample of configs against the hard constraints, then marks one preferred
+          candidate among those it evaluated. A row that fails a constraint stays available to inspect and is labeled as
+          a tradeoff example, not a design that meets the brief. Asset kind is a market-design assumption, not a legal
+          claim. The row you deploy is the config the wallet will sign.
         </p>
       </header>
 
@@ -262,9 +267,24 @@ export function MarketDesignStep({
 
       {policy && (
         <>
+          {failure && (
+            <div
+              className="space-y-1 rounded-input border border-signal-warn/40 bg-signal-warn/10 px-4 py-3 text-sm"
+              role="alert"
+              data-testid="constraint-failure"
+            >
+              {failure.map((line) => (
+                <p key={line} className={line === failure[0] ? "font-semibold text-fg-primary" : "text-fg-secondary"}>
+                  {line}
+                </p>
+              ))}
+            </div>
+          )}
           <div className="ec-card space-y-2 p-4 text-sm">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-fg-muted">
-              Feasible · Pareto frontier · selected for this objective
+              {failure
+                ? "Preferred among the candidates evaluated · constraints not all met"
+                : "Feasible · Pareto frontier · selected for this objective"}
             </p>
             <p className="font-medium text-fg-primary">
               {policy.chosen.profileName} · policy {policy.policyId}
@@ -366,11 +386,11 @@ export function MarketDesignStep({
                       <td className="py-2">
                         <button
                           type="button"
-                          className={selected ? "ec-btn-secondary" : "ec-btn-primary"}
+                          className={selected ? "ec-btn-secondary" : row.feasible ? "ec-btn-primary" : "ec-btn-secondary"}
                           disabled={stale}
                           onClick={() => deploy(row)}
                         >
-                          Review this config
+                          {row.feasible ? "Review this config" : "Inspect this tradeoff"}
                         </button>
                       </td>
                     </tr>
