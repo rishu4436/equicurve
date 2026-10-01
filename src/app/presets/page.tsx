@@ -48,7 +48,11 @@ export default function PresetsPage() {
         <p className="max-w-3xl text-sm text-fg-secondary">
           Private-company profile, controlled discovery, 100 SOL raise, 1 SOL typical order, 12 participants, 4 cohort
           paths, seed {sample?.seed ?? "—"}. Every metric here is simulated. There is no observed launch record on this
-          page.
+          page.{" "}
+          {sample
+            ? `The leading row is the preferred feasible design among ${sample.search.candidateCount} candidates evaluated (price multiples ${sample.search.multiples.join(", ")}). It is not a proof that no better curve exists.`
+            : "The search reports the preferred feasible design among the candidates it evaluates. It is not a proof that no better curve exists."}{" "}
+          Illustrative layout, not live results.
         </p>
         {sample ? (
           <div className="overflow-x-auto">

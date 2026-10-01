@@ -6,12 +6,13 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { getClusterLabel, getCluster, getOptionalPoolConfigKey, WSOL_MINT } from "@/lib/constants";
-import { planLaunchAddresses, prepareLaunchTransaction } from "@/lib/dbc/create";
+import { launchCurveConfig, planLaunchAddresses, prepareLaunchTransaction } from "@/lib/dbc/create";
 import { signLaunchPayload, type LaunchAuthPayload, type SignedLaunchBody } from "@/lib/auth/launchAuth";
 import { getUsdcMint } from "@/lib/constants";
 import { resolveMetadataUri } from "@/lib/metadata/client";
 import { Keypair, PublicKey } from "@solana/web3.js";
 import { getPreset, MIN_LP_LOCK_PCT, tradingFeeSplit } from "@/lib/dbc/presets";
+import { marketConfigFingerprint } from "@/lib/dbc/configFingerprint";
 import { buildLaunchReview, type LaunchReview, type ReviewRow } from "@/lib/dbc/launchReview";
 import { fetchPoolSnapshot, expectedDammDestination } from "@/lib/dbc/migrate";
 import { formatAtomsExact } from "@/lib/amounts";
@@ -91,27 +92,35 @@ export function CreateWizard() {
   const idx = stepIndex(step);
   const feePlatform = 100 - state.feeIssuer;
   const walletAddr = wallet.publicKey?.toBase58() ?? null;
-  const review: LaunchReview = useMemo(
-    () =>
-      buildLaunchReview({
-        presetId: state.presetId,
-        quote: state.quote,
-        quoteMint: state.quote === "USDC" ? (getUsdcMint()?.toBase58() ?? null) : WSOL_MINT.toBase58(),
-        transferProfile: state.transferProfile,
-        totalSupply: state.totalSupply,
-        creatorPct: state.feeIssuer,
-        lpLockPct: state.lpLockPct,
-        mintRenounce: state.mintRenounce,
-        antiSniper: state.antiSniper,
-        feeClaimer: state.feeClaimer,
-        wallet: walletAddr,
-        seedBuy: state.seedBuy,
-        cluster: getClusterLabel(),
-        sharedConfig: getOptionalPoolConfigKey()?.toBase58() ?? null,
-        marketCaps: state.marketCaps ?? undefined,
-      }),
-    [state, walletAddr],
-  );
+  const review: LaunchReview = useMemo(() => {
+    const built = buildLaunchReview({
+      presetId: state.presetId,
+      quote: state.quote,
+      quoteMint: state.quote === "USDC" ? (getUsdcMint()?.toBase58() ?? null) : WSOL_MINT.toBase58(),
+      transferProfile: state.transferProfile,
+      totalSupply: state.totalSupply,
+      creatorPct: state.feeIssuer,
+      lpLockPct: state.lpLockPct,
+      mintRenounce: state.mintRenounce,
+      antiSniper: state.antiSniper,
+      feeClaimer: state.feeClaimer,
+      wallet: walletAddr,
+      seedBuy: state.seedBuy,
+      cluster: getClusterLabel(),
+      sharedConfig: getOptionalPoolConfigKey()?.toBase58() ?? null,
+      marketCaps: state.marketCaps ?? undefined,
+    });
+    if (!state.marketCaps || !state.designed) {
+      built.errors.push(
+        "No current market design is selected. Run the search and choose a candidate before review or deployment.",
+      );
+    } else if (built.configFingerprint !== state.designed.configFingerprint) {
+      built.errors.push(
+        "This review does not match the design that was simulated. Rerun the market design before deploying.",
+      );
+    }
+    return built;
+  }, [state, walletAddr]);
 
   function patch(p: Partial<WizardState>) {
     setState((s) => applyWizardPatch(s, p));
@@ -156,6 +165,32 @@ export function CreateWizard() {
   async function onLaunch() {
     if (!state.marketCaps || !state.designed) {
       toast.error("Design a market before deploying. The transaction builds that design's market caps.");
+      return;
+    }
+    if (getOptionalPoolConfigKey()) {
+      toast.error(
+        "A shared pool config is set. It cannot deploy this market design. Unset NEXT_PUBLIC_POOL_CONFIG_KEY, then rerun the search.",
+      );
+      return;
+    }
+    try {
+      const signedConfig = launchCurveConfig({
+        presetId: state.presetId,
+        totalSupply: state.totalSupply,
+        creatorTradingFeePercentage: state.feeIssuer,
+        lpLockPct: state.lpLockPct,
+        mintRenounce: state.mintRenounce,
+        antiSniper: state.antiSniper,
+        quoteDecimals: state.quote === "USDC" ? 6 : 9,
+        transferProfile: state.transferProfile,
+        marketCaps: state.marketCaps,
+      });
+      if (marketConfigFingerprint(signedConfig) !== state.designed.configFingerprint) {
+        toast.error("The transaction config does not match the simulated design. Rerun the market design before deploying.");
+        return;
+      }
+    } catch (e) {
+      toast.error(toUserMessage(e));
       return;
     }
     if (!wallet.publicKey) {
@@ -523,7 +558,7 @@ export function CreateWizard() {
             <button
               type="button"
               onClick={onContinue}
-              disabled={!canContinue(step, state)}
+              disabled={!canContinue(step, state) || (step === "review" && review.errors.length > 0)}
               className="ec-btn-primary"
             >
               Continue
@@ -1090,8 +1125,8 @@ function StepReview({
           )}
           {state.designed && (
             <p className="font-mono text-[10px] text-fg-muted">
-              {state.designed.policyId} · config {state.designed.configHash} · model {state.designed.modelVersion} · seed{" "}
-              {state.designed.seed}
+              {state.designed.policyId} · config {state.designed.configHash} · fingerprint {state.designed.configFingerprint} ·
+              review {review.configFingerprint} · model {state.designed.modelVersion} · seed {state.designed.seed}
             </p>
           )}
         </div>
@@ -1200,6 +1235,12 @@ function StepLaunch({
             : ""}. No mock success.
         </p>
       </header>
+      {!state.designed && (
+        <p className="rounded-input border border-signal-warn/30 bg-signal-warn/10 px-3 py-2 text-xs text-signal-warn">
+          No current market design is selected. Go back, run the search, and choose a candidate. Deployment stays blocked
+          until that design matches the transaction.
+        </p>
+      )}
       <ol className="ec-card space-y-2 p-4 text-sm text-fg-secondary">
         <li>1. Sign a free message binding the registry / metadata to the planned pool and mint</li>
         <li>2. Create DBC config (fee / lock / mint authority from your inputs)</li>
@@ -1213,7 +1254,7 @@ function StepLaunch({
       </ol>
       <button
         type="button"
-        disabled={busy || !walletConnected || !!result}
+        disabled={busy || !walletConnected || !!result || !state.designed || !state.marketCaps}
         onClick={onLaunch}
         className="ec-btn-primary w-full sm:w-auto"
       >

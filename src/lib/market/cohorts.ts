@@ -34,12 +34,18 @@ export function buildCohortPath(args: {
   seed: number;
   /** Whale order size in hundredths of a typical order. Default matches a private-company profile. */
   whaleHundredths?: number;
+  /**
+   * Expected participants. Retail order count scales with this and is capped at 64.
+   * It is a representative sample, not one order per participant.
+   */
+  participants?: number;
 }): CohortOrder[] {
   const whaleBase = args.whaleHundredths ?? 600;
   const rand = mulberry32(args.seed);
   const duration = Math.max(1, args.feeDurationSec);
   const orders: CohortOrder[] = [];
-  const retailN = 6 + Math.floor(rand() * 6);
+  const participantCap = Math.min(64, Math.max(1, Math.floor(args.participants ?? 12)));
+  const retailN = Math.max(1, Math.min(participantCap, Math.round(participantCap * (0.55 + rand() * 0.45))));
   for (let i = 0; i < retailN; i++) {
     orders.push({
       cohort: "retail",
@@ -117,6 +123,11 @@ export type CohortStress = {
   seed: number;
   graduationRate: number;
   medianProgress: number;
+  /** 10th percentile of path progress. With few paths this sits near the worst path. */
+  p10Progress: number;
+  worstProgress: number;
+  /** Participants the retail sample was scaled to, after the 64-order cap. */
+  participantSample: number;
   /** Stable fingerprint of this seed's path results. */
   signature: string;
 };
@@ -128,8 +139,10 @@ export function runCohortStress(args: {
   paths: number;
   seed: number;
   whaleHundredths?: number;
+  participants?: number;
 }): CohortStress {
   const paths = Math.max(1, Math.min(5_000, Math.floor(args.paths)));
+  const participantSample = Math.min(64, Math.max(1, Math.floor(args.participants ?? 12)));
   const progresses: number[] = [];
   let graduated = 0;
   for (let i = 0; i < paths; i++) {
@@ -138,6 +151,7 @@ export function runCohortStress(args: {
       feeDurationSec: args.feeDurationSec,
       seed: (args.seed + i * 997) >>> 0,
       whaleHundredths: args.whaleHundredths,
+      participants: args.participants,
     });
     const state = replayCohorts(args.book, orders);
     const prog =
@@ -155,6 +169,15 @@ export function runCohortStress(args: {
     seed: args.seed,
     graduationRate: graduated / paths,
     medianProgress: sorted[Math.floor(sorted.length / 2)] ?? 0,
+    p10Progress: percentile(sorted, 0.1),
+    worstProgress: sorted[0] ?? 0,
+    participantSample,
     signature: progresses.map((n) => n.toFixed(4)).join(","),
   };
+}
+
+function percentile(sorted: number[], p: number): number {
+  if (sorted.length === 0) return 0;
+  const idx = Math.min(sorted.length - 1, Math.max(0, Math.ceil(p * sorted.length) - 1));
+  return sorted[idx] ?? 0;
 }

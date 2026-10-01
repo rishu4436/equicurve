@@ -60,6 +60,8 @@ export type WizardState = {
   /** Typical order, quote units. Decimal string. */
   typicalTrade: string;
   participants: number;
+  /** Synthetic cohort paths. 8 is a quick preview. 32 is a more thorough run. */
+  stressPaths: number;
   /** Set only by selecting a simulated design. Deploy builds these caps. */
   marketCaps: { initial: number; migration: number } | null;
   designed: DesignedMarket | null;
@@ -106,6 +108,7 @@ export const INITIAL_WIZARD: WizardState = {
   targetRaise: "100",
   typicalTrade: "1",
   participants: 40,
+  stressPaths: 8,
   marketCaps: null,
   designed: null,
   designWhy: [],
@@ -150,6 +153,7 @@ export const DESIGN_INPUT_KEYS = [
   "objective",
   "quote",
   "totalSupply",
+  "stressPaths",
 ] as const;
 
 export function applyWizardPatch(s: WizardState, p: Partial<WizardState>): WizardState {
@@ -210,9 +214,9 @@ export function canContinue(step: WizardStepId, s: WizardState): boolean {
     case "design":
       return !!s.presetId && !!s.marketCaps && s.marketCaps.migration > s.marketCaps.initial;
     case "review":
-      return s.ackBonding && s.ackDocs && s.ackFees && s.ackClaimer && !!s.marketCaps;
+      return s.ackBonding && s.ackDocs && s.ackFees && s.ackClaimer && !!s.marketCaps && !!s.designed;
     case "launch":
-      return !!s.marketCaps;
+      return !!s.marketCaps && !!s.designed;
     default:
       return false;
   }

@@ -51,6 +51,8 @@ describe("buildLaunchReview", () => {
     expect(val(r, "Creator first buy")).toContain("0.25 SOL exactly (250000000 atoms)");
     expect(val(r, "Fee claimer")).toBe(base.wallet);
     expect(r.migrationQuoteThresholdAtoms).toBe(presetMigrationThresholdAtoms("short", "SOL"));
+    const token2022 = buildLaunchReview({ ...base, transferProfile: "token-2022" });
+    expect(token2022.configFingerprint).toBe(r.configFingerprint);
     // SOL short preset now needs a few SOL, not 772.5 SOL.
     const sol = Number(BigInt(r.migrationQuoteThresholdAtoms!) / 1_000_000n) / 1000;
     expect(sol).toBeGreaterThan(1);

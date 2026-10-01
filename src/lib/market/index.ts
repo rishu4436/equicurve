@@ -1,6 +1,6 @@
 export { applyBuy, applySell, initialState, moveBps, openBook, priceString } from "./book";
 export { runCohortStress } from "./cohorts";
-export { constraintsFor } from "./constraints";
+export { constraintsFor, multiplesIn, refineMultiples, scenarioAssumptions } from "./constraints";
 export { sha256Hex } from "./hash";
 export { dominates, objectivePriorities, paretoFrontier, prefer } from "./pareto";
 export {
@@ -26,4 +26,6 @@ export type {
   ReferenceImpact,
   ScenarioId,
   ScenarioReport,
+  SearchCoverage,
 } from "./types";
+export { marketConfigFingerprint } from "@/lib/dbc/configFingerprint";

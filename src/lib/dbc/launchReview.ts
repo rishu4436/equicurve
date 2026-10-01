@@ -17,6 +17,7 @@ import {
   presetPriceMultiple,
   tradingFeeSplit,
 } from "./presets";
+import { marketConfigFingerprint } from "./configFingerprint";
 import type { PresetId } from "./types";
 
 export type LaunchReviewInput = {
@@ -55,6 +56,8 @@ export type LaunchReview = {
   errors: string[];
   migrationQuoteThresholdAtoms: string | null;
   curvePoints: number;
+  /** Fingerprint of the config this review describes. Deploy must match it. */
+  configFingerprint: string;
 };
 
 const Q64 = 1n << 64n;
@@ -88,7 +91,8 @@ export function buildLaunchReview(i: LaunchReviewInput): LaunchReview {
     transferProfile: i.transferProfile,
     marketCaps: i.marketCaps,
   });
-  const cfg = buildPresetConfig(i.presetId, overrides) as unknown as {
+  const built = buildPresetConfig(i.presetId, overrides);
+  const cfg = built as unknown as {
     migrationQuoteThreshold: { toString(): string };
     sqrtStartPrice: { toString(): string };
     curve: { sqrtPrice: { toString(): string }; liquidity: { toString(): string } }[];
@@ -286,5 +290,6 @@ export function buildLaunchReview(i: LaunchReviewInput): LaunchReview {
     errors,
     migrationQuoteThresholdAtoms: shared ? null : threshold,
     curvePoints: points,
+    configFingerprint: marketConfigFingerprint(built),
   };
 }

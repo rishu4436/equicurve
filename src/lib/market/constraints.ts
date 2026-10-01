@@ -98,3 +98,23 @@ export function multiplesIn(c: DesignConstraints): number[] {
   const mid = Math.round((min + max) / 2);
   return [...new Set([min, mid, max])];
 }
+
+function roundMultiple(n: number): number {
+  return Math.round(n * 10) / 10;
+}
+
+/**
+ * One finer step between coarse multiples that touched a promising result.
+ * This is still a sample of the range, not an exhaustive optimum.
+ */
+export function refineMultiples(min: number, max: number, tested: number[], promising: number[]): number[] {
+  const sorted = [...new Set(tested.map(roundMultiple))].sort((a, b) => a - b);
+  const interesting = new Set(promising.map(roundMultiple));
+  const extra: number[] = [];
+  for (let i = 0; i < sorted.length - 1; i++) {
+    if (!interesting.has(sorted[i]) && !interesting.has(sorted[i + 1])) continue;
+    const mid = roundMultiple((sorted[i] + sorted[i + 1]) / 2);
+    if (mid > sorted[i] && mid < sorted[i + 1] && mid >= min && mid <= max) extra.push(mid);
+  }
+  return [...new Set(extra)];
+}

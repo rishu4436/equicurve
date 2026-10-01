@@ -1038,7 +1038,10 @@ function DesignedVsActual({
             Chain phase: {snapshot.curve.phase}
             {snapshot.isMigrated ? " · migrated" : ""}. Cohort paths reached graduation in{" "}
             {Math.round(designed.stressGraduationRate * 1000) / 10}% of {designed.stressPaths} synthetic paths. That rate
-            is not this pool&apos;s result.
+            is a simulated frequency, not this pool&apos;s result.
+            {typeof designed.stressP10Progress === "number" && typeof designed.stressWorstProgress === "number"
+              ? ` 10th percentile progress ${Math.round(designed.stressP10Progress * 1000) / 10}%, worst path ${Math.round(designed.stressWorstProgress * 1000) / 10}%.`
+              : ""}
           </dd>
         </div>
       </dl>

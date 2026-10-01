@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { swapQuotePartialFill } from "@meteora-ag/dynamic-bonding-curve-sdk";
 import BN from "bn.js";
 import { describe, expect, it } from "vitest";
+import { marketConfigFingerprint } from "@/lib/dbc/configFingerprint";
 import { launchCurveConfig } from "@/lib/dbc/create";
 import { buildLaunchReview } from "@/lib/dbc/launchReview";
 import { buildPresetConfig, validateEquiCurveConfig } from "@/lib/dbc/presets";
@@ -267,6 +268,18 @@ describe("cohort stress", () => {
     const c = runCohortStress({ ...args, seed: 2 });
     expect(a.signature).toBe(b.signature);
     expect(a.signature).not.toBe(c.signature);
+    expect(a.worstProgress).toBeLessThanOrEqual(a.p10Progress);
+    expect(a.p10Progress).toBeLessThanOrEqual(a.medianProgress);
+  });
+
+  it("changes the retail sample when the participant count changes", () => {
+    const book = shortBook();
+    const args = { book, typicalAtoms: 100_000_000n, feeDurationSec: 600, paths: 4, seed: 7 };
+    const few = runCohortStress({ ...args, participants: 4 });
+    const many = runCohortStress({ ...args, participants: 80 });
+    expect(few.participantSample).toBe(4);
+    expect(many.participantSample).toBe(64);
+    expect(few.signature).not.toBe(many.signature);
   });
 });
 
@@ -299,6 +312,10 @@ describe("launch policy", () => {
       readFileSync(resolve("node_modules/@meteora-ag/dynamic-bonding-curve-sdk/package.json"), "utf8"),
     ).version as string;
     expect(DBC_SDK_VERSION).toBe(installed);
+    const lock = JSON.parse(readFileSync(resolve("package-lock.json"), "utf8")) as {
+      packages: Record<string, { version?: string }>;
+    };
+    expect(DBC_SDK_VERSION).toBe(lock.packages["node_modules/@meteora-ag/dynamic-bonding-curve-sdk"]?.version);
   });
 
   it("designs a deployable curve and repeats it for the same seed", () => {
@@ -323,6 +340,16 @@ describe("launch policy", () => {
     expect(first.chosen.recipe.antiSniper).toBe(true);
     expect(first.candidates.length).toBeGreaterThan(1);
     expect(first.alternatives.length).toBeLessThan(first.candidates.length);
+    expect(first.search.stage).toBe("coarse-to-fine");
+    expect(first.search.multiples.length).toBeGreaterThan(3);
+    expect(first.search.candidateCount).toBe(first.candidates.length);
+    expect(first.why.join(" ")).toMatch(/preferred feasible design among/i);
+    expect(first.why.join(" ")).not.toMatch(/optimal curve/i);
+    expect(first.chosen.stressWorstProgress).toBeLessThanOrEqual(first.chosen.stressP10Progress);
+    expect(first.chosen.stressP10Progress).toBeLessThanOrEqual(first.chosen.stressMedianProgress);
+    expect(first.limits.join(" ")).toMatch(/representative sample/i);
+    const retailTrace = first.chosen.scenarios.find((s) => s.id === "retail");
+    expect(retailTrace?.trace.length).toBeGreaterThan(0);
 
     for (const row of first.candidates) {
       expect(validateEquiCurveConfig(materializeRecipe(row.recipe))).toEqual([]);
@@ -331,6 +358,45 @@ describe("launch policy", () => {
       const preset = row.recipe.presetId;
       if (preset === "exponential" || preset === "equity") expect(row.dynamicFeeStatus).toBe("simulated");
       if (preset === "short" || preset === "flat" || preset === "long") expect(row.dynamicFeeStatus).toBe("not-used");
+      const rebuilt = materializeRecipe(row.recipe);
+      const deployed = launchCurveConfig({
+        presetId: row.recipe.presetId,
+        totalSupply: row.recipe.totalSupply,
+        creatorTradingFeePercentage: row.recipe.creatorTradingFeePercentage,
+        lpLockPct: row.recipe.lpLockPct,
+        mintRenounce: true,
+        antiSniper: row.recipe.antiSniper,
+        quoteDecimals: 9,
+        transferProfile: "open-spl",
+        marketCaps: {
+          initial: row.recipe.initialMarketCap,
+          migration: row.recipe.migrationMarketCap,
+        },
+      });
+      const reviewed = buildLaunchReview({
+        presetId: row.recipe.presetId,
+        quote: "SOL",
+        quoteMint: "So11111111111111111111111111111111111111112",
+        transferProfile: "open-spl",
+        totalSupply: row.recipe.totalSupply,
+        creatorPct: row.recipe.creatorTradingFeePercentage,
+        lpLockPct: row.recipe.lpLockPct,
+        mintRenounce: true,
+        antiSniper: row.recipe.antiSniper,
+        feeClaimer: "",
+        wallet: null,
+        seedBuy: "0",
+        cluster: "devnet",
+        sharedConfig: null,
+        marketCaps: {
+          initial: row.recipe.initialMarketCap,
+          migration: row.recipe.migrationMarketCap,
+        },
+      });
+      expect(row.configFingerprint).toBe(marketConfigFingerprint(rebuilt));
+      expect(marketConfigFingerprint(deployed)).toBe(row.configFingerprint);
+      expect(reviewed.configFingerprint).toBe(row.configFingerprint);
+      expect(reviewed.migrationQuoteThresholdAtoms).toBe(row.thresholdAtoms);
     }
 
     const rebuilt = materializeRecipe(first.chosen.recipe);

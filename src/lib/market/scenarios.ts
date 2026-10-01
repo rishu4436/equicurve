@@ -1,7 +1,7 @@
 import type { BookState, CurveBook, Fill } from "./book";
 import { applyBuy, applySell, initialState, moveBps } from "./book";
 import { scenarioAssumptions } from "./constraints";
-import type { AssetKind, ReferenceImpact, ScenarioId, ScenarioReport } from "./types";
+import type { AssetKind, ReferenceImpact, ScenarioId, ScenarioReport, ScenarioTracePoint } from "./types";
 
 export type SimOrder =
   | { side: "buy"; quoteAtoms: bigint; atSec: number }
@@ -16,10 +16,16 @@ function progressOf(reserve: bigint, threshold: bigint): number {
   return Number((reserve * 10_000n) / threshold) / 10_000;
 }
 
-export function replay(book: CurveBook, orders: SimOrder[]): { state: BookState; fills: Fill[]; peakSqrt: bigint } {
+export function replay(book: CurveBook, orders: SimOrder[]): {
+  state: BookState;
+  fills: Fill[];
+  peakSqrt: bigint;
+  trace: ScenarioTracePoint[];
+} {
   let state = initialState(book);
   let peakSqrt = state.sqrtPrice;
   const fills: Fill[] = [];
+  const trace: ScenarioTracePoint[] = [];
   for (const order of orders) {
     const step =
       order.side === "buy"
@@ -30,8 +36,13 @@ export function replay(book: CurveBook, orders: SimOrder[]): { state: BookState;
     state = step.state;
     if (state.sqrtPrice > peakSqrt) peakSqrt = state.sqrtPrice;
     fills.push(step.fill);
+    trace.push({
+      step: trace.length + 1,
+      priceMoveBps: moveBps(book.sqrtStart, state.sqrtPrice),
+      progress: progressOf(state.quoteReserve, book.threshold),
+    });
   }
-  return { state, fills, peakSqrt };
+  return { state, fills, peakSqrt, trace };
 }
 
 export function summarize(
@@ -42,7 +53,7 @@ export function summarize(
   participantsAsked: number | null,
   orders: SimOrder[],
 ): ScenarioReport {
-  const { state, fills, peakSqrt } = replay(book, orders);
+  const { state, fills, peakSqrt, trace } = replay(book, orders);
   let paid = 0n;
   let fees = 0n;
   let largestIn = 0n;
@@ -74,6 +85,7 @@ export function summarize(
     drawdownBps: Math.min(0, moveBps(peakSqrt, state.sqrtPrice)),
     concentration: filled > 0n ? Number((largestIn * 10_000n) / filled) / 10_000 : 0,
     note,
+    trace,
   };
 }
 

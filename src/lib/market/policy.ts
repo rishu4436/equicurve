@@ -1,7 +1,8 @@
 import type { ConfigParameters } from "@meteora-ag/dynamic-bonding-curve-sdk";
 import { formatAtomsExact, parseUiAmount } from "@/lib/amounts";
+import { marketConfigFingerprint } from "@/lib/dbc/configFingerprint";
+import { launchCurveConfig } from "@/lib/dbc/create";
 import {
-  buildPresetConfig,
   FEE_BY_PRESET,
   getPreset,
   MIN_LP_LOCK_PCT,
@@ -12,7 +13,7 @@ import { EquiCurveError } from "@/lib/errors";
 import { openBook } from "./book";
 import { runCohortStress } from "./cohorts";
 import { sha256Hex } from "./hash";
-import { constraintsFor, multiplesIn, scenarioAssumptions, type DesignConstraints } from "./constraints";
+import { constraintsFor, multiplesIn, refineMultiples, scenarioAssumptions, type DesignConstraints } from "./constraints";
 import { objectivePriorities, paretoFrontier, prefer, type FrontierMetrics } from "./pareto";
 import { namedScenarios, referenceBuy } from "./scenarios";
 import { objectiveLabel } from "./score";
@@ -23,9 +24,10 @@ import type {
   LaunchBrief,
   LaunchPolicy,
   PolicyRecipe,
+  SearchCoverage,
 } from "./types";
 
-export const MARKET_MODEL_VERSION = "0.2.0";
+export const MARKET_MODEL_VERSION = "0.3.0";
 /** Installed @meteora-ag/dynamic-bonding-curve-sdk. A test locks this to package.json. */
 export const DBC_SDK_VERSION = "1.5.12";
 const DEFAULT_SEED = 0xec0c;
@@ -167,13 +169,16 @@ function buildAt(args: {
   antiSniper: boolean;
 }): ConfigParameters | null {
   try {
-    const cfg = buildPresetConfig(args.presetId, {
-      quoteDecimals: args.decimals,
-      totalTokenSupply: args.supply,
-      marketCaps: { initial: args.initial, migration: args.migration },
+    const cfg = launchCurveConfig({
+      presetId: args.presetId,
+      totalSupply: args.supply,
       creatorTradingFeePercentage: args.creatorPct,
       lpLockPct: args.lpLockPct,
+      mintRenounce: true,
       antiSniper: args.antiSniper,
+      quoteDecimals: args.decimals,
+      transferProfile: "open-spl",
+      marketCaps: { initial: args.initial, migration: args.migration },
     });
     if (validateEquiCurveConfig(cfg).length > 0) return null;
     return cfg;
@@ -334,6 +339,7 @@ function evaluateOne(parsed: ParsedBrief, presetId: PresetId, multiple: number):
     paths: parsed.paths,
     seed: parsed.seed,
     whaleHundredths: assumptions.cohortWhaleHundredths,
+    participants: parsed.brief.participants,
   });
   const row: CandidateReport = {
     profileId: `${presetId}-${multiple}x`,
@@ -348,6 +354,9 @@ function evaluateOne(parsed: ParsedBrief, presetId: PresetId, multiple: number):
     stressGraduationRate: stress.graduationRate,
     stressPaths: stress.paths,
     stressMedianProgress: stress.medianProgress,
+    stressP10Progress: stress.p10Progress,
+    stressWorstProgress: stress.worstProgress,
+    configFingerprint: marketConfigFingerprint(cfg),
     score: 0,
     dynamicFeeStatus: feeStatus(book),
     feasible: true,
@@ -385,50 +394,110 @@ export function recipeConfigHash(recipe: PolicyRecipe): string {
   return sha(JSON.stringify(recipe));
 }
 
-function whyLines(parsed: ParsedBrief, chosen: CandidateReport, next: CandidateReport | undefined, priorities: string[]): string[] {
+function feeWords(status: DynamicFeeStatus): string {
+  if (status === "simulated") return "Dynamic fee behavior was simulated.";
+  if (status === "base-only") return "Dynamic fee behavior was only partially modeled.";
+  return "Dynamic fee behavior was not used.";
+}
+
+function pct1(n: number): string {
+  return `${Math.round(n * 1000) / 10}%`;
+}
+
+function compareLine(chosen: CandidateReport, next: CandidateReport): string {
+  const whaleA = scenarioOf(chosen, "whale")?.largestBuyImpactBps ?? 0;
+  const whaleB = scenarioOf(next, "whale")?.largestBuyImpactBps ?? 0;
+  const retailA = scenarioOf(chosen, "retail")?.progress ?? 0;
+  const retailB = scenarioOf(next, "retail")?.progress ?? 0;
+  const whale =
+    whaleA < whaleB ? "lower whale impact" : whaleA > whaleB ? "higher whale impact" : "the same whale impact";
+  const retail =
+    retailA > retailB ? "faster retail progress" : retailA < retailB ? "slower retail progress" : "the same retail progress";
+  return `Compared with ${next.profileName}, it had ${whale} and ${retail}.`;
+}
+
+function whyLines(
+  parsed: ParsedBrief,
+  chosen: CandidateReport,
+  next: CandidateReport | undefined,
+  priorities: string[],
+  coverage: SearchCoverage,
+): string[] {
   const quote = parsed.brief.quote;
+  const assumptions = scenarioAssumptions(parsed.brief.asset);
+  const gapPct = (chosen.thresholdGap * 100).toFixed(2);
   const threshold = formatAtomsExact(chosen.thresholdAtoms, parsed.decimals);
-  const retail = scenarioOf(chosen, "retail");
   const whale = scenarioOf(chosen, "whale");
-  const lines = [
-    next
-      ? `${chosen.profileName} is the frontier point preferred for ${objectiveLabel(parsed.brief.objective)}. Next was ${next.profileName}.`
-      : `${chosen.profileName} is the only frontier point for ${objectiveLabel(parsed.brief.objective)}.`,
+  return [
+    chosen.feasible
+      ? "This design passed all five constraints."
+      : `This design did not pass every constraint${chosen.rejected.length ? `: ${chosen.rejected.join("; ")}` : "."}`,
+    `This is the preferred feasible design among ${coverage.candidateCount} candidates evaluated, for ${objectiveLabel(parsed.brief.objective)}. It is not a proof that no better curve exists.`,
+    `Search range: presets ${coverage.presets.join(", ")} at price multiples ${coverage.multiples.join(", ")}. ${coverage.note}`,
+    next ? compareLine(chosen, next) : "No other frontier point was available to compare.",
     `Preference order: ${priorities.join(", ")}.`,
-    `A typical buy of ${parsed.brief.typicalTrade} ${quote} moves the opening price by ${chosen.reference.impactBps} bps.`,
-    `Graduation threshold is ${threshold} ${quote}. Creator fee share ${chosen.recipe.creatorTradingFeePercentage}% and LP lock ${chosen.recipe.lpLockPct}% are the values that will be deployed.`,
+    `The chosen threshold is ${gapPct}% away from your requested raise (${threshold} ${quote}). Creator fee share ${chosen.recipe.creatorTradingFeePercentage}% and LP lock ${chosen.recipe.lpLockPct}% are the values that will be deployed.`,
+    feeWords(chosen.dynamicFeeStatus),
+    `Typical impact is the opening buy of ${parsed.brief.typicalTrade} ${quote}: ${chosen.reference.impactBps} bps.`,
+    `Whale impact uses a ${assumptions.whaleMultiple}× order, as five buys at launch${whale ? ` (${whale.largestBuyImpactBps} bps on this design)` : ""}.`,
+    "Sell drawdown is the price move from the peak to the end of the sell-pressure path, not a reduction in the quote reserve.",
+    "Retail fill is how far a capped sample moved toward the migration threshold. It is not a forecast of who will buy.",
+    `${chosen.stressPaths} cohort paths, seed ${parsed.seed}: graduation ${pct1(chosen.stressGraduationRate)} is a simulated frequency, not a real-world probability. Median progress ${pct1(chosen.stressMedianProgress)}, 10th percentile ${pct1(chosen.stressP10Progress)}, worst path ${pct1(chosen.stressWorstProgress)}.`,
   ];
-  if (retail) {
-    lines.push(
-      retail.graduated
-        ? "The retail sample reaches the graduation threshold."
-        : `The retail sample fills ${Math.round(retail.progress * 1000) / 10}% of the threshold.`,
-    );
+}
+
+function promisingMultiples(rows: CandidateReport[], presets: PresetId[]): number[] {
+  const feasible = rows.filter((row) => row.feasible);
+  if (feasible.length > 0) return [...new Set(feasible.map((row) => row.priceMultiple))];
+  const closest: number[] = [];
+  for (const presetId of presets) {
+    const ofPreset = rows.filter((row) => row.recipe.presetId === presetId);
+    if (ofPreset.length === 0) continue;
+    const best = ofPreset.reduce((a, b) => (a.thresholdGap <= b.thresholdGap ? a : b));
+    closest.push(best.priceMultiple);
   }
-  if (whale) lines.push(`The largest buy in the whale sample moves the price by ${whale.largestBuyImpactBps} bps.`);
-  lines.push(
-    `${chosen.stressPaths} cohort paths, seed ${parsed.seed}, reached graduation ${Math.round(chosen.stressGraduationRate * 1000) / 10}% of the time. That is a stress test, not a probability of a real launch.`,
-  );
-  return lines;
+  return [...new Set(closest)];
 }
 
 export function designPolicy(input: LaunchBrief): LaunchPolicy {
   const parsed = parseBrief(input);
   const limitsSpec = constraintsFor(parsed.brief.asset, parsed.brief.objective);
+  const coarse = multiplesIn(limitsSpec);
   const rows: CandidateReport[] = [];
-  for (const presetId of FEE_PRESETS) {
-    for (const multiple of multiplesIn(limitsSpec)) {
-      const row = evaluateOne(parsed, presetId, multiple);
-      if (row) rows.push(row);
+  const collect = (multiples: number[]) => {
+    for (const presetId of FEE_PRESETS) {
+      for (const multiple of multiples) {
+        const row = evaluateOne(parsed, presetId, multiple);
+        if (row) rows.push(row);
+      }
     }
-  }
+  };
+  collect(coarse);
   if (rows.length === 0) {
     throw new EquiCurveError("No curve could be built for this brief.", "SDK");
   }
-  for (const row of rows) {
-    row.rejected = violations(row, limitsSpec);
-    row.feasible = row.rejected.length === 0;
-  }
+  const mark = () => {
+    for (const row of rows) {
+      row.rejected = violations(row, limitsSpec);
+      row.feasible = row.rejected.length === 0;
+    }
+  };
+  mark();
+  const finer = refineMultiples(
+    limitsSpec.multipleMin,
+    limitsSpec.multipleMax,
+    coarse,
+    promisingMultiples(rows, FEE_PRESETS),
+  );
+  collect(finer);
+  mark();
+  const search: SearchCoverage = {
+    stage: "coarse-to-fine",
+    presets: [...FEE_PRESETS],
+    multiples: [...new Set(rows.map((row) => row.priceMultiple))].sort((a, b) => a - b),
+    candidateCount: rows.length,
+    note: "Coarse anchors are the minimum, midpoint, and maximum of the permitted price-multiple range. One finer midpoint is then scored beside each promising anchor. This sample does not prove a global optimum.",
+  };
   let pool = rows.filter((r) => r.feasible);
   const relaxed: string[] = [];
   if (pool.length === 0) {
@@ -457,9 +526,12 @@ export function designPolicy(input: LaunchBrief): LaunchPolicy {
   if (rows.some((r) => r.dynamicFeeStatus === "base-only")) {
     limits.push("A dynamic fee was requested but its parameters could not be read, so that curve was scored on the base fee only.");
   }
-  if (parsed.brief.participants > 64) {
-    limits.push("Retail and sell-pressure scenarios run at most 64 typical orders and say so on the report.");
-  }
+  limits.push(
+    `Cohort retail orders scale with the ${parsed.brief.participants} participants in the brief and are capped at 64. That is a representative sample, not one order per participant.`,
+  );
+  limits.push(
+    "Named retail and sell-pressure scenarios also run at most 64 typical orders and say so on the report.",
+  );
   limits.push(
     "The creator seed buy's first-swap minimum-fee exemption is not part of the market scenarios. Anti-sniper is still written on the config that deploys.",
   );
@@ -481,8 +553,9 @@ export function designPolicy(input: LaunchBrief): LaunchPolicy {
     chosen,
     alternatives,
     candidates: [...frontier, ...rows.filter((r) => !frontier.includes(r))],
-    why: whyLines(parsed, chosen, alternatives[0], priorities),
+    why: whyLines(parsed, chosen, alternatives[0], priorities, search),
     limits,
+    search,
     observedLaunches: null,
     observedNote: OBSERVED_NOTE,
   };
@@ -490,13 +563,16 @@ export function designPolicy(input: LaunchBrief): LaunchPolicy {
 
 /** Rebuild the config a policy scored, through the same builder Create uses. */
 export function materializeRecipe(recipe: PolicyRecipe): ConfigParameters {
-  return buildPresetConfig(recipe.presetId, {
-    quoteDecimals: quoteDecimals(recipe.quote),
-    marketCaps: { initial: recipe.initialMarketCap, migration: recipe.migrationMarketCap },
-    totalTokenSupply: recipe.totalSupply,
+  return launchCurveConfig({
+    presetId: recipe.presetId,
+    totalSupply: recipe.totalSupply,
     creatorTradingFeePercentage: recipe.creatorTradingFeePercentage,
     lpLockPct: recipe.lpLockPct,
+    mintRenounce: true,
     antiSniper: recipe.antiSniper,
+    quoteDecimals: quoteDecimals(recipe.quote),
+    transferProfile: "open-spl",
+    marketCaps: { initial: recipe.initialMarketCap, migration: recipe.migrationMarketCap },
   });
 }
 
@@ -519,5 +595,8 @@ export function toDesignedMarket(policy: LaunchPolicy, picked: CandidateReport =
     whaleImpactBps: whale?.largestBuyImpactBps ?? 0,
     stressGraduationRate: picked.stressGraduationRate,
     stressPaths: picked.stressPaths,
+    stressP10Progress: picked.stressP10Progress,
+    stressWorstProgress: picked.stressWorstProgress,
+    configFingerprint: picked.configFingerprint,
   };
 }

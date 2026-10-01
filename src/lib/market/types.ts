@@ -72,6 +72,16 @@ export type ScenarioReport = {
   /** Largest buy's filled quote divided by all filled quote. 0 when nothing filled. */
   concentration: number;
   note: string;
+  /** Opening-price move and threshold progress after each order. Synthetic. */
+  trace: ScenarioTracePoint[];
+};
+
+export type ScenarioTracePoint = {
+  step: number;
+  /** Price versus the opening price, basis points. */
+  priceMoveBps: number;
+  /** Quote reserve / graduation threshold, capped at 1. */
+  progress: number;
 };
 
 export type ReferenceImpact = {
@@ -110,6 +120,12 @@ export type DesignedMarket = {
   whaleImpactBps: number;
   stressGraduationRate: number;
   stressPaths: number;
+  /** 10th percentile of cohort progress, 0..1. Lower is the worse tail. */
+  stressP10Progress: number;
+  /** Lowest cohort-path progress, 0..1. */
+  stressWorstProgress: number;
+  /** Fingerprint of the config the simulator scored. Must match review and deploy. */
+  configFingerprint: string;
 };
 
 export type MarketProfileId =
@@ -138,6 +154,12 @@ export type CandidateReport = {
   stressPaths: number;
   /** Median progress across synthetic paths, 0..1. */
   stressMedianProgress: number;
+  /** 10th percentile of cohort progress, 0..1. */
+  stressP10Progress: number;
+  /** Lowest progress among cohort paths, 0..1. */
+  stressWorstProgress: number;
+  /** Market-config fingerprint of the curve this row scored. */
+  configFingerprint: string;
   /** 100 for the selected frontier point. Lower numbers are other frontier points. Not a weighted grade. */
   score: number;
   dynamicFeeStatus: DynamicFeeStatus;
@@ -162,6 +184,17 @@ export type LaunchPolicy = {
   candidates: CandidateReport[];
   why: string[];
   limits: string[];
+  /** What the search actually evaluated. Not a claim of global optimality. */
+  search: SearchCoverage;
   observedLaunches: null;
   observedNote: string;
+};
+
+export type SearchCoverage = {
+  stage: "coarse-to-fine";
+  presets: string[];
+  /** Price multiples that were built and scored. */
+  multiples: number[];
+  candidateCount: number;
+  note: string;
 };
