@@ -1,18 +1,33 @@
 import type { PresetId } from "@/lib/dbc/types";
 import type { Sector } from "@/lib/demo/offerings";
 import { MIN_LP_LOCK_PCT } from "@/lib/dbc/presets";
+import { parseUiAmount } from "@/lib/amounts";
+import type { AssetKind, DesignedMarket, MarketObjective } from "@/lib/market/types";
 import { validateWizard, type FieldErrors } from "@/lib/validation";
 
 export const WIZARD_STEPS = [
-  { id: "basics", label: "Basics" },
-  { id: "offering", label: "Offering" },
-  { id: "curve", label: "Curve" },
-  { id: "fees", label: "Fees & locks" },
-  { id: "review", label: "Review" },
-  { id: "launch", label: "Launch" },
+  { id: "basics", label: "Asset" },
+  { id: "goals", label: "Market goals" },
+  { id: "terms", label: "Terms" },
+  { id: "design", label: "Market design" },
+  { id: "review", label: "Policy review" },
+  { id: "launch", label: "Deploy" },
 ] as const;
 
 export type WizardStepId = (typeof WIZARD_STEPS)[number]["id"];
+
+/** Old step ids still linked from /presets and the homepage. */
+export const STEP_ALIASES: Record<string, WizardStepId> = {
+  offering: "goals",
+  curve: "design",
+  fees: "terms",
+};
+
+export function resolveWizardStep(raw: string | null): WizardStepId {
+  if (raw && WIZARD_STEPS.some((s) => s.id === raw)) return raw as WizardStepId;
+  if (raw && STEP_ALIASES[raw]) return STEP_ALIASES[raw];
+  return "basics";
+}
 
 export type WizardState = {
   name: string;
@@ -37,6 +52,19 @@ export type WizardState = {
   docFinancials: boolean;
   geoBlockUs: boolean;
   presetId: PresetId;
+  /** Market-design assumption. It does not create a legal claim. */
+  assetKind: AssetKind;
+  objective: MarketObjective;
+  /** Quote units the curve should hold before graduation. Decimal string. */
+  targetRaise: string;
+  /** Typical order, quote units. Decimal string. */
+  typicalTrade: string;
+  participants: number;
+  /** Set only by selecting a simulated design. Deploy builds these caps. */
+  marketCaps: { initial: number; migration: number } | null;
+  designed: DesignedMarket | null;
+  designWhy: string[];
+  designLimits: string[];
   /** Creator (issuer) share of trading fees; platform/partner gets remainder. */
   feeIssuer: number;
   antiSniper: boolean;
@@ -60,7 +88,7 @@ export const INITIAL_WIZARD: WizardState = {
   thesis: "",
   sector: "Equity",
   website: "",
-  raiseTarget: 100_000,
+  raiseTarget: 100,
   quote: "SOL",
   seedBuy: "0",
   jurisdictions: "",
@@ -73,6 +101,15 @@ export const INITIAL_WIZARD: WizardState = {
   docFinancials: false,
   geoBlockUs: true,
   presetId: "short",
+  assetKind: "private-company",
+  objective: "controlled-discovery",
+  targetRaise: "100",
+  typicalTrade: "1",
+  participants: 40,
+  marketCaps: null,
+  designed: null,
+  designWhy: [],
+  designLimits: [],
   feeIssuer: 70,
   antiSniper: true,
   lpLockPct: 100,
@@ -94,12 +131,59 @@ export function stepIndex(id: WizardStepId): number {
 /** Fields validated on each step (schema-backed via validateWizard). */
 export const STEP_FIELDS: Record<WizardStepId, (keyof FieldErrors)[]> = {
   basics: ["name", "ticker", "thesis", "sector", "website", "uri", "image"],
-  offering: ["raiseTarget", "quote", "seedBuy"],
-  curve: ["presetId", "totalSupply"],
-  fees: ["feeIssuer", "lpLockPct", "feeClaimer"],
+  goals: ["raiseTarget", "quote", "seedBuy", "totalSupply"],
+  terms: ["feeIssuer", "lpLockPct", "feeClaimer"],
+  design: ["presetId"],
   review: [],
   launch: [],
 };
+
+/** Changing any of these throws away a previously selected design. */
+export const DESIGN_INPUT_KEYS = [
+  "feeIssuer",
+  "lpLockPct",
+  "antiSniper",
+  "targetRaise",
+  "typicalTrade",
+  "participants",
+  "assetKind",
+  "objective",
+  "quote",
+  "totalSupply",
+] as const;
+
+export function applyWizardPatch(s: WizardState, p: Partial<WizardState>): WizardState {
+  const next: WizardState = { ...s, ...p };
+  const touched = Object.keys(p);
+  const clears =
+    !("marketCaps" in p) &&
+    (touched.some((k) => (DESIGN_INPUT_KEYS as readonly string[]).includes(k)) || "presetId" in p);
+  if (clears) {
+    next.marketCaps = null;
+    next.designed = null;
+    next.designWhy = [];
+    next.designLimits = [];
+  }
+  if (typeof p.targetRaise === "string") {
+    const n = Number(p.targetRaise);
+    if (Number.isFinite(n) && n >= 1 && n <= 1_000_000_000_000) {
+      next.raiseTarget = Math.min(1_000_000_000_000, Math.max(1, Math.round(n)));
+    }
+  }
+  return next;
+}
+
+function briefReady(s: WizardState): boolean {
+  if (!Number.isInteger(s.participants) || s.participants < 1 || s.participants > 1_000_000) return false;
+  try {
+    const decimals = s.quote === "USDC" ? 6 : 9;
+    const target = parseUiAmount(s.targetRaise, decimals);
+    const typical = parseUiAmount(s.typicalTrade, decimals);
+    return target > 0n && typical > 0n && typical <= target * 1_000n;
+  } catch {
+    return false;
+  }
+}
 
 export function wizardErrors(s: WizardState): FieldErrors {
   return validateWizard(s);
@@ -119,16 +203,16 @@ export function canContinue(step: WizardStepId, s: WizardState): boolean {
   switch (step) {
     case "basics":
       return true;
-    case "offering":
-      return s.docMemo && s.docRisk && s.docIssuer;
-    case "curve":
-      return !!s.presetId;
-    case "fees":
+    case "goals":
+      return s.docMemo && s.docRisk && s.docIssuer && briefReady(s);
+    case "terms":
       return s.lpLockPct >= MIN_LP_LOCK_PCT;
+    case "design":
+      return !!s.presetId && !!s.marketCaps && s.marketCaps.migration > s.marketCaps.initial;
     case "review":
-      return s.ackBonding && s.ackDocs && s.ackFees && s.ackClaimer;
+      return s.ackBonding && s.ackDocs && s.ackFees && s.ackClaimer && !!s.marketCaps;
     case "launch":
-      return true;
+      return !!s.marketCaps;
     default:
       return false;
   }

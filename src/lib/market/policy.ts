@@ -4,21 +4,35 @@ import {
   buildPresetConfig,
   FEE_BY_PRESET,
   getPreset,
+  MIN_LP_LOCK_PCT,
   validateEquiCurveConfig,
 } from "@/lib/dbc/presets";
 import type { PresetId } from "@/lib/dbc/types";
 import { EquiCurveError } from "@/lib/errors";
 import { openBook } from "./book";
-import { namedScenarios, referenceBuy, stressPaths } from "./scenarios";
-import { objectiveLabel, scoreCandidate } from "./score";
+import { runCohortStress } from "./cohorts";
+import { sha256Hex } from "./hash";
+import { constraintsFor, multiplesIn, scenarioAssumptions, type DesignConstraints } from "./constraints";
+import { objectivePriorities, paretoFrontier, prefer, type FrontierMetrics } from "./pareto";
+import { namedScenarios, referenceBuy } from "./scenarios";
+import { objectiveLabel } from "./score";
 import type {
   AssetKind,
   CandidateReport,
+  DynamicFeeStatus,
   LaunchBrief,
   LaunchPolicy,
-  MarketProfileId,
   PolicyRecipe,
 } from "./types";
+
+export const MARKET_MODEL_VERSION = "0.2.0";
+/** Installed @meteora-ag/dynamic-bonding-curve-sdk. A test locks this to package.json. */
+export const DBC_SDK_VERSION = "1.5.12";
+const DEFAULT_SEED = 0xec0c;
+const DEFAULT_SUPPLY = 1_000_000_000;
+const DEFAULT_CREATOR_PCT = 70;
+const DEFAULT_LP_LOCK = 100;
+const FEE_PRESETS: PresetId[] = ["short", "flat", "exponential", "long", "equity"];
 
 const ASSETS = new Set<AssetKind>([
   "tokenized-equity",
@@ -40,16 +54,6 @@ const OBJECTIVES = new Set<LaunchBrief["objective"]>([
   "whale-protection",
 ]);
 
-const PROFILES: { id: MarketProfileId; name: string; multiple: number; presetId: PresetId }[] = [
-  { id: "stable", name: "Stable", multiple: 3, presetId: "equity" },
-  { id: "controlled", name: "Controlled discovery", multiple: 8, presetId: "flat" },
-  { id: "participation", name: "Participation", multiple: 15, presetId: "flat" },
-  { id: "fast", name: "Fast graduation", multiple: 5, presetId: "short" },
-  { id: "runway", name: "Long runway", multiple: 40, presetId: "long" },
-  { id: "protected", name: "Whale protection", multiple: 12, presetId: "exponential" },
-];
-
-const DEFAULT_SUPPLY = 1_000_000_000;
 const OBSERVED_NOTE =
   "No live launches are attached. Every score on this policy comes from the simulator.";
 
@@ -65,6 +69,13 @@ function roundCap(n: number): number {
   return Math.round(n * p) / p;
 }
 
+function atomsToNumber(atoms: bigint, decimals: number): number {
+  const base = 10n ** BigInt(decimals);
+  const whole = atoms / base;
+  const frac = atoms % base;
+  return Number(whole) + Number(frac) / 10 ** decimals;
+}
+
 type ParsedBrief = {
   brief: LaunchBrief;
   targetAtoms: bigint;
@@ -72,15 +83,15 @@ type ParsedBrief = {
   decimals: 6 | 9;
   supply: number;
   paths: number;
+  seed: number;
+  creatorPct: number;
+  lpLockPct: number;
+  antiSniper: boolean;
 };
 
 export function parseBrief(input: LaunchBrief): ParsedBrief {
-  if (!ASSETS.has(input.asset)) {
-    throw new EquiCurveError("Unknown asset kind.", "VALIDATION");
-  }
-  if (!OBJECTIVES.has(input.objective)) {
-    throw new EquiCurveError("Unknown market objective.", "VALIDATION");
-  }
+  if (!ASSETS.has(input.asset)) throw new EquiCurveError("Unknown asset kind.", "VALIDATION");
+  if (!OBJECTIVES.has(input.objective)) throw new EquiCurveError("Unknown market objective.", "VALIDATION");
   if (input.quote !== "SOL" && input.quote !== "USDC") {
     throw new EquiCurveError("Quote must be SOL or USDC.", "VALIDATION");
   }
@@ -91,9 +102,21 @@ export function parseBrief(input: LaunchBrief): ParsedBrief {
   if (!Number.isInteger(supply) || supply < 1 || supply > 1_000_000_000_000) {
     throw new EquiCurveError("Total supply must be a whole number from 1 to 1e12.", "VALIDATION");
   }
-  const paths = input.stressPaths ?? 64;
+  const paths = input.stressPaths ?? 16;
   if (!Number.isInteger(paths) || paths < 1 || paths > 5_000) {
     throw new EquiCurveError("Stress paths must be a whole number from 1 to 5,000.", "VALIDATION");
+  }
+  const creatorPct = input.creatorPct ?? DEFAULT_CREATOR_PCT;
+  if (!Number.isInteger(creatorPct) || creatorPct < 0 || creatorPct > 100) {
+    throw new EquiCurveError("Creator fee share must be a whole number from 0 to 100.", "VALIDATION");
+  }
+  const lpLockPct = input.lpLockPct ?? DEFAULT_LP_LOCK;
+  if (!Number.isInteger(lpLockPct) || lpLockPct < MIN_LP_LOCK_PCT || lpLockPct > 100) {
+    throw new EquiCurveError(`LP lock must be a whole number from ${MIN_LP_LOCK_PCT} to 100.`, "VALIDATION");
+  }
+  const seed = input.seed ?? DEFAULT_SEED;
+  if (!Number.isInteger(seed) || seed < 0) {
+    throw new EquiCurveError("Seed must be a non-negative integer.", "VALIDATION");
   }
   const decimals = quoteDecimals(input.quote);
   let targetAtoms: bigint;
@@ -107,26 +130,50 @@ export function parseBrief(input: LaunchBrief): ParsedBrief {
   if (typicalAtoms > targetAtoms * 1_000n) {
     throw new EquiCurveError("Typical trade is more than 1,000× the target raise.", "VALIDATION");
   }
-  return { brief: { ...input, totalSupply: supply, stressPaths: paths }, targetAtoms, typicalAtoms, decimals, supply, paths };
+  return {
+    brief: {
+      ...input,
+      totalSupply: supply,
+      stressPaths: paths,
+      creatorPct,
+      lpLockPct,
+      antiSniper: input.antiSniper ?? true,
+      seed,
+    },
+    targetAtoms,
+    typicalAtoms,
+    decimals,
+    supply,
+    paths,
+    seed,
+    creatorPct,
+    lpLockPct,
+    antiSniper: input.antiSniper ?? true,
+  };
 }
 
 function thresholdOf(cfg: ConfigParameters): bigint {
   return BigInt((cfg as { migrationQuoteThreshold: { toString(): string } }).migrationQuoteThreshold.toString());
 }
 
-function buildAt(
-  presetId: PresetId,
-  decimals: 6 | 9,
-  supply: number,
-  initial: number,
-  migration: number,
-): ConfigParameters | null {
+function buildAt(args: {
+  presetId: PresetId;
+  decimals: 6 | 9;
+  supply: number;
+  initial: number;
+  migration: number;
+  creatorPct: number;
+  lpLockPct: number;
+  antiSniper: boolean;
+}): ConfigParameters | null {
   try {
-    const cfg = buildPresetConfig(presetId, {
-      quoteDecimals: decimals,
-      totalTokenSupply: supply,
-      marketCaps: { initial, migration },
-      lpLockPct: 100,
+    const cfg = buildPresetConfig(args.presetId, {
+      quoteDecimals: args.decimals,
+      totalTokenSupply: args.supply,
+      marketCaps: { initial: args.initial, migration: args.migration },
+      creatorTradingFeePercentage: args.creatorPct,
+      lpLockPct: args.lpLockPct,
+      antiSniper: args.antiSniper,
     });
     if (validateEquiCurveConfig(cfg).length > 0) return null;
     return cfg;
@@ -142,15 +189,18 @@ function searchCaps(args: {
   supply: number;
   targetAtoms: bigint;
   targetUi: number;
-}): { initial: number; migration: number; threshold: bigint } {
-  const { presetId, multiple, decimals, supply, targetAtoms, targetUi } = args;
+  creatorPct: number;
+  lpLockPct: number;
+  antiSniper: boolean;
+}): { initial: number; migration: number; threshold: bigint } | null {
+  const { presetId, multiple, decimals, supply, targetAtoms, targetUi, creatorPct, lpLockPct, antiSniper } = args;
   let lo = Math.max(targetUi * 0.05, 1e-4);
   let hi = Math.max(targetUi * 40, lo * 4);
   const evalAt = (migration: number) => {
     const mig = roundCap(migration);
     const initial = roundCap(mig / multiple);
     if (!(mig > initial)) return null;
-    const cfg = buildAt(presetId, decimals, supply, initial, mig);
+    const cfg = buildAt({ presetId, decimals, supply, initial, migration: mig, creatorPct, lpLockPct, antiSniper });
     if (!cfg) return null;
     return { initial, migration: mig, threshold: thresholdOf(cfg) };
   };
@@ -162,19 +212,17 @@ function searchCaps(args: {
     else break;
   }
   let best = evalAt(lo) ?? evalAt(hi);
-  if (!best) {
-    throw new EquiCurveError(`Could not build a ${presetId} curve for this raise.`, "SDK");
-  }
-  for (let i = 0; i < 24; i++) {
-    const mid = evalAt((lo + hi) / 2);
+  if (!best) return null;
+  for (let i = 0; i < 18; i++) {
+    const midPoint = (lo + hi) / 2;
+    const mid = evalAt(midPoint);
     if (!mid) {
-      lo = (lo + hi) / 2;
+      lo = midPoint;
       continue;
     }
-    const better = absGap(mid.threshold, targetAtoms) < absGap(best.threshold, targetAtoms);
-    if (better) best = mid;
-    if (mid.threshold < targetAtoms) lo = (lo + hi) / 2;
-    else hi = (lo + hi) / 2;
+    if (absGap(mid.threshold, targetAtoms) < absGap(best.threshold, targetAtoms)) best = mid;
+    if (mid.threshold < targetAtoms) lo = midPoint;
+    else hi = midPoint;
   }
   return best;
 }
@@ -185,82 +233,170 @@ function absGap(threshold: bigint, target: bigint): bigint {
 
 function gapFraction(threshold: bigint, target: bigint): number {
   if (target === 0n) return 1;
-  const gap = absGap(threshold, target);
-  return Number((gap * 1_000_000n) / target) / 1_000_000;
+  return Number((absGap(threshold, target) * 1_000_000n) / target) / 1_000_000;
 }
 
-function evaluateProfile(parsed: ParsedBrief, profile: (typeof PROFILES)[number]): CandidateReport {
-  const targetUi = Number(parsed.targetAtoms) / 10 ** parsed.decimals;
+function feeStatus(book: { dynamicFee: unknown; dynamicFeeUnreadable: boolean }): DynamicFeeStatus {
+  if (book.dynamicFee) return "simulated";
+  if (book.dynamicFeeUnreadable) return "base-only";
+  return "not-used";
+}
+
+function scenarioOf(c: CandidateReport, id: CandidateReport["scenarios"][number]["id"]) {
+  return c.scenarios.find((s) => s.id === id);
+}
+
+function metricsOf(c: CandidateReport): FrontierMetrics {
+  return {
+    referenceImpactBps: c.reference.impactBps,
+    whaleImpactBps: scenarioOf(c, "whale")?.largestBuyImpactBps ?? 0,
+    drawdownBps: scenarioOf(c, "sell-pressure")?.drawdownBps ?? 0,
+    retailProgress: scenarioOf(c, "retail")?.progress ?? 0,
+    lateProgress: scenarioOf(c, "late")?.progress ?? 0,
+    stressGraduation: c.stressGraduationRate,
+  };
+}
+
+function violations(c: CandidateReport, limits: DesignConstraints): string[] {
+  const m = metricsOf(c);
+  const out: string[] = [];
+  if (c.thresholdGap > limits.maxThresholdGap) {
+    out.push(`threshold is ${(c.thresholdGap * 100).toFixed(2)}% from the raise`);
+  }
+  if (m.referenceImpactBps > limits.maxReferenceImpactBps) {
+    out.push(`typical buy moves price ${m.referenceImpactBps} bps`);
+  }
+  if (m.whaleImpactBps > limits.maxWhaleImpactBps) {
+    out.push(`whale buy moves price ${m.whaleImpactBps} bps`);
+  }
+  const retail = scenarioOf(c, "retail");
+  if (retail && retail.concentration > limits.maxConcentration) {
+    out.push(`largest buy is ${Math.round(retail.concentration * 100)}% of filled quote`);
+  }
+  if (m.retailProgress < limits.minRetailProgress) {
+    out.push(`retail sample fills ${Math.round(m.retailProgress * 100)}%`);
+  }
+  return out;
+}
+
+function evaluateOne(parsed: ParsedBrief, presetId: PresetId, multiple: number): CandidateReport | null {
+  const targetUi = atomsToNumber(parsed.targetAtoms, parsed.decimals);
   const caps = searchCaps({
-    presetId: profile.presetId,
-    multiple: profile.multiple,
+    presetId,
+    multiple,
     decimals: parsed.decimals,
     supply: parsed.supply,
     targetAtoms: parsed.targetAtoms,
     targetUi,
+    creatorPct: parsed.creatorPct,
+    lpLockPct: parsed.lpLockPct,
+    antiSniper: parsed.antiSniper,
   });
-  const cfg = buildAt(profile.presetId, parsed.decimals, parsed.supply, caps.initial, caps.migration);
-  if (!cfg) {
-    throw new EquiCurveError(`Curve build failed for ${profile.name}.`, "SDK");
-  }
+  if (!caps) return null;
+  const cfg = buildAt({
+    presetId,
+    decimals: parsed.decimals,
+    supply: parsed.supply,
+    initial: caps.initial,
+    migration: caps.migration,
+    creatorPct: parsed.creatorPct,
+    lpLockPct: parsed.lpLockPct,
+    antiSniper: parsed.antiSniper,
+  });
+  if (!cfg) return null;
   const book = openBook(cfg, parsed.decimals);
-  const preset = getPreset(profile.presetId);
-  const fee = FEE_BY_PRESET[profile.presetId];
+  const preset = getPreset(presetId);
+  const fee = FEE_BY_PRESET[presetId];
   const built = cfg as { creatorTradingFeePercentage: number; partnerPermanentLockedLiquidityPercentage: number };
   const recipe: PolicyRecipe = {
-    presetId: profile.presetId,
+    presetId,
     quote: parsed.brief.quote,
     initialMarketCap: caps.initial,
     migrationMarketCap: caps.migration,
     totalSupply: parsed.supply,
     creatorTradingFeePercentage: built.creatorTradingFeePercentage,
     lpLockPct: built.partnerPermanentLockedLiquidityPercentage,
+    antiSniper: parsed.antiSniper,
   };
+  const assumptions = scenarioAssumptions(parsed.brief.asset);
   const scenarios = namedScenarios({
     book,
     typicalAtoms: parsed.typicalAtoms,
     participants: parsed.brief.participants,
     feeDurationSec: fee.totalDuration,
+    asset: parsed.brief.asset,
   });
   const reference = referenceBuy(book, parsed.typicalAtoms);
-  const stress = stressPaths({
+  const stress = runCohortStress({
     book,
     typicalAtoms: parsed.typicalAtoms,
     feeDurationSec: fee.totalDuration,
     paths: parsed.paths,
+    seed: parsed.seed,
+    whaleHundredths: assumptions.cohortWhaleHundredths,
   });
-  const fit = scoreCandidate(parsed.brief.objective, reference.impactBps, scenarios);
-  const miss = gapFraction(book.threshold, parsed.targetAtoms);
-  const score = Math.max(0, Math.round((fit - Math.min(30, miss * 100)) * 100) / 100);
-  return {
-    profileId: profile.id,
-    profileName: profile.name,
+  const row: CandidateReport = {
+    profileId: `${presetId}-${multiple}x`,
+    profileName: `${preset.name} · ${multiple}×`,
     recipe,
     thresholdAtoms: book.threshold.toString(10),
-    thresholdGap: miss,
+    thresholdGap: gapFraction(book.threshold, parsed.targetAtoms),
     feeLabel: preset.feeLabel,
-    priceMultiple: profile.multiple,
+    priceMultiple: multiple,
     reference,
     scenarios,
     stressGraduationRate: stress.graduationRate,
     stressPaths: stress.paths,
     stressMedianProgress: stress.medianProgress,
-    score,
-    dynamicFeeModeled: !fee.dynamicFeeEnabled,
+    score: 0,
+    dynamicFeeStatus: feeStatus(book),
+    feasible: true,
+    rejected: [],
   };
+  return row;
 }
 
-function whyLines(parsed: ParsedBrief, chosen: CandidateReport, next: CandidateReport | undefined): string[] {
+function identity(parsed: ParsedBrief): string {
+  const b = parsed.brief;
+  return [
+    MARKET_MODEL_VERSION,
+    DBC_SDK_VERSION,
+    String(parsed.seed),
+    b.asset,
+    b.objective,
+    b.quote,
+    parsed.targetAtoms.toString(10),
+    parsed.typicalAtoms.toString(10),
+    String(b.participants),
+    String(parsed.supply),
+    String(parsed.creatorPct),
+    String(parsed.lpLockPct),
+    String(parsed.antiSniper),
+    String(parsed.paths),
+  ].join("|");
+}
+
+function sha(text: string): string {
+  return sha256Hex(text).slice(0, 12);
+}
+
+/** Hash of the recipe that will be deployed. Timestamp is not an input. */
+export function recipeConfigHash(recipe: PolicyRecipe): string {
+  return sha(JSON.stringify(recipe));
+}
+
+function whyLines(parsed: ParsedBrief, chosen: CandidateReport, next: CandidateReport | undefined, priorities: string[]): string[] {
   const quote = parsed.brief.quote;
   const threshold = formatAtomsExact(chosen.thresholdAtoms, parsed.decimals);
-  const retail = chosen.scenarios.find((s) => s.id === "retail");
-  const whale = chosen.scenarios.find((s) => s.id === "whale");
+  const retail = scenarioOf(chosen, "retail");
+  const whale = scenarioOf(chosen, "whale");
   const lines = [
     next
-      ? `${chosen.profileName} scored ${chosen.score} for ${objectiveLabel(parsed.brief.objective)}. Next was ${next.profileName} at ${next.score}.`
-      : `${chosen.profileName} scored ${chosen.score} for ${objectiveLabel(parsed.brief.objective)}.`,
+      ? `${chosen.profileName} is the frontier point preferred for ${objectiveLabel(parsed.brief.objective)}. Next was ${next.profileName}.`
+      : `${chosen.profileName} is the only frontier point for ${objectiveLabel(parsed.brief.objective)}.`,
+    `Preference order: ${priorities.join(", ")}.`,
     `A typical buy of ${parsed.brief.typicalTrade} ${quote} moves the opening price by ${chosen.reference.impactBps} bps.`,
-    `Graduation threshold is ${threshold} ${quote}. Traders pay more than that: the fee is taken before quote is counted as raised.`,
+    `Graduation threshold is ${threshold} ${quote}. Creator fee share ${chosen.recipe.creatorTradingFeePercentage}% and LP lock ${chosen.recipe.lpLockPct}% are the values that will be deployed.`,
   ];
   if (retail) {
     lines.push(
@@ -269,52 +405,83 @@ function whyLines(parsed: ParsedBrief, chosen: CandidateReport, next: CandidateR
         : `The retail sample fills ${Math.round(retail.progress * 1000) / 10}% of the threshold.`,
     );
   }
-  if (whale) {
-    lines.push(`The largest buy in the whale sample moves the price by ${whale.largestBuyImpactBps} bps.`);
-  }
+  if (whale) lines.push(`The largest buy in the whale sample moves the price by ${whale.largestBuyImpactBps} bps.`);
   lines.push(
-    `${chosen.stressPaths} synthetic paths reached graduation ${Math.round(chosen.stressGraduationRate * 1000) / 10}% of the time. That is a stress test, not a probability of a real launch.`,
+    `${chosen.stressPaths} cohort paths, seed ${parsed.seed}, reached graduation ${Math.round(chosen.stressGraduationRate * 1000) / 10}% of the time. That is a stress test, not a probability of a real launch.`,
   );
   return lines;
 }
 
 export function designPolicy(input: LaunchBrief): LaunchPolicy {
   const parsed = parseBrief(input);
-  const candidates = PROFILES.map((profile) => evaluateProfile(parsed, profile)).sort((a, b) => {
-    if (b.score !== a.score) return b.score - a.score;
-    return a.thresholdGap - b.thresholdGap;
-  });
-  const chosen = candidates[0];
-  if (!chosen) {
-    throw new EquiCurveError("No curve could be designed for this brief.", "SDK");
+  const limitsSpec = constraintsFor(parsed.brief.asset, parsed.brief.objective);
+  const rows: CandidateReport[] = [];
+  for (const presetId of FEE_PRESETS) {
+    for (const multiple of multiplesIn(limitsSpec)) {
+      const row = evaluateOne(parsed, presetId, multiple);
+      if (row) rows.push(row);
+    }
   }
-  const alternatives = candidates.slice(1);
+  if (rows.length === 0) {
+    throw new EquiCurveError("No curve could be built for this brief.", "SDK");
+  }
+  for (const row of rows) {
+    row.rejected = violations(row, limitsSpec);
+    row.feasible = row.rejected.length === 0;
+  }
+  let pool = rows.filter((r) => r.feasible);
+  const relaxed: string[] = [];
+  if (pool.length === 0) {
+    pool = rows.filter((r) => r.thresholdGap <= limitsSpec.maxThresholdGap);
+    relaxed.push("Impact, concentration, and participation limits were relaxed because none of the curves passed them.");
+  }
+  if (pool.length === 0) {
+    pool = [...rows].sort((a, b) => a.thresholdGap - b.thresholdGap).slice(0, 3);
+    relaxed.push("No curve landed within 5% of the requested raise. The closest curves are shown.");
+  }
+  const frontier = paretoFrontier(pool, metricsOf);
+  frontier.sort((a, b) => prefer(parsed.brief.objective, metricsOf(a), metricsOf(b)));
+  frontier.forEach((row, i) => {
+    row.score = Math.max(0, 100 - i);
+  });
+  const chosen = frontier[0];
+  if (!chosen) throw new EquiCurveError("The frontier was empty.", "SDK");
+  const alternatives = frontier.slice(1);
+  const priorities = objectivePriorities(parsed.brief.objective);
   const limits = [
     "Order flow is synthetic. It is not a prediction of who will trade or what the price will be.",
     OBSERVED_NOTE,
+    `Hard constraints come from the asset profile (${parsed.brief.asset}) and the objective (${parsed.brief.objective}).`,
+    ...relaxed,
   ];
-  if (candidates.some((c) => c.recipe.presetId === "exponential" || c.recipe.presetId === "equity")) {
-    const dynamic = candidates.filter((c) => FEE_BY_PRESET[c.recipe.presetId].dynamicFeeEnabled);
-    if (dynamic.length > 0) {
-      limits.push(
-        "Dynamic fee is not replayed. Volatility stays at zero, so only the scheduled base fee is charged.",
-      );
-    }
-  }
-  if (chosen.thresholdGap > 0.02) {
-    limits.push(
-      `The closest threshold for ${chosen.profileName} is ${(chosen.thresholdGap * 100).toFixed(2)}% away from the requested raise.`,
-    );
+  if (rows.some((r) => r.dynamicFeeStatus === "base-only")) {
+    limits.push("A dynamic fee was requested but its parameters could not be read, so that curve was scored on the base fee only.");
   }
   if (parsed.brief.participants > 64) {
     limits.push("Retail and sell-pressure scenarios run at most 64 typical orders and say so on the report.");
   }
+  limits.push(
+    "The creator seed buy's first-swap minimum-fee exemption is not part of the market scenarios. Anti-sniper is still written on the config that deploys.",
+  );
+  if (chosen.dynamicFeeStatus === "simulated") {
+    limits.push("The dynamic fee is replayed inside the simulator. It is a model of the program, not a quote from a live pool.");
+  }
+  const configHash = recipeConfigHash(chosen.recipe);
   return {
+    version: 1,
+    policyId: `EQ-${sha(identity(parsed))}`,
+    modelVersion: MARKET_MODEL_VERSION,
+    sdkVersion: DBC_SDK_VERSION,
+    seed: parsed.seed,
+    configHash,
+    createdAt: new Date().toISOString(),
     brief: parsed.brief,
     targetRaiseAtoms: parsed.targetAtoms.toString(10),
+    priorities,
     chosen,
     alternatives,
-    why: whyLines(parsed, chosen, alternatives[0]),
+    candidates: [...frontier, ...rows.filter((r) => !frontier.includes(r))],
+    why: whyLines(parsed, chosen, alternatives[0], priorities),
     limits,
     observedLaunches: null,
     observedNote: OBSERVED_NOTE,
@@ -329,5 +496,28 @@ export function materializeRecipe(recipe: PolicyRecipe): ConfigParameters {
     totalTokenSupply: recipe.totalSupply,
     creatorTradingFeePercentage: recipe.creatorTradingFeePercentage,
     lpLockPct: recipe.lpLockPct,
+    antiSniper: recipe.antiSniper,
   });
+}
+
+/** Compact record for the candidate the issuer deploys. Defaults to the frontier pick. */
+export function toDesignedMarket(policy: LaunchPolicy, picked: CandidateReport = policy.chosen) {
+  const retail = picked.scenarios.find((s) => s.id === "retail");
+  const whale = picked.scenarios.find((s) => s.id === "whale");
+  return {
+    policyId: policy.policyId,
+    modelVersion: policy.modelVersion,
+    sdkVersion: policy.sdkVersion,
+    seed: policy.seed,
+    configHash: recipeConfigHash(picked.recipe),
+    asset: policy.brief.asset,
+    objective: policy.brief.objective,
+    presetId: picked.recipe.presetId,
+    thresholdAtoms: picked.thresholdAtoms,
+    referenceImpactBps: picked.reference.impactBps,
+    retailProgress: retail?.progress ?? 0,
+    whaleImpactBps: whale?.largestBuyImpactBps ?? 0,
+    stressGraduationRate: picked.stressGraduationRate,
+    stressPaths: picked.stressPaths,
+  };
 }

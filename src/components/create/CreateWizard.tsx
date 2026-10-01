@@ -5,25 +5,19 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { CurveMiniViz } from "@/components/ui/CurveMiniViz";
 import { getClusterLabel, getCluster, getOptionalPoolConfigKey, WSOL_MINT } from "@/lib/constants";
 import { planLaunchAddresses, prepareLaunchTransaction } from "@/lib/dbc/create";
 import { signLaunchPayload, type LaunchAuthPayload, type SignedLaunchBody } from "@/lib/auth/launchAuth";
 import { getUsdcMint } from "@/lib/constants";
 import { resolveMetadataUri } from "@/lib/metadata/client";
 import { Keypair, PublicKey } from "@solana/web3.js";
-import { CURVE_PRESETS, getPreset, MIN_LP_LOCK_PCT, tradingFeeSplit } from "@/lib/dbc/presets";
+import { getPreset, MIN_LP_LOCK_PCT, tradingFeeSplit } from "@/lib/dbc/presets";
 import { buildLaunchReview, type LaunchReview, type ReviewRow } from "@/lib/dbc/launchReview";
 import { fetchPoolSnapshot, expectedDammDestination } from "@/lib/dbc/migrate";
 import { formatAtomsExact } from "@/lib/amounts";
 import { setReceiptState, upsertReceiptItem, type LaunchReceipt } from "@/lib/dbc/receipt";
-import {
-  FeeSplitAnswer,
-  LpLockAnswer,
-  PresetFacts,
-  PresetShapeNote,
-  presetThresholdLabel,
-} from "@/components/issuer/IssuerAnswers";
+import { FeeSplitAnswer, LpLockAnswer } from "@/components/issuer/IssuerAnswers";
+import { MarketDesignStep } from "./MarketDesignStep";
 import { LaunchReceiptCard } from "./LaunchReceiptCard";
 import { ImageUrlField } from "./ImageUrlField";
 import type { ImageCheckResult } from "@/lib/metadata/imageCheck";
@@ -37,7 +31,9 @@ import { EligibilityGate, useEligibilityGate } from "@/components/gate/Eligibili
 import { clsx } from "clsx";
 import { OfferingPreviewCard } from "./OfferingPreviewCard";
 import {
+  applyWizardPatch,
   canContinue,
+  resolveWizardStep,
   stepErrors,
   INITIAL_WIZARD,
   stepIndex,
@@ -51,7 +47,6 @@ import {
   type TransferProfile,
 } from "@/lib/dbc/transferHook";
 
-const OFFICIAL: PresetId[] = ["short", "flat", "exponential", "long"];
 const ALL_PRESET_IDS: PresetId[] = [
   "short",
   "flat",
@@ -66,11 +61,7 @@ export function CreateWizard() {
   const router = useRouter();
   const search = useSearchParams();
 
-  const initialStep = useMemo((): WizardStepId => {
-    const q = search.get("step") as WizardStepId | null;
-    if (q && WIZARD_STEPS.some((s) => s.id === q)) return q;
-    return "basics";
-  }, [search]);
+  const initialStep = useMemo((): WizardStepId => resolveWizardStep(search.get("step")), [search]);
 
   const initialPreset = useMemo((): PresetId => {
     const q = search.get("preset");
@@ -117,20 +108,21 @@ export function CreateWizard() {
         seedBuy: state.seedBuy,
         cluster: getClusterLabel(),
         sharedConfig: getOptionalPoolConfigKey()?.toBase58() ?? null,
+        marketCaps: state.marketCaps ?? undefined,
       }),
     [state, walletAddr],
   );
 
   function patch(p: Partial<WizardState>) {
-    setState((s) => ({ ...s, ...p }));
+    setState((s) => applyWizardPatch(s, p));
   }
 
-  function go(next: WizardStepId) {
+  function go(next: WizardStepId, presetId?: PresetId) {
     setShowErrors(false);
     setStep(next);
     const url = new URL(window.location.href);
     url.searchParams.set("step", next);
-    url.searchParams.set("preset", state.presetId);
+    url.searchParams.set("preset", presetId ?? state.presetId);
     window.history.replaceState({}, "", url.toString());
   }
 
@@ -162,6 +154,10 @@ export function CreateWizard() {
   }
 
   async function onLaunch() {
+    if (!state.marketCaps || !state.designed) {
+      toast.error("Design a market before deploying. The transaction builds that design's market caps.");
+      return;
+    }
     if (!wallet.publicKey) {
       toast.error("Connect a wallet to launch on " + getCluster() + ".");
       return;
@@ -267,6 +263,7 @@ export function CreateWizard() {
             quoteLabel: state.quote,
             feeClaimer: state.feeClaimer.trim() || undefined,
             transferProfile: state.transferProfile,
+            marketCaps: state.marketCaps,
           },
         });
       if (prepared.poolPubkey !== planned.pool || prepared.baseMintPubkey !== planned.mint) {
@@ -372,6 +369,7 @@ export function CreateWizard() {
         quote: prepared.quoteLabel,
         raiseTarget: state.raiseTarget,
         presetId: state.presetId,
+        designed: state.designed ?? undefined,
         feeBps: 0,
         feeIssuerPct: prepared.creatorTradingFeePercentage,
         lockPct: prepared.lpLockPct,
@@ -474,14 +472,16 @@ export function CreateWizard() {
               </ul>
             )}
             {step === "basics" && <StepBasics state={state} patch={patch} />}
-            {step === "offering" && <StepOffering state={state} patch={patch} />}
-            {step === "curve" && <StepCurve state={state} patch={patch} />}
-            {step === "fees" && (
+            {step === "goals" && <StepGoals state={state} patch={patch} />}
+            {step === "terms" && (
               <StepFees
                 state={state}
                 patch={patch}
                 feePlatform={feePlatform}
               />
+            )}
+            {step === "design" && (
+              <MarketDesignStep state={state} patch={patch} onDeploy={(presetId) => go("review", presetId)} />
             )}
             {step === "review" && (
               <StepReview
@@ -643,7 +643,7 @@ function StepBasics({
   );
 }
 
-function StepOffering({
+function StepGoals({
   state,
   patch,
 }: {
@@ -653,25 +653,90 @@ function StepOffering({
   return (
     <section className="space-y-6">
       <header>
-        <h1 className="text-2xl font-semibold text-fg-primary">
-          Offering / compliance
-        </h1>
+        <h1 className="text-2xl font-semibold text-fg-primary">Market goals</h1>
         <p className="mt-1 text-sm text-fg-secondary">
-          Raise economics plus issuer attestation checklist (stored locally —
-          not an upload vault). MVP — no KYC vendor.
+          The raise, the typical order, and who you expect to trade set the search. Asset kind changes the constraints.
+          It does not make the token a share, and EquiCurve does not verify NAV or custody. Attestations stay in this
+          browser.
         </p>
       </header>
 
       <div className="ec-card space-y-4 p-5">
-        <h2 className="text-sm font-semibold text-fg-primary">Offer economics</h2>
+        <h2 className="text-sm font-semibold text-fg-primary">What the market should do</h2>
         <label className="block space-y-1.5">
-          <span className="ec-label">Raise target (display only)</span>
+          <span className="ec-label">Asset profile (design assumption, not a legal category)</span>
+          <select
+            className="ec-input"
+            value={state.assetKind}
+            onChange={(e) => patch({ assetKind: e.target.value as WizardState["assetKind"] })}
+          >
+            <option value="tokenized-equity">Tokenized equity</option>
+            <option value="private-company">Private company</option>
+            <option value="commodity">Commodity</option>
+            <option value="rwa">Real-world asset</option>
+            <option value="pre-launch">Pre-launch</option>
+            <option value="ai-agent">AI agent</option>
+            <option value="community">Community</option>
+            <option value="speculative">Speculative</option>
+          </select>
+        </label>
+        <label className="block space-y-1.5">
+          <span className="ec-label">Market objective</span>
+          <select
+            className="ec-input"
+            value={state.objective}
+            onChange={(e) => patch({ objective: e.target.value as WizardState["objective"] })}
+          >
+            <option value="stable">Price stability</option>
+            <option value="controlled-discovery">Controlled discovery</option>
+            <option value="participation">Broad participation</option>
+            <option value="fast-graduation">Fast graduation</option>
+            <option value="long-runway">Long runway</option>
+            <option value="whale-protection">Whale protection</option>
+          </select>
+        </label>
+        <label className="block space-y-1.5">
+          <span className="ec-label">Target raise ({state.quote} the curve must hold before graduation)</span>
+          <input
+            type="text"
+            inputMode="decimal"
+            className="ec-input font-mono"
+            value={state.targetRaise}
+            onChange={(e) => patch({ targetRaise: e.target.value.trim() })}
+          />
+        </label>
+        <label className="block space-y-1.5">
+          <span className="ec-label">Typical order ({state.quote})</span>
+          <input
+            type="text"
+            inputMode="decimal"
+            className="ec-input font-mono"
+            value={state.typicalTrade}
+            onChange={(e) => patch({ typicalTrade: e.target.value.trim() })}
+          />
+        </label>
+        <label className="block space-y-1.5">
+          <span className="ec-label">Expected participants</span>
+          <input
+            type="number"
+            min={1}
+            max={1000000}
+            className="ec-input font-mono"
+            value={state.participants}
+            onChange={(e) => patch({ participants: Number(e.target.value) })}
+          />
+          <p className="text-xs text-fg-muted">
+            Retail and sell-pressure samples run at most 64 orders and say so. This is not a forecast of who will trade.
+          </p>
+        </label>
+        <label className="block space-y-1.5">
+          <span className="ec-label">Total supply (minted into the curve)</span>
           <input
             type="number"
             min={1}
             className="ec-input font-mono"
-            value={state.raiseTarget}
-            onChange={(e) => patch({ raiseTarget: Number(e.target.value) })}
+            value={state.totalSupply}
+            onChange={(e) => patch({ totalSupply: Number(e.target.value) })}
           />
         </label>
         <fieldset className="space-y-2">
@@ -699,8 +764,8 @@ function StepOffering({
           </div>
           <p className="text-xs text-fg-muted">
             {state.quote === "USDC"
-              ? "USDC is the on-chain quote mint for this launch. Seed buy amounts are in USDC. Soft raise target stays display-only."
-              : "SOL (WSOL) is the default on-chain quote mint. Soft raise target is display-only; graduation uses the curve migration market cap."}
+              ? "USDC is the on-chain quote mint. The target raise is what the search tries to hit as migrationQuoteThreshold."
+              : "SOL (WSOL) is the on-chain quote. The target raise is what the search tries to hit as migrationQuoteThreshold."}
             {!getUsdcMint() && (
               <> USDC is unavailable on this cluster (no known mint).</>
             )}
@@ -837,65 +902,6 @@ function StepOffering({
   );
 }
 
-function StepCurve({
-  state,
-  patch,
-}: {
-  state: WizardState;
-  patch: (p: Partial<WizardState>) => void;
-}) {
-  const selected = getPreset(state.presetId);
-  const q = state.quote;
-  return (
-    <section className="space-y-4">
-      <header>
-        <h1 className="text-2xl font-semibold text-fg-primary">Curve preset</h1>
-        <p className="mt-1 text-sm text-fg-secondary">
-          Each preset maps to a real <code className="text-accent-soft">buildCurveWithMarketCap</code> config for your
-          quote asset (<strong className="text-fg-primary">{q}</strong>). Amounts below are in {q}, not dollars. Migration
-          target is always DAMM v2.
-        </p>
-      </header>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {CURVE_PRESETS.map((p) => (
-          <button
-            key={p.id}
-            type="button"
-            onClick={() => patch({ presetId: p.id })}
-            data-testid={`preset-${p.id}`}
-            className={clsx(
-              "ec-card p-4 text-left transition",
-              state.presetId === p.id ? "border-accent/60 shadow-glow" : "hover:border-accent/30",
-            )}
-          >
-            <CurveMiniViz preset={p.id} className="mb-2 h-12 w-full" />
-            <p className="font-semibold text-fg-primary">
-              {p.name}
-              {!OFFICIAL.includes(p.id) && <span className="ml-1 text-[10px] font-normal text-gold">EquiCurve</span>}
-            </p>
-            <p className="text-xs text-accent-soft">{p.tagline}</p>
-            <p className="mt-1 font-mono text-[10px] text-fg-muted">
-              Graduates at {presetThresholdLabel(p.id, q)} raised
-            </p>
-          </button>
-        ))}
-      </div>
-      <div className="ec-card space-y-3 p-4 text-sm">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <p className="font-medium text-fg-primary">Selected: {selected.name}</p>
-          <p className="font-mono text-xs text-accent-soft" data-testid="migration-threshold">
-            Migration threshold: {presetThresholdLabel(state.presetId, q, 6)}
-          </p>
-        </div>
-        <p className="text-fg-secondary">{selected.description}</p>
-        <PresetFacts id={state.presetId} quote={q} />
-        <p className="text-xs text-signal-grad">Migration target: DAMM v2 (fixed — cannot pick v1)</p>
-      </div>
-      <PresetShapeNote />
-    </section>
-  );
-}
-
 function StepFees({
   state,
   patch,
@@ -908,12 +914,10 @@ function StepFees({
   return (
     <section className="space-y-6">
       <header>
-        <h1 className="text-2xl font-semibold text-fg-primary">Fees &amp; locks</h1>
+        <h1 className="text-2xl font-semibold text-fg-primary">Terms</h1>
         <p className="mt-1 text-sm text-fg-secondary">
-          DBC supports a two-way split:{" "}
-          <code className="text-accent-soft">creatorTradingFeePercentage</code>{" "}
-          (issuer) vs partner (feeClaimer). LP permanent lock ≥{MIN_LP_LOCK_PCT}%
-          is enforced on-chain.
+          Creator fee share, LP lock, and anti-sniper are written into both the simulation and the create transaction.
+          Changing them clears a design you already selected. LP permanent lock ≥{MIN_LP_LOCK_PCT}% is enforced on-chain.
         </p>
       </header>
       <div className="ec-card space-y-4 p-5">
@@ -1045,12 +1049,12 @@ function StepFees({
 
 const REVIEW_GROUPS: ReviewRow["group"][] = ["Token", "Curve", "Fees", "Liquidity", "Authorities", "Seed buy", "Network"];
 const GROUP_STEP: Partial<Record<ReviewRow["group"], WizardStepId>> = {
-  Token: "offering",
-  Curve: "curve",
-  Fees: "fees",
-  Liquidity: "fees",
-  Authorities: "fees",
-  "Seed buy": "offering",
+  Token: "goals",
+  Curve: "design",
+  Fees: "terms",
+  Liquidity: "terms",
+  Authorities: "terms",
+  "Seed buy": "goals",
 };
 
 function StepReview({
@@ -1069,11 +1073,34 @@ function StepReview({
   const claimer = state.feeClaimer.trim() || walletAddr;
   return (
     <section className="space-y-4">
+      {state.designWhy.length > 0 && (
+        <div className="ec-card space-y-2 p-4 text-sm">
+          <p className="font-medium text-fg-primary">Why this design</p>
+          <ul className="list-disc space-y-1 pl-5 text-xs text-fg-secondary">
+            {state.designWhy.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+          {state.designLimits.length > 0 && (
+            <ul className="list-disc space-y-1 pl-5 text-xs text-fg-muted">
+              {state.designLimits.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          )}
+          {state.designed && (
+            <p className="font-mono text-[10px] text-fg-muted">
+              {state.designed.policyId} · config {state.designed.configHash} · model {state.designed.modelVersion} · seed{" "}
+              {state.designed.seed}
+            </p>
+          )}
+        </div>
+      )}
       <header>
-        <h1 className="text-2xl font-semibold text-fg-primary">Review every on-chain setting</h1>
+        <h1 className="text-2xl font-semibold text-fg-primary">Policy review</h1>
         <p className="mt-1 text-sm text-fg-secondary">
           This is exactly what the create transaction will write on {getClusterLabel()}, built with the same code path
-          as Launch. Name <strong className="text-fg-primary">{state.name}</strong> · ticker{" "}
+          as Deploy. Name <strong className="text-fg-primary">{state.name}</strong> · ticker{" "}
           <strong className="text-fg-primary">${state.ticker}</strong> (fixed after launch). Bonding price ≠ NAV.
         </p>
       </header>
@@ -1163,11 +1190,14 @@ function StepLaunch({
   return (
     <section className="space-y-4">
       <header>
-        <h1 className="text-2xl font-semibold text-fg-primary">Launch</h1>
+        <h1 className="text-2xl font-semibold text-fg-primary">Deploy this market design</h1>
         <p className="mt-1 text-sm text-fg-secondary">
           Signs a real Meteora DBC transaction on {getClusterLabel()} for{" "}
           <strong className="text-fg-primary">{state.name}</strong> ($
-          {state.ticker}). No mock success.
+          {state.ticker}). The curve is the design you selected
+          {state.marketCaps
+            ? ` (${state.marketCaps.initial} → ${state.marketCaps.migration} ${state.quote} market cap)`
+            : ""}. No mock success.
         </p>
       </header>
       <ol className="ec-card space-y-2 p-4 text-sm text-fg-secondary">
@@ -1192,7 +1222,7 @@ function StepLaunch({
           : result
             ? "Launched"
             : walletConnected
-              ? "Sign & launch on DBC"
+              ? "Deploy this market design"
               : "Connect wallet to launch"}
       </button>
       {receipt && receipt.items.length > 0 && <LaunchReceiptCard receipt={receipt} />}

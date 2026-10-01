@@ -1,14 +1,26 @@
 /** Single source of truth for EquiCurve's product positioning copy. */
 export const POSITIONING =
-  "EquiCurve is an issuer-controlled launch and price-discovery interface for equity-inspired and RWA-related tokens.";
+  "EquiCurve designs the market for a programmable token launch on Meteora's Dynamic Bonding Curve, then deploys that design. Equity and real-world-asset launches are one use of it.";
 
 export const POSITIONING_SHORT =
-  "Issuer-controlled launch and price discovery for equity-inspired and RWA-related tokens.";
+  "Market design for programmable launches on Meteora DBC, then DAMM v2.";
 
 export const NOT_A_SECURITIES_PLATFORM =
   "EquiCurve is software for launching tokens on Meteora's bonding curve. It is not a broker, exchange, transfer agent or securities platform, makes no claim of securities-law compliance, and does not create shareholder rights.";
 
 export const EXPLAINER = [
+  {
+    id: "design",
+    title: "Market design",
+    who: "What you simulate is what you deploy",
+    body:
+      "You set an asset profile, a market objective, a raise, and a typical order. EquiCurve searches real Meteora curve configs, rejects the ones that miss the constraints, and deploys the design you pick. Scores come from a simulator until a pool is read from chain.",
+    points: [
+      "Asset kind is a design assumption, not a statement that the token is a share",
+      "No invented launch counts or track records",
+      "Observed stats appear only after a chain read",
+    ],
+  },
   {
     id: "launch",
     title: "Token launch",

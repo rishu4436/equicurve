@@ -5,6 +5,7 @@
 
 import type { Sector } from "@/lib/demo/offerings";
 import type { PresetId } from "@/lib/dbc/types";
+import type { DesignedMarket } from "@/lib/market/types";
 import { clearPriceHistory } from "@/lib/local/priceHistory";
 
 export const LAUNCHES_KEY = "equicurve.launches.v1";
@@ -43,6 +44,8 @@ export type StoredLaunch = {
   status: "raising" | "graduated" | "new";
   dammPool?: string;
   migrateSig?: string;
+  /** Present only when Create stored the simulated design. Older records omit it. */
+  designed?: DesignedMarket;
 };
 
 export type StoredActivity = {

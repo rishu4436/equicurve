@@ -1,6 +1,6 @@
 # EquiCurve
 
-**EquiCurve is an issuer-controlled launch and price-discovery interface for equity-inspired and RWA-related tokens on Solana.** It launches a token on a Meteora Dynamic Bonding Curve (DBC), lets the market trade it on the curve, and graduates liquidity into a Meteora DAMM v2 pool when the raise threshold is reached.
+**EquiCurve designs the market for a programmable token launch on Meteora's Dynamic Bonding Curve, then deploys that design.** Equity and real-world-asset launches are one use of it. The app builds a DBC config, lets the market trade the curve, and graduates liquidity into a Meteora DAMM v2 pool when the raise threshold is reached. EquiCurve does not create shares, act as a broker, or verify NAV or custody.
 
 > EquiCurve is software for launching tokens on Meteora's bonding curve. It is **not** a broker, exchange, transfer agent or securities platform, makes **no claim of securities-law compliance**, and does **not** create shareholder rights.
 

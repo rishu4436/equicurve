@@ -5,6 +5,14 @@ import {
   type ConfigParameters,
 } from "@meteora-ag/dynamic-bonding-curve-sdk";
 import { sqrtPriceToPriceString } from "@/lib/dbc/launchReview";
+import {
+  readDynamicFee,
+  updateAccumulator,
+  updateReferences,
+  zeroVol,
+  type DynamicFeeParams,
+  type VolState,
+} from "./volatility";
 
 /**
  * In-memory DBC pool.
@@ -33,7 +41,7 @@ export type BuiltConfig = ConfigParameters & {
       thirdFactor: BN;
       baseFeeMode: number;
     };
-    dynamicFee: { initialized?: number; binStep?: number; variableFeeControl?: number } | null;
+    dynamicFee: Record<string, unknown> | null;
   };
   enableFirstSwapWithMinFee?: boolean;
   creatorTradingFeePercentage: number;
@@ -45,7 +53,10 @@ export type CurveBook = {
   threshold: bigint;
   sqrtStart: bigint;
   quoteDecimals: number;
-  dynamicFeeEnabled: boolean;
+  /** Present only when the config's dynamic fee can be replayed. */
+  dynamicFee: DynamicFeeParams | null;
+  /** The preset asked for a dynamic fee, but the parameters were not readable. */
+  dynamicFeeUnreadable: boolean;
 };
 
 export type BookState = {
@@ -55,6 +66,7 @@ export type BookState = {
   heldBase: bigint;
   feesAtoms: bigint;
   trades: number;
+  vol: VolState;
 };
 
 export type FillSide = "buy" | "sell";
@@ -87,9 +99,9 @@ export function openBook(cfg: ConfigParameters, quoteDecimals: number): CurveBoo
   if (!built.curve?.length) {
     throw new Error("Config has no curve points.");
   }
-  const dynamic = built.poolFees.dynamicFee;
-  const dynamicFee = dynamic
-    ? { ...dynamic, initialized: dynamic.initialized ?? 1 }
+  const parsedFee = readDynamicFee(built.poolFees.dynamicFee);
+  const dynamicFee = parsedFee
+    ? { ...built.poolFees.dynamicFee, initialized: 1 }
     : { initialized: 0, binStep: 0, variableFeeControl: 0 };
   const migrationSqrtPrice = getMigrationThresholdPrice(
     built.migrationQuoteThreshold,
@@ -101,12 +113,15 @@ export function openBook(cfg: ConfigParameters, quoteDecimals: number): CurveBoo
     migrationSqrtPrice,
     poolFees: { ...built.poolFees, dynamicFee },
   } as BuiltConfig;
+  const rawFee = built.poolFees.dynamicFee;
+  const askedForDynamic = rawFee != null && rawFee.initialized !== 0;
   return {
     config,
     threshold: bi(built.migrationQuoteThreshold),
     sqrtStart: bi(built.sqrtStartPrice),
     quoteDecimals,
-    dynamicFeeEnabled: Boolean(dynamic && (dynamic.initialized ?? 1) !== 0),
+    dynamicFee: parsedFee,
+    dynamicFeeUnreadable: askedForDynamic && !parsedFee,
   };
 }
 
@@ -117,6 +132,7 @@ export function initialState(book: CurveBook): BookState {
     heldBase: 0n,
     feesAtoms: 0n,
     trades: 0,
+    vol: zeroVol(),
   };
 }
 
@@ -133,6 +149,12 @@ export function moveBps(beforeSqrt: bigint, afterSqrt: bigint): number {
   const bps = (delta * 10_000n) / before;
   const n = bps > BigInt(Number.MAX_SAFE_INTEGER) ? Number.MAX_SAFE_INTEGER : Number(bps);
   return after >= before ? n : -n;
+}
+
+function advanceVol(book: CurveBook, state: BookState, nextSqrt: bigint, atSec: number): VolState {
+  if (!book.dynamicFee) return state.vol;
+  const pre = updateReferences(state.vol, book.dynamicFee, state.sqrtPrice, atSec);
+  return updateAccumulator(pre, book.dynamicFee, nextSqrt, atSec);
 }
 
 function emptyFill(side: FillSide, unused: bigint, completed: boolean): Fill {
@@ -174,10 +196,10 @@ function quote(
       quoteReserve: bn(state.quoteReserve),
       activationPoint: bn(0n),
       volatilityTracker: {
-        lastUpdateTimestamp: bn(0n),
-        sqrtPriceReference: bn(0n),
-        volatilityAccumulator: bn(0n),
-        volatilityReference: bn(0n),
+        lastUpdateTimestamp: bn(state.vol.lastUpdate),
+        sqrtPriceReference: bn(state.vol.sqrtRef),
+        volatilityAccumulator: bn(state.vol.volAcc),
+        volatilityReference: bn(state.vol.volRef),
         padding: [0, 0, 0],
       },
     },
@@ -199,7 +221,10 @@ export function applyBuy(book: CurveBook, state: BookState, quoteAtoms: bigint, 
   if (completed || quoteAtoms <= 0n) {
     return { state, fill: emptyFill("buy", quoteAtoms > 0n ? quoteAtoms : 0n, completed) };
   }
-  const q = quote(book, state, false, quoteAtoms, atSec);
+  const pre = book.dynamicFee
+    ? { ...state, vol: updateReferences(state.vol, book.dynamicFee, state.sqrtPrice, atSec) }
+    : state;
+  const q = quote(book, pre, false, quoteAtoms, atSec);
   const fee = bi(q.tradingFee) + bi(q.protocolFee) + bi(q.referralFee);
   const added = bi(q.excludedFeeInputAmount);
   const nextSqrt = bi(q.nextSqrtPrice);
@@ -209,6 +234,7 @@ export function applyBuy(book: CurveBook, state: BookState, quoteAtoms: bigint, 
     heldBase: state.heldBase + bi(q.outputAmount),
     feesAtoms: state.feesAtoms + fee,
     trades: state.trades + 1,
+    vol: advanceVol(book, state, nextSqrt, atSec),
   };
   return {
     state: next,
@@ -233,7 +259,10 @@ export function applySell(book: CurveBook, state: BookState, baseAtoms: bigint, 
   if (completed || capped <= 0n || state.sqrtPrice <= book.sqrtStart) {
     return { state, fill: emptyFill("sell", baseAtoms > 0n ? baseAtoms : 0n, completed) };
   }
-  const q = quote(book, state, true, capped, atSec);
+  const pre = book.dynamicFee
+    ? { ...state, vol: updateReferences(state.vol, book.dynamicFee, state.sqrtPrice, atSec) }
+    : state;
+  const q = quote(book, pre, true, capped, atSec);
   const fee = bi(q.tradingFee) + bi(q.protocolFee) + bi(q.referralFee);
   // Fees are taken from the quote output, and the reserve loses the gross amount.
   const grossQuoteOut = bi(q.outputAmount) + fee;
@@ -248,6 +277,7 @@ export function applySell(book: CurveBook, state: BookState, baseAtoms: bigint, 
     heldBase: state.heldBase - soldBase,
     feesAtoms: state.feesAtoms + fee,
     trades: state.trades + 1,
+    vol: advanceVol(book, state, nextSqrt, atSec),
   };
   return {
     state: next,

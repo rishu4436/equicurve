@@ -37,6 +37,8 @@ export type LaunchReviewInput = {
   cluster: string;
   /** NEXT_PUBLIC_POOL_CONFIG_KEY when set: pool-only mode on a shared config. */
   sharedConfig: string | null;
+  /** Searched caps. When set, the review describes this curve, not the preset default. */
+  marketCaps?: { initial: number; migration: number };
 };
 
 export type ReviewRow = {
@@ -84,6 +86,7 @@ export function buildLaunchReview(i: LaunchReviewInput): LaunchReview {
     antiSniper: i.antiSniper,
     quoteDecimals,
     transferProfile: i.transferProfile,
+    marketCaps: i.marketCaps,
   });
   const cfg = buildPresetConfig(i.presetId, overrides) as unknown as {
     migrationQuoteThreshold: { toString(): string };
@@ -98,8 +101,13 @@ export function buildLaunchReview(i: LaunchReviewInput): LaunchReview {
     tokenAuthorityOption: number;
   };
   const threshold = cfg.migrationQuoteThreshold.toString();
-  const caps = presetMarketCaps(i.presetId, i.quote);
+  const caps = i.marketCaps ?? presetMarketCaps(i.presetId, i.quote);
   const shared = !!i.sharedConfig;
+  if (shared && i.marketCaps) {
+    errors.push(
+      "A shared pool config is set (NEXT_PUBLIC_POOL_CONFIG_KEY). It cannot deploy this market design's market caps. Unset it to deploy the simulated curve.",
+    );
+  }
 
   // Token
   const programId = i.transferProfile === "open-spl" ? TOKEN_PROGRAM_ID : TOKEN_2022_PROGRAM_ID;
@@ -134,8 +142,14 @@ export function buildLaunchReview(i: LaunchReviewInput): LaunchReview {
     {
       group: "Curve",
       label: "Preset",
-      value: `${preset.name} · ${presetPriceMultiple(i.presetId, i.quote)}× price range · market cap ${caps.initial.toLocaleString()} → ${caps.migration.toLocaleString()} ${i.quote}`,
-      note: "Market caps are in quote-token units, not USD.",
+      value: `${preset.name} · ${
+        i.marketCaps
+          ? `${Math.round((caps.migration / caps.initial) * 100) / 100}×`
+          : `${presetPriceMultiple(i.presetId, i.quote)}×`
+      } price range · market cap ${caps.initial.toLocaleString()} → ${caps.migration.toLocaleString()} ${i.quote}`,
+      note: i.marketCaps
+        ? "These market caps are the selected design. They are quote-token units, not USD, and they are what the create transaction builds."
+        : "Market caps are in quote-token units, not USD.",
     },
     {
       group: "Curve",

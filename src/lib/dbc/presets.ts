@@ -287,6 +287,8 @@ export function launchPresetOverrides(args: {
   antiSniper: boolean;
   quoteDecimals: 6 | 9;
   transferProfile: "open-spl" | "token-2022" | "transfer-hook";
+  /** Searched caps from a launch policy. Omitted means the preset's own caps. */
+  marketCaps?: QuoteMarketCaps;
 }): BuildPresetOverrides {
   const wantsHook = args.transferProfile === "transfer-hook";
   const effectiveRenounce = wantsHook ? args.mintRenounce : true;
@@ -297,6 +299,7 @@ export function launchPresetOverrides(args: {
     mintRenounce: effectiveRenounce,
     antiSniper: args.antiSniper,
     quoteDecimals: args.quoteDecimals,
+    marketCaps: args.marketCaps,
     tokenType: args.transferProfile === "open-spl" ? "spl" : "token-2022",
     allowMintAuthority: wantsHook && !effectiveRenounce,
   };

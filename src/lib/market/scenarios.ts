@@ -1,6 +1,7 @@
 import type { BookState, CurveBook, Fill } from "./book";
 import { applyBuy, applySell, initialState, moveBps } from "./book";
-import type { ReferenceImpact, ScenarioId, ScenarioReport } from "./types";
+import { scenarioAssumptions } from "./constraints";
+import type { AssetKind, ReferenceImpact, ScenarioId, ScenarioReport } from "./types";
 
 export type SimOrder =
   | { side: "buy"; quoteAtoms: bigint; atSec: number }
@@ -101,11 +102,14 @@ export function namedScenarios(args: {
   typicalAtoms: bigint;
   participants: number;
   feeDurationSec: number;
+  asset?: AssetKind;
 }): ScenarioReport[] {
   const { book, typicalAtoms, participants, feeDurationSec } = args;
+  const assumptions = scenarioAssumptions(args.asset ?? "private-company");
   const sample = Math.min(SAMPLE_CAP, Math.max(1, participants));
-  const whaleSize = typicalAtoms * 10n;
+  const whaleSize = typicalAtoms * BigInt(assumptions.whaleMultiple);
   const duration = Math.max(0, feeDurationSec);
+  const lateAt = Math.floor(duration * assumptions.lateStart);
 
   const retailNote =
     participants > sample
@@ -125,7 +129,7 @@ export function namedScenarios(args: {
     book,
     "whale",
     "Whale",
-    "Five buys at 10× the typical size, placed at launch while the early fee is highest.",
+    `Five buys at ${assumptions.whaleMultiple}× the typical size, placed at launch while the early fee is highest.`,
     null,
     spreadBuys(5, whaleSize, Math.min(duration, 300), 0),
   );
@@ -136,11 +140,11 @@ export function namedScenarios(args: {
     book,
     "late",
     "Late capital",
-    "A fifth of the attempt arrives at launch. The rest arrives at the end of the fee window.",
+    "Some size arrives at launch. The rest arrives later in the fee window. When that starts depends on the asset profile.",
     null,
     [
       ...spreadBuys(earlyCount, typicalAtoms, 0, 0),
-      ...spreadBuys(lateCount, typicalAtoms * 4n, 0, duration),
+      ...spreadBuys(lateCount, typicalAtoms * 4n, 0, lateAt),
     ],
   );
 
@@ -148,11 +152,11 @@ export function namedScenarios(args: {
     book,
     "sell-pressure",
     "Sell pressure",
-    "Buyers take a position, then sell half of the base they received.",
+    `Buyers take a position, then sell ${assumptions.sellFractionBps / 100}% of the base they received.`,
     null,
     [
       ...spreadBuys(sample, typicalAtoms, Math.floor(duration / 2), 0),
-      { side: "sellFraction", fractionBps: 5_000, atSec: duration },
+      { side: "sellFraction", fractionBps: assumptions.sellFractionBps, atSec: duration },
     ],
   );
 
@@ -165,7 +169,7 @@ export function namedScenarios(args: {
     book,
     "volatile",
     "Volatile",
-    "Alternating buys and partial sells. Dynamic fee is not applied; see the policy limits.",
+    "Alternating buys and partial sells. A dynamic fee is replayed when the config has one.",
     null,
     volatileOrders,
   );

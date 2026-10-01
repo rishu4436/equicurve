@@ -25,7 +25,7 @@ import {
 import { chainStatusFromCurve } from "@/lib/dbc/curveState";
 import { migrationConfigForSnapshot } from "@/lib/dbc/migrate";
 import { PoolNotFoundError } from "@/lib/dbc/poolAccount";
-import { tryFormatAtoms } from "@/lib/amounts";
+import { formatAtomsExact, tryFormatAtoms } from "@/lib/amounts";
 import {
   DBC_PROGRAM_ID,
   DAMM_V2_PROGRAM,
@@ -36,6 +36,7 @@ import {
 } from "@/lib/constants";
 import { fetchPoolSnapshot } from "@/lib/dbc/migrate";
 import type { PoolSnapshot } from "@/lib/dbc/types";
+import type { DesignedMarket } from "@/lib/market/types";
 import type { DemoOffering } from "@/lib/demo/offerings";
 import {
   getLaunch,
@@ -552,6 +553,7 @@ export function OfferingDetailClient({ id, demo }: Props) {
                       Bonding price is discovery, not NAV / fair value. The token does not by itself grant shareholder
                       rights; any equity or asset link depends on the issuer&apos;s own legal framework.
                     </p>
+                    {!illustrative && <DesignedVsActual designed={launch?.designed} snapshot={snapshot} quote={quote} />}
                     <IssuerFaq
                       lockPct={snapshot?.lockPct ?? null}
                       creatorPct={snapshot?.creatorFeePct ?? null}
@@ -953,5 +955,93 @@ export function OfferingDetailClient({ id, demo }: Props) {
         </div>
       </div>
     </EligibilityGate>
+  );
+}
+
+function DesignedVsActual({
+  designed,
+  snapshot,
+  quote,
+}: {
+  designed: DesignedMarket | undefined;
+  snapshot: PoolSnapshot | null;
+  quote: string;
+}) {
+  if (!designed) {
+    return (
+      <p className="text-xs text-fg-muted">
+        No market design was stored with this pool, so there is no designed-versus-actual record.
+      </p>
+    );
+  }
+  const decimals = snapshot?.quoteDecimals ?? null;
+  const chainThreshold = snapshot?.migrationQuoteThreshold ?? null;
+  const chainProgress = snapshot?.quoteProgress ?? null;
+  if (!snapshot || (chainThreshold == null && chainProgress == null)) {
+    return (
+      <div className="rounded-input border border-line bg-subtle px-3 py-2 text-xs text-fg-muted">
+        <p className="font-medium text-fg-secondary">Designed versus actual</p>
+        <p>
+          No observed record yet. A chain read has not returned this pool&apos;s migration threshold or quote progress.
+        </p>
+      </div>
+    );
+  }
+  const thresholdText = (atoms: string) =>
+    decimals != null ? `${formatAtomsExact(atoms, decimals)} ${quote}` : `${atoms} atoms (quote decimals unknown)`;
+  let thresholdDelta = "unknown";
+  if (chainThreshold != null) {
+    try {
+      const delta = BigInt(chainThreshold) - BigInt(designed.thresholdAtoms);
+      const abs = delta < 0n ? -delta : delta;
+      const sign = delta > 0n ? "+" : delta < 0n ? "−" : "";
+      thresholdDelta = decimals != null ? `${sign}${formatAtomsExact(abs.toString(), decimals)} ${quote}` : `${sign}${abs.toString()} atoms`;
+    } catch {
+      thresholdDelta = "unreadable";
+    }
+  }
+  return (
+    <div className="rounded-input border border-line bg-subtle px-3 py-2 text-xs text-fg-secondary">
+      <p className="font-medium text-fg-primary">Designed versus actual</p>
+      <p className="mt-1 text-fg-muted">
+        Policy {designed.policyId}. Synthetic retail progress and cohort graduation are simulator output. Chain figures
+        come from the latest pool read.
+      </p>
+      <dl className="mt-2 grid gap-2 sm:grid-cols-2">
+        <div>
+          <dt className="text-fg-muted">Graduation threshold</dt>
+          <dd>
+            Designed {thresholdText(designed.thresholdAtoms)}
+            {chainThreshold != null ? ` · chain ${thresholdText(chainThreshold)} · difference ${thresholdDelta}` : " · chain threshold unknown"}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-fg-muted">Progress</dt>
+          <dd>
+            Synthetic retail sample {Math.round(designed.retailProgress * 1000) / 10}%
+            {chainProgress != null
+              ? ` · chain quote progress ${Math.round(chainProgress * 1000) / 10}%`
+              : " · chain progress unknown"}
+            . The retail sample is not a forecast.
+          </dd>
+        </div>
+        <div>
+          <dt className="text-fg-muted">Whale impact and slippage</dt>
+          <dd>
+            Designed whale impact was {designed.whaleImpactBps} bps in the simulator. No chain read of realized whale
+            impact or slippage is available, so those are not compared.
+          </dd>
+        </div>
+        <div>
+          <dt className="text-fg-muted">Graduation</dt>
+          <dd>
+            Chain phase: {snapshot.curve.phase}
+            {snapshot.isMigrated ? " · migrated" : ""}. Cohort paths reached graduation in{" "}
+            {Math.round(designed.stressGraduationRate * 1000) / 10}% of {designed.stressPaths} synthetic paths. That rate
+            is not this pool&apos;s result.
+          </dd>
+        </div>
+      </dl>
+    </div>
   );
 }

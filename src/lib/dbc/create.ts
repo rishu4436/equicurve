@@ -73,6 +73,24 @@ function assertValid<T>(
 }
 
 /**
+ * The config Create will send. Review and the market simulator must call this
+ * same builder (via launchPresetOverrides) so the signed curve is the simulated one.
+ */
+export function launchCurveConfig(args: {
+  presetId: LaunchFormInput["presetId"];
+  totalSupply: number;
+  creatorTradingFeePercentage: number;
+  lpLockPct: number;
+  mintRenounce: boolean;
+  antiSniper: boolean;
+  quoteDecimals: 6 | 9;
+  transferProfile: TransferProfile;
+  marketCaps?: LaunchFormInput["marketCaps"];
+}) {
+  return buildPresetConfig(args.presetId, launchPresetOverrides(args));
+}
+
+/**
  * Build real DBC createConfigAndPool (optionally with first buy).
  * Supports Open SPL, Token-2022 (no hook), and Token-2022 transfer-hook
  * via dedicated SDK builders when NEXT_PUBLIC_TRANSFER_HOOK_PROGRAM is set.
@@ -181,7 +199,7 @@ export async function prepareLaunchTransaction(args: {
     } satisfies LaunchKeypairs);
 
   const preset = getPreset(input.presetId);
-  const caps = presetMarketCaps(input.presetId, quoteLabel);
+  const caps = input.marketCaps ?? presetMarketCaps(input.presetId, quoteLabel);
   let thresholdAtoms = "";
   let mode: PreparedLaunch["mode"];
   let configPubkey: PublicKey;
@@ -191,6 +209,13 @@ export async function prepareLaunchTransaction(args: {
   let transferHookProgramPk: PublicKey | undefined;
   if (wantsTransferHook) {
     transferHookProgramPk = await requireTransferHookProgram(connection);
+  }
+
+  if (existingConfig && input.marketCaps) {
+    throw new EquiCurveError(
+      "This launch has a searched market design. NEXT_PUBLIC_POOL_CONFIG_KEY would ignore those market caps, so the transaction was not built. Unset the shared config to deploy the simulated curve.",
+      "VALIDATION",
+    );
   }
 
   if (existingConfig) {
@@ -240,18 +265,17 @@ export async function prepareLaunchTransaction(args: {
   } else {
     mode = "config-and-pool";
     configPubkey = keypairs.config.publicKey;
-    const curveConfig = buildPresetConfig(
-      input.presetId,
-      launchPresetOverrides({
-        totalSupply: input.totalSupply,
-        creatorTradingFeePercentage,
-        lpLockPct,
-        mintRenounce: effectiveMintRenounce,
-        antiSniper,
-        quoteDecimals: quoteDecimals as 6 | 9,
-        transferProfile,
-      }),
-    );
+    const curveConfig = launchCurveConfig({
+      presetId: input.presetId,
+      totalSupply: input.totalSupply,
+      creatorTradingFeePercentage,
+      lpLockPct,
+      mintRenounce: effectiveMintRenounce,
+      antiSniper,
+      quoteDecimals: quoteDecimals as 6 | 9,
+      transferProfile,
+      marketCaps: input.marketCaps,
+    });
     thresholdAtoms = String(
       (curveConfig as { migrationQuoteThreshold: { toString(): string } }).migrationQuoteThreshold.toString(),
     );

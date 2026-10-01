@@ -23,6 +23,12 @@ export type LaunchFormInput = {
   feeClaimer?: string;
   /** open-spl | token-2022 | transfer-hook */
   transferProfile?: import("./transferHook").TransferProfile;
+  /**
+   * Market caps from the selected launch policy, in quote-token units.
+   * When set, the create transaction builds this curve instead of the preset default.
+   * A shared NEXT_PUBLIC_POOL_CONFIG_KEY cannot carry these caps and is refused.
+   */
+  marketCaps?: { initial: number; migration: number };
 };
 
 export type PreparedLaunch = {

@@ -6,23 +6,102 @@ import {
   presetThresholdLabel,
 } from "@/components/issuer/IssuerAnswers";
 import { CurveMiniViz } from "@/components/ui/CurveMiniViz";
+import { formatAtomsExact } from "@/lib/amounts";
 import { CURVE_PRESETS, FEE_BY_PRESET, presetPriceMultiple } from "@/lib/dbc/presets";
+import { designPolicy } from "@/lib/market/policy";
+
+function illustrativePolicy() {
+  try {
+    return designPolicy({
+      asset: "private-company",
+      objective: "controlled-discovery",
+      quote: "SOL",
+      targetRaise: "100",
+      typicalTrade: "1",
+      participants: 12,
+      stressPaths: 4,
+      seed: 0xec0c,
+    });
+  } catch {
+    return null;
+  }
+}
 
 export default function PresetsPage() {
+  const sample = illustrativePolicy();
   return (
     <div className="space-y-8">
       <header>
-        <h1 className="text-3xl font-semibold text-fg-primary">Curve &amp; fee presets</h1>
+        <h1 className="text-3xl font-semibold text-fg-primary">Market designs</h1>
         <p className="mt-2 max-w-3xl text-sm text-fg-secondary">
-          Templates built with Meteora <code className="text-accent-soft">buildCurveWithMarketCap</code>, the same builder
-          Create uses. Market caps are in <strong className="text-fg-primary">quote-token units</strong> (SOL or USDC),
-          not dollars, and each quote has its own caps so a SOL raise has a sensible SOL threshold. Thresholds below
-          are the exact <code>migrationQuoteThreshold</code> each preset produces.
+          A launch design is a real Meteora config: fee schedule, market caps, creator fee, and LP lock. The table
+          below is one labelled simulation, not a ranking of live launches. Fee-schedule seeds further down are the
+          templates the search builds from. EquiCurve does not create shares and does not verify NAV or custody.
         </p>
         <div className="mt-3 max-w-3xl">
           <PresetShapeNote />
         </div>
       </header>
+
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold text-fg-primary">Illustrative brief, synthetic evidence</h2>
+        <p className="max-w-3xl text-sm text-fg-secondary">
+          Private-company profile, controlled discovery, 100 SOL raise, 1 SOL typical order, 12 participants, 4 cohort
+          paths, seed {sample?.seed ?? "—"}. Every metric here is simulated. There is no observed launch record on this
+          page.
+        </p>
+        {sample ? (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[720px] text-left text-xs" data-testid="design-sample">
+              <thead className="text-fg-muted">
+                <tr className="border-b border-line">
+                  <th className="py-2 pr-3">Design</th>
+                  <th className="py-2 pr-3">Typical impact</th>
+                  <th className="py-2 pr-3">Whale impact</th>
+                  <th className="py-2 pr-3">Retail fill</th>
+                  <th className="py-2 pr-3">Graduation (synthetic)</th>
+                  <th className="py-2 pr-3">Threshold</th>
+                  <th className="py-2">Fee model</th>
+                </tr>
+              </thead>
+              <tbody className="text-fg-secondary">
+                {sample.candidates.map((row) => {
+                  const whale = row.scenarios.find((s) => s.id === "whale");
+                  const retail = row.scenarios.find((s) => s.id === "retail");
+                  return (
+                    <tr key={row.profileId} className="border-b border-line/60">
+                      <td className="py-2 pr-3 font-semibold text-fg-primary">
+                        {row.profileName}
+                        <span className="block text-[10px] font-normal text-fg-muted">
+                          {row.score > 0 ? "On the frontier" : "Not on the frontier"}
+                          {row.feasible ? "" : " · constraint failed"}
+                        </span>
+                      </td>
+                      <td className="py-2 pr-3 font-mono">{row.reference.impactBps} bps</td>
+                      <td className="py-2 pr-3 font-mono">{whale?.largestBuyImpactBps ?? "—"} bps</td>
+                      <td className="py-2 pr-3 font-mono">{retail ? `${Math.round(retail.progress * 1000) / 10}%` : "—"}</td>
+                      <td className="py-2 pr-3 font-mono">{Math.round(row.stressGraduationRate * 1000) / 10}%</td>
+                      <td className="py-2 pr-3 font-mono">{formatAtomsExact(row.thresholdAtoms, 9)} SOL</td>
+                      <td className="py-2">{row.dynamicFeeStatus}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <p className="mt-1 text-[10px] text-fg-muted">
+              Policy {sample.policyId}. {sample.observedNote} No usage counts are shown because none have been read from
+              chain.
+            </p>
+          </div>
+        ) : (
+          <p className="text-sm text-signal-warn">The illustrative search did not produce a policy. The fee seeds below are still real templates.</p>
+        )}
+        <Link href="/create?step=design" className="ec-btn-primary inline-flex">
+          Design a market
+        </Link>
+      </section>
+
+      <h2 className="text-lg font-semibold text-fg-primary">Fee-schedule seeds</h2>
 
       <div className="overflow-x-auto">
         <table className="w-full min-w-[640px] text-left text-xs" data-testid="preset-table">
@@ -70,8 +149,8 @@ export default function PresetsPage() {
             <p className="mt-2 text-[10px] text-fg-muted">
               Shown for SOL quote. USDC quote: {presetThresholdLabel(p.id, "USDC")} before graduation.
             </p>
-            <Link href={`/create?step=curve&preset=${p.id}`} className="ec-btn-primary mt-5 w-full">
-              Use in Create
+            <Link href={`/create?step=design&preset=${p.id}`} className="ec-btn-primary mt-5 w-full">
+              Design with this fee schedule available
             </Link>
           </div>
         ))}

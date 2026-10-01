@@ -18,9 +18,9 @@ const mono = JetBrains_Mono({
   subsets: ["latin"],
 });
 
-const TITLE = "EquiCurve — issuer-controlled launch & price discovery on Solana";
+const TITLE = "EquiCurve — market design for programmable launches on Solana";
 const DESCRIPTION =
-  "An issuer-controlled launch and price-discovery interface for equity-inspired and RWA-related tokens, built on Meteora Dynamic Bonding Curve with graduation to DAMM v2. Does not create shareholder rights.";
+  "Design a Meteora Dynamic Bonding Curve, simulate it, and deploy that same config. Equity and RWA launches are one use. EquiCurve does not create shareholder rights, act as a broker, or verify NAV or custody.";
 
 export const metadata: Metadata = {
   title: TITLE,

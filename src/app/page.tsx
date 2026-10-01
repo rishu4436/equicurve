@@ -18,10 +18,10 @@ export default function HomePage() {
       >
         <div>
           <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-accent">
-            Equity-inspired &amp; RWA-related tokens · Meteora DBC → DAMM v2
+            Market design for programmable launches · Meteora DBC → DAMM v2
           </p>
           <h1 className="text-4xl font-semibold tracking-tight text-fg-primary sm:text-5xl">
-            Issuer-controlled launch and price discovery on Solana
+            Design the market, then deploy that curve
           </h1>
           <p className="mt-4 max-w-xl text-base leading-relaxed text-fg-secondary sm:text-lg">
             {POSITIONING} Issuers set the curve, fee split, LP lock and mint authority; every setting is written
@@ -101,8 +101,8 @@ export default function HomePage() {
           {[
             {
               n: "1",
-              title: "Configure curve",
-              body: "Pick Short / Flat / Exponential / Long. Set creator fee share, LP lock ≥10%, and mint authority — all mapped on-chain.",
+              title: "Design the market",
+              body: "Set the raise, the typical order, and the objective. EquiCurve searches real DBC configs and deploys the one you pick, including fee share and LP lock.",
               href: "/create",
             },
             {
@@ -135,17 +135,17 @@ export default function HomePage() {
       <section className="space-y-4">
         <div className="flex items-end justify-between gap-4">
           <h2 className="text-2xl font-semibold text-fg-primary">
-            Curve presets
+            Fee-schedule seeds
           </h2>
           <Link href="/presets" className="text-sm text-accent hover:underline">
-            Preset gallery
+            Market designs
           </Link>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {official.map((p) => (
             <Link
               key={p.id}
-              href={`/create?step=curve&preset=${p.id}`}
+              href={`/create?step=design&preset=${p.id}`}
               className="ec-card p-5 transition hover:border-accent/40"
             >
               <CurveMiniViz preset={p.id} className="mb-3 h-12 w-full" />

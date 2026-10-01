@@ -1,6 +1,6 @@
 # EquiCurve architecture
 
-EquiCurve is an issuer-controlled launch and price-discovery interface for equity-inspired and RWA-related tokens. It is a Next.js app with no on-chain program of its own: every on-chain action is a transaction to **Meteora Dynamic Bonding Curve (DBC)** or **Meteora DAMM v2**, built with the official SDKs and signed by the user's wallet. The server keeps only an off-chain registry and hosted metadata JSON.
+EquiCurve is a market-design app for programmable launches on Meteora DBC. Equity and RWA launches are one use of it. It is a Next.js app with no on-chain program of its own: every on-chain action is a transaction to **Meteora Dynamic Bonding Curve (DBC)** or **Meteora DAMM v2**, built with the official SDKs and signed by the user's wallet. The server keeps only an off-chain registry and hosted metadata JSON.
 
 Legal representation (shareholder rights) and RWA verification (custody, audits, redemption) are **outside** this system. See the three-layer explainer in the [README](../README.md#what-equicurve-is-and-is-not-three-separate-layers).
 

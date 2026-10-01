@@ -42,9 +42,9 @@ export function OfferingPreviewCard({ state }: { state: WizardState }) {
 
       <dl className="grid grid-cols-2 gap-2 text-xs">
         <div>
-          <dt className="text-fg-muted">Raise target</dt>
+          <dt className="text-fg-muted">Target raise</dt>
           <dd className="font-mono text-fg-primary">
-            ${state.raiseTarget.toLocaleString()} SOL
+            {state.targetRaise || "—"} {state.quote}
           </dd>
         </div>
         <div>
@@ -65,7 +65,7 @@ export function OfferingPreviewCard({ state }: { state: WizardState }) {
 
       <div className="flex flex-wrap gap-1.5">
         <span className="rounded-pill border border-line bg-subtle px-2 py-0.5 text-[10px] text-fg-secondary">
-          Quote: SOL
+          Quote: {state.quote}
         </span>
         <span className="rounded-pill border border-line bg-subtle px-2 py-0.5 text-[10px] text-fg-secondary">
           {state.investorType}

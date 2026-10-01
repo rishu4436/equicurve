@@ -1,14 +1,27 @@
 export { applyBuy, applySell, initialState, moveBps, openBook, priceString } from "./book";
-export { designPolicy, materializeRecipe, parseBrief } from "./policy";
-export { namedScenarios, referenceBuy, replay, stressPaths } from "./scenarios";
-export { objectiveLabel, scoreCandidate } from "./score";
+export { runCohortStress } from "./cohorts";
+export { constraintsFor } from "./constraints";
+export { sha256Hex } from "./hash";
+export { dominates, objectivePriorities, paretoFrontier, prefer } from "./pareto";
+export {
+  DBC_SDK_VERSION,
+  MARKET_MODEL_VERSION,
+  designPolicy,
+  materializeRecipe,
+  parseBrief,
+  recipeConfigHash,
+  toDesignedMarket,
+} from "./policy";
+export { namedScenarios, referenceBuy, replay } from "./scenarios";
+export { objectiveLabel } from "./score";
 export type {
   AssetKind,
   CandidateReport,
+  DesignedMarket,
+  DynamicFeeStatus,
   LaunchBrief,
   LaunchPolicy,
   MarketObjective,
-  MarketProfileId,
   PolicyRecipe,
   ReferenceImpact,
   ScenarioId,

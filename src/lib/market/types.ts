@@ -34,8 +34,16 @@ export type LaunchBrief = {
   /** Expected number of buyers. Named scenarios sample at most 64 of them and say so. */
   participants: number;
   totalSupply?: number;
-  /** Synthetic paths in the stress test. Default 64. Each path is labelled synthetic. */
+  /** Creator share of the non-protocol trading fee, 0–100. Default 70, matching Create. */
+  creatorPct?: number;
+  /** Permanent partner LP lock. Default 100. Clamped to the on-chain minimum. */
+  lpLockPct?: number;
+  /** Sets enableFirstSwapWithMinFee on the config. Default true, matching Create. */
+  antiSniper?: boolean;
+  /** Synthetic cohort paths. Default 16. */
   stressPaths?: number;
+  /** Deterministic stress seed. Default 0xec0c. */
+  seed?: number;
 };
 
 export type ScenarioId = "retail" | "whale" | "late" | "sell-pressure" | "volatile";
@@ -81,6 +89,27 @@ export type PolicyRecipe = {
   totalSupply: number;
   creatorTradingFeePercentage: number;
   lpLockPct: number;
+  antiSniper: boolean;
+};
+
+export type DynamicFeeStatus = "simulated" | "base-only" | "not-used";
+
+/** Compact record stored with a launch so a later chain read can be compared. */
+export type DesignedMarket = {
+  policyId: string;
+  modelVersion: string;
+  sdkVersion: string;
+  seed: number;
+  configHash: string;
+  asset: AssetKind;
+  objective: MarketObjective;
+  presetId: PresetId;
+  thresholdAtoms: string;
+  referenceImpactBps: number;
+  retailProgress: number;
+  whaleImpactBps: number;
+  stressGraduationRate: number;
+  stressPaths: number;
 };
 
 export type MarketProfileId =
@@ -92,7 +121,8 @@ export type MarketProfileId =
   | "protected";
 
 export type CandidateReport = {
-  profileId: MarketProfileId;
+  /** Fee preset plus price multiple, for example "equity-3x". */
+  profileId: string;
   profileName: string;
   recipe: PolicyRecipe;
   /** On-chain migration quote threshold, atoms. */
@@ -103,23 +133,34 @@ export type CandidateReport = {
   priceMultiple: number;
   reference: ReferenceImpact;
   scenarios: ScenarioReport[];
-  /** Share of synthetic paths that reached the threshold. */
+  /** Share of synthetic cohort paths that reached the threshold. */
   stressGraduationRate: number;
   stressPaths: number;
   /** Median progress across synthetic paths, 0..1. */
   stressMedianProgress: number;
+  /** 100 for the selected frontier point. Lower numbers are other frontier points. Not a weighted grade. */
   score: number;
-  /** False when the preset enables a dynamic fee. Volatility is not replayed, so that fee stays at zero. */
-  dynamicFeeModeled: boolean;
+  dynamicFeeStatus: DynamicFeeStatus;
+  feasible: boolean;
+  rejected: string[];
 };
 
 export type LaunchPolicy = {
+  version: 1;
+  policyId: string;
+  modelVersion: string;
+  sdkVersion: string;
+  seed: number;
+  configHash: string;
+  createdAt: string;
   brief: LaunchBrief;
   targetRaiseAtoms: string;
+  priorities: string[];
   chosen: CandidateReport;
+  /** Other frontier points, selected order. */
   alternatives: CandidateReport[];
+  candidates: CandidateReport[];
   why: string[];
-  /** Always present. Empty only when every number on the policy is fully modeled. */
   limits: string[];
   observedLaunches: null;
   observedNote: string;
