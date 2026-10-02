@@ -44,6 +44,16 @@ function briefKey(state: WizardState): string {
   ].join("|");
 }
 
+function deployLabel(
+  status: LaunchPolicy["negotiation"]["status"],
+  row: CandidateReport,
+  allowed: boolean,
+): string {
+  if (status === "needs-decision") return "Blocked until you accept a budget";
+  if (!allowed) return "Outside this budget";
+  return row.feasible ? "Review this config" : "Review with this budget";
+}
+
 function budgetKey(budget: ConstraintBudget | null | undefined): string {
   if (!budget) return "original";
   return [
@@ -119,6 +129,7 @@ export function MarketDesignStep({
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editorEpoch, setEditorEpoch] = useState(0);
+  const [adjustingBudget, setAdjustingBudget] = useState(false);
   const shared = getOptionalPoolConfigKey();
   const decimals = state.quote === "USDC" ? 6 : 9;
   const assumptions = scenarioAssumptions(state.assetKind);
@@ -177,11 +188,13 @@ export function MarketDesignStep({
   }
 
   function recalculate(budget: ConstraintBudget) {
+    setAdjustingBudget(false);
     patch({ constraintDraft: budget });
     run(budget);
   }
 
   function clearBudget() {
+    setAdjustingBudget(false);
     setEditorEpoch((epoch) => epoch + 1);
     patch({ constraintDraft: null });
     run(null);
@@ -299,9 +312,35 @@ export function MarketDesignStep({
 
       {policy && (
         <>
-          {policy.negotiation.status !== "satisfied" && (
+          {policy.negotiation.status === "accepted" && !adjustingBudget ? (
             <div
-              className="space-y-2 rounded-input border border-signal-warn/40 bg-signal-warn/10 px-4 py-3 text-sm"
+              className="ec-scroll-target space-y-2 rounded-input border border-signal-warn/40 bg-signal-warn/10 px-4 py-3 text-sm"
+              role="alert"
+              data-testid="constraint-budget-accepted"
+            >
+              <p className="font-semibold text-fg-primary">Constraint decision</p>
+              <p className="text-fg-primary">✓ Wider budget accepted</p>
+              <p className="text-xs text-fg-secondary">The original constraints were not met.</p>
+              <ul className="space-y-1 text-xs text-fg-secondary">
+                {constraintPolicyFrom(policy.negotiation.requested, policy.negotiation.applied).relaxed.map((change) => (
+                  <li key={change.field}>
+                    <span className="block text-fg-primary">{constraintFieldLabel(change.field)}</span>
+                    {formatConstraintValue(change.field, change.from)} → {formatConstraintValue(change.field, change.to)}
+                  </li>
+                ))}
+              </ul>
+              <button
+                type="button"
+                className="ec-btn-secondary ec-scroll-target min-h-11"
+                onClick={() => setAdjustingBudget(true)}
+              >
+                Adjust budget
+              </button>
+            </div>
+          ) : (
+            policy.negotiation.status !== "satisfied" && (
+            <div
+              className="ec-scroll-target space-y-2 rounded-input border border-signal-warn/40 bg-signal-warn/10 px-4 py-3 text-sm"
               role="alert"
               data-testid={policy.negotiation.status === "accepted" ? "constraint-budget-accepted" : "constraint-budget"}
             >
@@ -353,6 +392,24 @@ export function MarketDesignStep({
                 onReset={clearBudget}
               />
             </div>
+            )
+          )}
+          {policy.negotiation.status === "accepted" && !adjustingBudget && (
+            <div className="ec-card ec-scroll-target space-y-2 p-4" data-testid="preferred-design">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-fg-muted">Preferred design</p>
+              <p className="font-medium text-fg-primary">{policy.chosen.profileName}</p>
+              <p className="break-all font-mono text-xs text-fg-secondary">Fingerprint {policy.chosen.configFingerprint}</p>
+            </div>
+          )}
+          {policy.negotiation.status === "accepted" && !adjustingBudget && (
+            <RobustnessPanel
+              key={`${policy.chosen.configFingerprint}|${budgetKey(policy.negotiation.applied)}|compact`}
+              chosen={policy.chosen}
+              brief={policy.brief}
+              budget={policy.negotiation.applied}
+              budgetLabel="accepted"
+              disabled={running || stale}
+            />
           )}
           {failure && (
             <div
@@ -397,16 +454,89 @@ export function MarketDesignStep({
             <p className="text-xs text-fg-muted">{policy.observedNote}</p>
           </div>
 
-          <RobustnessPanel
-            key={`${policy.chosen.configFingerprint}|${budgetKey(policy.negotiation.applied)}`}
-            chosen={policy.chosen}
-            brief={policy.brief}
-            budget={policy.negotiation.applied}
-            budgetLabel={policy.negotiation.status === "accepted" ? "accepted" : "requested"}
-            disabled={running || stale}
-          />
+          {!(policy.negotiation.status === "accepted" && !adjustingBudget) && (
+            <RobustnessPanel
+              key={`${policy.chosen.configFingerprint}|${budgetKey(policy.negotiation.applied)}`}
+              chosen={policy.chosen}
+              brief={policy.brief}
+              budget={policy.negotiation.applied}
+              budgetLabel={policy.negotiation.status === "accepted" ? "accepted" : "requested"}
+              disabled={running || stale}
+            />
+          )}
 
-          <div className="overflow-x-auto">
+          <ul className="space-y-3 sm:hidden" data-testid="market-design-cards">
+            {policy.candidates.map((row) => {
+              const whale = scenario(row, "whale");
+              const retail = scenario(row, "retail");
+              const allowed = !stale && deploymentAllowed(policy, row);
+              const selected =
+                allowed &&
+                state.designed?.configFingerprint === row.configFingerprint &&
+                state.presetId === row.recipe.presetId;
+              const pinnedRow = pins.includes(row.profileId);
+              return (
+                <li key={row.profileId} className="ec-card ec-scroll-target space-y-3 p-4 text-sm">
+                  <div>
+                    <p className="font-semibold text-fg-primary">{row.profileName}</p>
+                    <p className="text-[10px] text-fg-muted">
+                      {row.feasible ? "Feasible" : "Failed a constraint"}
+                      {row.score > 0 ? ` · preference ${row.score}` : ""}
+                    </p>
+                  </div>
+                  <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+                    <div>
+                      <dt className="text-fg-muted">Typical impact</dt>
+                      <dd className="font-mono text-fg-primary">{row.reference.impactBps} bps</dd>
+                    </div>
+                    <div>
+                      <dt className="text-fg-muted">Whale impact</dt>
+                      <dd className="font-mono text-fg-primary">{whale?.largestBuyImpactBps ?? "—"} bps</dd>
+                    </div>
+                    <div>
+                      <dt className="text-fg-muted">Retail fill</dt>
+                      <dd className="font-mono text-fg-primary">{retail ? pct(retail.progress) : "—"}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-fg-muted">Graduation</dt>
+                      <dd className="font-mono text-fg-primary">{pct(row.stressGraduationRate)}</dd>
+                    </div>
+                  </dl>
+                  {row.rejected.length > 0 && (
+                    <div className="text-xs text-signal-warn">
+                      <p className="font-medium">Failed</p>
+                      {row.rejected.map((reason) => (
+                        <p key={reason}>{reason}</p>
+                      ))}
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-fg-muted">Fingerprint</p>
+                    <p className="break-all font-mono text-xs text-fg-secondary">{row.configFingerprint}</p>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <button
+                      type="button"
+                      className="ec-btn-secondary ec-scroll-target min-h-11"
+                      onClick={() => togglePin(row.profileId)}
+                    >
+                      {pinnedRow ? "Unpin" : pins.length >= 3 ? "Three designs are pinned" : "Pin"}
+                    </button>
+                    <button
+                      type="button"
+                      className={`${selected ? "ec-btn-secondary" : allowed ? "ec-btn-primary" : "ec-btn-secondary"} ec-scroll-target min-h-11`}
+                      disabled={!allowed}
+                      onClick={() => deploy(row)}
+                    >
+                      {deployLabel(policy.negotiation.status, row, allowed)}
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+
+          <div className="hidden overflow-x-auto sm:block">
             <table className="w-full min-w-[980px] text-left text-xs" data-testid="market-design-table">
               <thead className="text-fg-muted">
                 <tr className="border-b border-line">
@@ -483,17 +613,11 @@ export function MarketDesignStep({
                       <td className="py-2">
                         <button
                           type="button"
-                          className={selected ? "ec-btn-secondary" : allowed ? "ec-btn-primary" : "ec-btn-secondary"}
+                          className={`${selected ? "ec-btn-secondary" : allowed ? "ec-btn-primary" : "ec-btn-secondary"} ec-scroll-target`}
                           disabled={!allowed}
                           onClick={() => deploy(row)}
                         >
-                          {policy.negotiation.status === "needs-decision"
-                            ? "Blocked until you accept a budget"
-                            : !allowed
-                              ? "Outside this budget"
-                              : row.feasible
-                                ? "Review this config"
-                                : "Review with this budget"}
+                          {deployLabel(policy.negotiation.status, row, allowed)}
                         </button>
                       </td>
                     </tr>

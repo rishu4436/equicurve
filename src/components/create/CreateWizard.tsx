@@ -516,7 +516,7 @@ export function CreateWizard() {
       onAccepted={eligibility.onAccepted}
     >
       <div className="space-y-6">
-        <div className="sticky top-16 z-30 -mx-4 border-b border-line bg-base/95 px-4 py-3 backdrop-blur md:top-[4.5rem]">
+        <div className="sticky top-[6.75rem] z-30 -mx-4 border-b border-line bg-base/95 px-4 py-3 backdrop-blur md:top-[4.5rem]">
           <ol className="mx-auto flex max-w-6xl flex-wrap items-center gap-2">
             {WIZARD_STEPS.map((s, i) => {
               const active = s.id === step;

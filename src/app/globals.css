@@ -64,3 +64,15 @@ body {
 .ec-grad-morph {
   animation: ec-grad-pulse 1.2s ease-in-out infinite;
 }
+
+/* 5rem clears a single sticky row. On a phone the header plus the step bar are taller. */
+.ec-scroll-target {
+  scroll-margin-top: 5rem;
+  scroll-margin-bottom: 5.5rem;
+}
+
+@media (max-width: 767px) {
+  .ec-scroll-target {
+    scroll-margin-top: 10.5rem;
+  }
+}

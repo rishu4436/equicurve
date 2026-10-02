@@ -70,7 +70,7 @@ export function RobustnessPanel({
   const budgetWords = budgetLabel === "accepted" ? "the budget you accepted" : "the requested budget";
 
   return (
-    <div className="ec-card space-y-3 p-4" data-testid="robustness-check">
+    <div className="ec-card ec-scroll-target space-y-3 p-4" data-testid="robustness-check">
       <div>
         <p className="text-[10px] font-semibold uppercase tracking-wider text-fg-muted">Robustness envelope</p>
         <p className="mt-1 text-sm text-fg-secondary">
@@ -78,7 +78,7 @@ export function RobustnessPanel({
           late capital moves by 25%. The curve stays the one you select. This is not a score.
         </p>
       </div>
-      <button type="button" className="ec-btn-secondary" onClick={run} disabled={disabled || running}>
+      <button type="button" className="ec-btn-secondary ec-scroll-target min-h-11" onClick={run} disabled={disabled || running}>
         {running ? "Checking this design…" : "Check robustness"}
       </button>
       {error && <p className="text-xs text-signal-danger">{error}</p>}

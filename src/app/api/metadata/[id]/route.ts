@@ -8,6 +8,7 @@ import {
   isValidMetadataId,
   readMetadata,
   readMetadataRecord,
+  StaleMetadataWrite,
   writeMetadataRecord,
 } from "@/lib/metadata/store";
 import { serverLookup } from "@/lib/registry/chain";
@@ -81,6 +82,15 @@ export async function PUT(req: Request, ctx: Ctx) {
   if (!result.ok) {
     return NextResponse.json({ error: result.error, code: result.code }, { status: result.status });
   }
-  if (!result.unchanged) await writeMetadataRecord(id, result.record);
+  if (!result.unchanged) {
+    try {
+      await writeMetadataRecord(id, result.record);
+    } catch (error) {
+      if (error instanceof StaleMetadataWrite) {
+        return NextResponse.json({ error: error.message, code: error.code }, { status: 409 });
+      }
+      throw error;
+    }
+  }
   return NextResponse.json({ ok: true, id, unchanged: result.unchanged, meta: result.record.meta });
 }

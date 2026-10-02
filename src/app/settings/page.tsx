@@ -166,7 +166,8 @@ export default function SettingsPage() {
           serverless, set{" "}
           <code className="text-accent-soft">UPSTASH_REDIS_REST_URL</code> +{" "}
           <code className="text-accent-soft">UPSTASH_REDIS_REST_TOKEN</code> for
-          durable storage across deploys. Tokens are never exposed in the UI —
+          durable registry and metadata across deploys. Metadata uses one Redis key per mint.
+          Tokens are never exposed in the UI —
           only the backend name.
         </p>
         {sharedConfig && (

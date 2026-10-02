@@ -78,7 +78,7 @@ export function ConstraintBudgetEditor({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="ec-scroll-target space-y-3">
       <p className="text-xs text-fg-secondary">
         Set each limit yourself. A suggested value updates that field and runs the search with every limit shown here.
         Typing a number waits until you recalculate.
@@ -100,7 +100,7 @@ export function ConstraintBudgetEditor({
                 <input
                   id={`constraint-${field}`}
                   data-testid={`constraint-${field}`}
-                  className="w-28 rounded-input border border-line bg-base px-2 py-1 font-mono text-xs"
+                  className="ec-scroll-target min-h-11 w-28 rounded-input border border-line bg-base px-2 py-1 font-mono text-xs"
                   inputMode="decimal"
                   autoComplete="off"
                   value={text[field]}
@@ -110,7 +110,7 @@ export function ConstraintBudgetEditor({
                 {offer && (
                   <button
                     type="button"
-                    className="ec-btn-secondary"
+                    className="ec-btn-secondary ec-scroll-target min-h-11"
                     disabled={running}
                     onClick={() => suggest(field, offer.value)}
                   >
@@ -135,7 +135,7 @@ export function ConstraintBudgetEditor({
       )}
       {note && <p className="text-xs text-fg-secondary">{note}</p>}
       <div className="flex flex-wrap gap-2">
-        <button type="button" className="ec-btn-primary" disabled={running} onClick={() => submit(text)}>
+        <button type="button" className="ec-btn-primary ec-scroll-target min-h-11" disabled={running} onClick={() => submit(text)}>
           {running ? "Simulating designs…" : "Recalculate with these limits"}
         </button>
         {showReset && (

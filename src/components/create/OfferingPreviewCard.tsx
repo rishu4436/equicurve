@@ -12,7 +12,7 @@ export function OfferingPreviewCard({ state }: { state: WizardState }) {
   const feePlatform = 100 - state.feeIssuer;
 
   return (
-    <div className="ec-card sticky top-24 space-y-4 p-5 shadow-glow">
+    <div className="ec-card space-y-4 p-5 shadow-glow lg:sticky lg:top-36">
       <div className="flex items-start gap-3">
         <div className="flex h-12 w-12 items-center justify-center rounded-card border border-line bg-subtle text-lg font-semibold text-accent">
           {(state.ticker || "??").slice(0, 2)}
