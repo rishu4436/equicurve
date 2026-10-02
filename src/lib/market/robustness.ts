@@ -2,17 +2,34 @@ import { marketConfigFingerprint } from "@/lib/dbc/configFingerprint";
 import { FEE_BY_PRESET } from "@/lib/dbc/presets";
 import { EquiCurveError } from "@/lib/errors";
 import { openBook } from "./book";
+import { constraintFieldLabel } from "./constraintBudget";
 import { scenarioAssumptions } from "./constraints";
-import { constraintViolations, materializeRecipe, parseBrief } from "./policy";
+import { materializeRecipe, parseBrief } from "./policy";
 import { namedScenarios, referenceBuy } from "./scenarios";
-import type { CandidateReport, ConstraintBudget, LaunchBrief, ScenarioReport } from "./types";
+import type { CandidateReport, ConstraintBudget, ConstraintField, LaunchBrief, ScenarioReport } from "./types";
+
+export type RobustnessMetricId = "threshold" | "reference" | "whale" | "concentration" | "retail";
+
+const METRIC_FIELDS: Record<RobustnessMetricId, ConstraintField> = {
+  threshold: "maxThresholdGap",
+  reference: "maxReferenceImpactBps",
+  whale: "maxWhaleImpactBps",
+  concentration: "maxConcentration",
+  retail: "minRetailProgress",
+};
 
 export type RobustnessMetric = {
-  id: "reference" | "whale" | "retail";
+  id: RobustnessMetricId;
   label: string;
-  kind: "bps" | "progress";
+  /** Basis points, or a 0..1 fraction for the gap, concentration, and retail fill. */
+  kind: "bps" | "fraction";
   value: number;
+  limit: number;
+  /** Retail is a minimum. Every other limit is a maximum. */
+  bound: "minimum" | "maximum";
   passed: boolean;
+  /** True for the assumption this case moved. */
+  focus: boolean;
 };
 
 export type RobustnessCase = {
@@ -45,39 +62,52 @@ function scenario(row: CandidateReport, id: ScenarioReport["id"]): ScenarioRepor
   return row.scenarios.find((item) => item.id === id);
 }
 
-function metric(
-  id: RobustnessMetric["id"],
-  row: CandidateReport,
-  budget: ConstraintBudget,
-): RobustnessMetric {
-  if (id === "reference") {
-    const value = row.reference.impactBps;
-    return {
-      id,
-      label: "Typical buy impact",
-      kind: "bps",
-      value,
-      passed: value <= budget.maxReferenceImpactBps,
-    };
-  }
-  if (id === "whale") {
-    const value = scenario(row, "whale")?.largestBuyImpactBps ?? 0;
-    return {
-      id,
-      label: "Whale buy impact",
-      kind: "bps",
-      value,
-      passed: value <= budget.maxWhaleImpactBps,
-    };
-  }
-  const value = scenario(row, "retail")?.progress ?? 0;
+export type ConstraintSnapshot = {
+  thresholdGap: number;
+  referenceImpactBps: number;
+  whaleImpactBps: number;
+  concentration: number;
+  retailProgress: number;
+};
+
+export function snapshotOf(row: CandidateReport): ConstraintSnapshot {
+  const retail = scenario(row, "retail");
   return {
-    id,
-    label: "Retail fill",
-    kind: "progress",
-    value,
-    passed: value >= budget.minRetailProgress,
+    thresholdGap: row.thresholdGap,
+    referenceImpactBps: row.reference.impactBps,
+    whaleImpactBps: scenario(row, "whale")?.largestBuyImpactBps ?? 0,
+    concentration: retail?.concentration ?? 0,
+    retailProgress: retail?.progress ?? 0,
   };
+}
+
+/** Every limit, with the measured value beside it. A failed whale line cannot hide a failed retail line. */
+export function readConstraintMetrics(
+  snapshot: ConstraintSnapshot,
+  budget: ConstraintBudget,
+  focus: readonly RobustnessMetricId[] = [],
+): RobustnessMetric[] {
+  const rows: Array<[RobustnessMetricId, number, number]> = [
+    ["threshold", snapshot.thresholdGap, budget.maxThresholdGap],
+    ["reference", snapshot.referenceImpactBps, budget.maxReferenceImpactBps],
+    ["whale", snapshot.whaleImpactBps, budget.maxWhaleImpactBps],
+    ["concentration", snapshot.concentration, budget.maxConcentration],
+    ["retail", snapshot.retailProgress, budget.minRetailProgress],
+  ];
+  return rows.map(([id, value, limit]) => {
+    const field = METRIC_FIELDS[id];
+    const bound = id === "retail" ? "minimum" : "maximum";
+    return {
+      id,
+      label: constraintFieldLabel(field),
+      kind: id === "reference" || id === "whale" ? "bps" : "fraction",
+      value,
+      limit,
+      bound,
+      passed: bound === "minimum" ? value >= limit : value <= limit,
+      focus: focus.includes(id),
+    };
+  });
 }
 
 function asCase(
@@ -86,15 +116,16 @@ function asCase(
   note: string,
   row: CandidateReport,
   budget: ConstraintBudget,
-  shown: RobustnessMetric["id"][],
+  focus: readonly RobustnessMetricId[],
 ): RobustnessCase {
-  const blocking = constraintViolations(row, budget);
+  const metrics = readConstraintMetrics(snapshotOf(row), budget, focus);
+  const blocking = metrics.filter((item) => !item.passed).map((item) => item.label);
   return {
     id,
     label,
     note,
     insideBudget: blocking.length === 0,
-    metrics: shown.map((item) => metric(item, row, budget)),
+    metrics,
     blocking,
   };
 }

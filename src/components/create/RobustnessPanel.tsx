@@ -2,12 +2,22 @@
 
 import { useState } from "react";
 import { toUserMessage } from "@/lib/errors";
-import { assessRobustness, type RobustnessReport } from "@/lib/market/robustness";
-import type { CandidateReport, ConstraintBudget, LaunchBrief } from "@/lib/market/types";
+import { formatConstraintValue } from "@/lib/market/constraintBudget";
+import { assessRobustness, type RobustnessMetric, type RobustnessReport } from "@/lib/market/robustness";
+import type { CandidateReport, ConstraintBudget, ConstraintField, LaunchBrief } from "@/lib/market/types";
 
-function formatMetric(kind: "bps" | "progress", value: number): string {
-  if (kind === "bps") return `${value} bps`;
-  return `${Math.round(value * 1000) / 10}%`;
+const METRIC_FIELDS: Record<RobustnessMetric["id"], ConstraintField> = {
+  threshold: "maxThresholdGap",
+  reference: "maxReferenceImpactBps",
+  whale: "maxWhaleImpactBps",
+  concentration: "maxConcentration",
+  retail: "minRetailProgress",
+};
+
+function formatLine(point: RobustnessMetric): string {
+  const field = METRIC_FIELDS[point.id];
+  const bound = point.bound === "minimum" ? "minimum" : "maximum";
+  return `${formatConstraintValue(field, point.value)} / ${formatConstraintValue(field, point.limit)} ${bound}`;
 }
 
 export function RobustnessPanel({
@@ -60,27 +70,26 @@ export function RobustnessPanel({
       {report && (
         <div className="space-y-3 text-xs text-fg-secondary" data-testid="robustness-report">
           <p>
-            {report.insideCount} of {report.caseCount} cases stay inside {budgetWords}. Fingerprint {report.fingerprint}.
+            {report.caseCount} cases tested. {report.insideCount} of {report.caseCount} stay inside {budgetWords}.
+            Fingerprint {report.fingerprint}.
           </p>
           <ul className="space-y-3">
             {report.cases.map((item) => (
-              <li key={item.id}>
+              <li key={item.id} data-testid={`robustness-${item.id}`}>
                 <p className="font-medium text-fg-primary">
-                  {item.insideBudget ? "Inside the budget" : "Outside the budget"} · {item.label}
+                  {item.insideBudget ? "✓ Inside the budget" : "✕ Outside the budget"} · {item.label}
                 </p>
                 <p className="text-fg-muted">{item.note}</p>
                 <ul className="mt-1 space-y-1">
                   {item.metrics.map((point) => (
-                    <li key={point.id} className="font-mono">
-                      {point.passed ? "✓" : "✕"} {point.label}: {formatMetric(point.kind, point.value)}
+                    <li key={point.id} className={point.focus ? "font-mono text-fg-primary" : "font-mono"}>
+                      {point.passed ? "✓" : "✕"} {point.label}: {formatLine(point)}
                     </li>
                   ))}
                 </ul>
-                {item.blocking.map((reason) => (
-                  <p key={reason} className="text-signal-warn">
-                    {reason}
-                  </p>
-                ))}
+                <p className={item.insideBudget ? "text-fg-muted" : "text-signal-warn"}>
+                  {item.insideBudget ? "All constraints hold." : `Blocking: ${item.blocking.join(", ")}.`}
+                </p>
               </li>
             ))}
           </ul>

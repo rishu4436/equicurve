@@ -17,7 +17,7 @@ export {
   toDesignedMarket,
 } from "./policy";
 export { namedScenarios, referenceBuy, replay } from "./scenarios";
-export { assessRobustness, scaledParticipants } from "./robustness";
+export { assessRobustness, readConstraintMetrics, scaledParticipants } from "./robustness";
 export type { RobustnessCase, RobustnessMetric, RobustnessReport } from "./robustness";
 export { constraintBudgetChanges, constraintFailureCopy, constraintFailureFromDesigned } from "./constraintNotice";
 export {
