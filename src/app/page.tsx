@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { JourneyProofCard } from "@/components/home/JourneyProofCard";
 import { CurveMiniViz } from "@/components/ui/CurveMiniViz";
 import { HomeLocalStrip } from "@/components/home/HomeLocalStrip";
 import { CURVE_PRESETS } from "@/lib/dbc/presets";
@@ -47,46 +48,7 @@ export default function HomePage() {
             ))}
           </div>
         </div>
-        <div className="ec-card relative overflow-hidden p-6 shadow-glow">
-          <p className="mb-4 text-xs uppercase tracking-wider text-fg-muted">
-            Bonding curve → DAMM bar
-          </p>
-          <svg viewBox="0 0 320 160" className="h-40 w-full" aria-hidden>
-            <defs>
-              <linearGradient id="heroCurve" x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0%" stopColor="#2DD4BF" />
-                <stop offset="100%" stopColor="#38BDF8" />
-              </linearGradient>
-            </defs>
-            <path d="M20 140 H300" stroke="#243044" />
-            <path d="M20 20 V140" stroke="#243044" />
-            <path
-              d="M20 130 C 80 125, 140 100, 200 60 S 260 28, 280 24"
-              fill="none"
-              stroke="url(#heroCurve)"
-              strokeWidth="3"
-              strokeLinecap="round"
-            />
-            <line
-              x1="280"
-              y1="24"
-              x2="310"
-              y2="24"
-              stroke="#A78BFA"
-              strokeWidth="4"
-              strokeLinecap="round"
-            />
-            <text x="20" y="18" fill="#6B7A8F" fontSize="10">
-              Discovery
-            </text>
-            <text x="250" y="16" fill="#A78BFA" fontSize="10">
-              DAMM v2
-            </text>
-          </svg>
-          <p className="mt-2 text-xs text-fg-muted">
-            Price discovery on DBC, then permanent depth on DAMM v2.
-          </p>
-        </div>
+        <JourneyProofCard />
       </section>
 
       <PositioningExplainer compact />
@@ -101,21 +63,21 @@ export default function HomePage() {
           {[
             {
               n: "1",
-              title: "Design the market",
-              body: "Set the raise, the typical order, and the objective. EquiCurve searches real DBC configs and deploys the one you pick, including fee share and LP lock.",
+              title: "Write the brief",
+              body: "Set the raise, the typical order, the participant count, and the constraint budget. Asset kind is a design assumption, not a legal claim.",
               href: "/create",
             },
             {
               n: "2",
-              title: "Discover on DBC",
-              body: "Buyers trade the bonding curve in SOL or USDC. Progress shows the exact quote raised toward the graduation threshold.",
-              href: "/explore",
+              title: "Negotiate the conflict",
+              body: "If no curve passes, EquiCurve does not widen a limit for you. You edit each limit, then recalculate. Deploy stays blocked until a budget you accept admits a curve.",
+              href: "/create",
             },
             {
               n: "3",
-              title: "Graduate DAMM v2",
-              body: "When the threshold hits, migrate into Meteora DAMM v2 with partner-locked LP.",
-              href: "/docs#graduate",
+              title: "Deploy that fingerprint",
+              body: "The wallet signs the config you reviewed. Readback says Deployment verified only when the fingerprint, configuration, threshold, and on-chain read all match. A passed readback does not mean every constraint was met.",
+              href: "/o/Eq57sdFYg5UFg4rtV7W3mPWYGFi97ovWAYiLYLX8hejF",
             },
           ].map((c) => (
             <Link
