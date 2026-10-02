@@ -6,7 +6,7 @@
 
 Built for [Superteam Earn · Meteora DBC](https://superteam.fun/earn/listing/meteora-dbc) + Colosseum Crypto World's Fair sidetrack. **Deadline:** 2026-10-13 · Design: [DESIGN.md](./DESIGN.md)
 
-**For judges:** [Architecture + lifecycle diagram](docs/ARCHITECTURE.md) · [Reproducible walkthrough](docs/WALKTHROUGH.md) · [On-chain e2e evidence](docs/e2e-devnet-evidence.md) (localnet with Meteora programs cloned from devnet, **not public devnet**; see [below](#e2e-evidence)).
+**For judges:** [Canonical Journey evidence](docs/canonical-evidence.md) · [Architecture + lifecycle diagram](docs/ARCHITECTURE.md) · [Reproducible walkthrough](docs/WALKTHROUGH.md) · [On-chain e2e evidence](docs/e2e-devnet-evidence.md) (localnet with Meteora programs cloned from devnet, **not public devnet**; see [below](#e2e-evidence)).
 
 ## What EquiCurve is (and is not): three separate layers
 
