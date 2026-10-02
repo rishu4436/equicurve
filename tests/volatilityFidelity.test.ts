@@ -13,13 +13,41 @@ import {
 } from "@/lib/market/volatility";
 
 /**
- * Independent copy of VolatilityTracker::update_references and
- * update_volatility_accumulator in Meteora state/fee.rs.
- * Elapsed time is saturating subtraction. fee.rs does not write
- * last_update_timestamp; EquiCurve writes it only when the price moves a bin.
+ * Independent copy of VolatilityTracker in Meteora state/fee.rs:
+ * get_delta_bin_id, update_references, and update_volatility_accumulator.
+ * None of these call EquiCurve helpers.
+ *
+ * get_delta_bin_id is floor((upper << 64) / lower) via shl_div rounding down,
+ * then floor((price_ratio - 2^64) / bin_step) * 2.
+ * update_references uses saturating subtraction and does not write
+ * last_update_timestamp. EquiCurve writes lastUpdate only when the price
+ * moves a bin, and its elapsed time treats lastUpdate 0 as already past the
+ * decay window. At the unix timestamps below, both take that same branch.
+ * Rust always mins the accumulator. This preset's max is non-zero, so the
+ * production clamp agrees.
  * This fixture does not execute a live program transaction.
  */
-function rustReferences(vol: VolState, fee: DynamicFeeParams, sqrtPrice: bigint, atSec: number): VolState {
+const ONE_Q64 = 1n << 64n;
+const MAX_U128 = (1n << 128n) - 1n;
+/** BIN_STEP_BPS_U128_DEFAULT. 2^64 = step * 10000 + 1616. */
+const DEFAULT_BIN_STEP_U128 = 1844674407370955n;
+
+function referenceDeltaBin(binStepU128: bigint, sqrtPriceA: bigint, sqrtPriceB: bigint): bigint {
+  if (binStepU128 <= 0n || sqrtPriceA <= 0n || sqrtPriceB <= 0n) {
+    throw new Error("get_delta_bin_id rejects a zero price or bin step");
+  }
+  const upper = sqrtPriceA > sqrtPriceB ? sqrtPriceA : sqrtPriceB;
+  const lower = sqrtPriceA > sqrtPriceB ? sqrtPriceB : sqrtPriceA;
+  const priceRatio = (upper << 64n) / lower;
+  if (priceRatio > MAX_U128 || priceRatio < ONE_Q64) {
+    throw new Error("get_delta_bin_id price ratio is outside u128 or below 1");
+  }
+  const delta = ((priceRatio - ONE_Q64) / binStepU128) * 2n;
+  if (delta > MAX_U128) throw new Error("get_delta_bin_id overflow");
+  return delta;
+}
+
+function referenceReferences(vol: VolState, fee: DynamicFeeParams, sqrtPrice: bigint, atSec: number): VolState {
   const now = BigInt(Math.max(0, Math.floor(atSec)));
   const elapsed = now > vol.lastUpdate ? now - vol.lastUpdate : 0n;
   if (elapsed < BigInt(fee.filterPeriod)) return vol;
@@ -29,8 +57,8 @@ function rustReferences(vol: VolState, fee: DynamicFeeParams, sqrtPrice: bigint,
   return next;
 }
 
-function rustAccumulator(vol: VolState, fee: DynamicFeeParams, sqrtPrice: bigint): VolState {
-  const moved = deltaBin(fee.binStepU128, sqrtPrice, vol.sqrtRef);
+function referenceAccumulator(vol: VolState, fee: DynamicFeeParams, sqrtPrice: bigint): VolState {
+  const moved = referenceDeltaBin(fee.binStepU128, sqrtPrice, vol.sqrtRef);
   let acc = vol.volRef + moved * 10_000n;
   if (acc > fee.maxVolatilityAccumulator) acc = fee.maxVolatilityAccumulator;
   return { ...vol, volAcc: acc };
@@ -44,14 +72,24 @@ describe("dynamic fee tracker fidelity", () => {
     if (!fee) return;
     expect(fee.variableFeeControl).toBeGreaterThan(0);
 
+    expect((DEFAULT_BIN_STEP_U128 * 10_000n) + 1616n).toBe(ONE_Q64);
+    const doubled = 2n * ONE_Q64;
+    expect(referenceDeltaBin(DEFAULT_BIN_STEP_U128, doubled, ONE_Q64)).toBe(20_000n);
+    expect(deltaBin(DEFAULT_BIN_STEP_U128, doubled, ONE_Q64)).toBe(20_000n);
+    expect(referenceDeltaBin(DEFAULT_BIN_STEP_U128, ONE_Q64, ONE_Q64)).toBe(0n);
+    expect(deltaBin(DEFAULT_BIN_STEP_U128, ONE_Q64, ONE_Q64)).toBe(0n);
+
     const opened = 1_700_000_000;
     const firstSqrt = book.sqrtStart * 2n;
     const oursRef = updateReferences(zeroVol(), fee, book.sqrtStart, opened);
-    const rustRef = rustReferences(zeroVol(), fee, book.sqrtStart, opened);
+    const rustRef = referenceReferences(zeroVol(), fee, book.sqrtStart, opened);
     expect(oursRef).toEqual(rustRef);
 
+    expect(referenceDeltaBin(fee.binStepU128, firstSqrt, rustRef.sqrtRef)).toBe(
+      deltaBin(fee.binStepU128, firstSqrt, oursRef.sqrtRef),
+    );
     const oursAcc = updateAccumulator(oursRef, fee, firstSqrt, opened);
-    const rustAcc = rustAccumulator(rustRef, fee, firstSqrt);
+    const rustAcc = referenceAccumulator(rustRef, fee, firstSqrt);
     expect(oursAcc.sqrtRef).toBe(rustAcc.sqrtRef);
     expect(oursAcc.volRef).toBe(rustAcc.volRef);
     expect(oursAcc.volAcc).toBe(rustAcc.volAcc);
@@ -60,12 +98,12 @@ describe("dynamic fee tracker fidelity", () => {
 
     const inside = opened + 5;
     const oursInside = updateReferences(oursAcc, fee, firstSqrt, inside);
-    const rustInside = rustReferences({ ...rustAcc, lastUpdate: oursAcc.lastUpdate }, fee, firstSqrt, inside);
+    const rustInside = referenceReferences({ ...rustAcc, lastUpdate: oursAcc.lastUpdate }, fee, firstSqrt, inside);
     expect(oursInside).toEqual(rustInside);
 
     const decayedAt = opened + fee.decayPeriod + 1;
     const oursDecay = updateReferences(oursAcc, fee, firstSqrt, decayedAt);
-    const rustDecay = rustReferences({ ...rustAcc, lastUpdate: oursAcc.lastUpdate }, fee, firstSqrt, decayedAt);
+    const rustDecay = referenceReferences({ ...rustAcc, lastUpdate: oursAcc.lastUpdate }, fee, firstSqrt, decayedAt);
     expect(oursDecay.volRef).toBe(0n);
     expect(oursDecay).toEqual(rustDecay);
 

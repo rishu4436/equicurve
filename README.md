@@ -103,7 +103,7 @@ The same explainer is on Home, `/trust` and `/docs` (`src/lib/positioning.ts` is
 | `/docs` | Lifecycle docs |
 | `/api/health` | Cluster + RPC host (no secrets) + slot ping |
 | `/api/metadata/[id]` | Hosted token metadata JSON; signed edits; identity fields immutable after launch |
-| `/api/image-check` | https image URL check (type + size via HEAD / ranged GET, SSRF-guarded) |
+| `/api/image-check` | https image check (type and size via HEAD or a ranged GET). The server connects to the resolved public address; Host and TLS keep the URL hostname. |
 | `/api/launches` | Shared EquiCurve launch registry (GET / POST / PATCH); every row has `verified: boolean` |
 | `/api/explore` | Explore discovery: registry + best-effort RPC enrich (~45s cache) |
 

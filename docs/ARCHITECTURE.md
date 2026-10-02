@@ -104,7 +104,7 @@ flowchart TB
 | DAMM v2 | `lib/damm/*`, `components/offering/DammTicket.tsx` | Resolve pool, quote and build from the same pool state, position fee claims. |
 | Claims | `lib/dbc/claim.ts`, `components/issuer/*` | Creator / partner trading-fee claims with wallet checks before signing. |
 | Registry | `lib/registry/*`, `app/api/launches` | Signed register, server-side chain verification, `verified` flag, file or Upstash store. |
-| Metadata | `lib/metadata/*`, `lib/server/imageCheck.ts`, `app/api/metadata/[id]`, `app/api/image-check` | Hosted JSON; name/symbol immutable after launch; signed edits of description/image/links; https image check with SSRF guard. |
+| Metadata | `lib/metadata/*`, `lib/server/imageCheck.ts`, `app/api/metadata/[id]`, `app/api/image-check` | Hosted JSON; name/symbol immutable after launch; signed edits of description/image/links; https image check that connects to the resolved public address and keeps the URL hostname for Host and TLS. |
 | Explore | `lib/explore/*`, `app/api/explore` | Registry + local launches, per-offering verification state, never invents pools. |
 | Prices | `lib/dbc/priceHistory.ts`, `lib/dbc/spotPrice.ts`, `lib/amounts.ts`, `components/offering/PriceHistoryChart.tsx` | Swap-derived points and spot price computed from atoms with bigint math; theoretical curve drawn separately. |
 | Portfolio | `lib/portfolio.ts`, `app/portfolio` | On-chain token balances vs locally recorded activity. |

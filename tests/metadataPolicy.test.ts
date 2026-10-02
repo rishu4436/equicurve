@@ -147,7 +147,7 @@ describe("image URL check", () => {
     expect(r).toMatchObject({ ok: true, bytes: 2048 });
   });
 
-  it("does not follow redirects to private hosts; DNS rebinding guard", async () => {
+  it("does not follow redirects to private hosts or private DNS answers", async () => {
     expect(
       await checkImageUrl("https://e.com/a.png", {
         fetchImpl: async () => res(302, { location: "https://10.0.0.5/x.png" }),
@@ -200,5 +200,64 @@ describe("image URL check", () => {
         fetchImpl: async () => res(302, { location: "https://2130706433/secret.png" }),
       }),
     ).toMatchObject({ ok: false, code: "private_host" });
+  });
+
+  it("connects only through the resolved addresses and does not fetch the hostname again", async () => {
+    const loose: string[] = [];
+    const pinned: { host: string; addresses: string[]; method: string }[] = [];
+    let lookups = 0;
+    const ok = await checkImageUrl("https://cdn.example/a.png?w=1", {
+      resolveHost: async (host) => {
+        lookups += 1;
+        expect(host).toBe("cdn.example");
+        return ["1.1.1.1", "8.8.8.8"];
+      },
+      fetchImpl: async (url) => {
+        loose.push(url);
+        return res(200, { "content-type": "image/png" });
+      },
+      fetchPinned: async ({ url, method, addresses }) => {
+        pinned.push({ host: new URL(url).hostname, addresses: [...addresses], method });
+        return method === "HEAD"
+          ? res(405, {})
+          : res(206, { "content-type": "image/png", "content-range": "bytes 0-0/20" });
+      },
+    });
+    expect(ok).toMatchObject({ ok: true, bytes: 20 });
+    expect(lookups).toBe(1);
+    expect(loose).toEqual([]);
+    expect(pinned).toEqual([
+      { host: "cdn.example", addresses: ["1.1.1.1", "8.8.8.8"], method: "HEAD" },
+      { host: "cdn.example", addresses: ["1.1.1.1", "8.8.8.8"], method: "GET" },
+    ]);
+
+    let fetched = false;
+    const unpinned = await checkImageUrl("https://cdn.example/a.png", {
+      resolveHost: async () => ["8.8.8.8"],
+      fetchImpl: async () => {
+        fetched = true;
+        return res(200, { "content-type": "image/png" });
+      },
+    });
+    expect(unpinned).toMatchObject({ ok: false, code: "unreachable" });
+    expect(fetched).toBe(false);
+  });
+
+  it("pins each redirect hop to that hop's own addresses", async () => {
+    const seen: { host: string; addresses: string[] }[] = [];
+    const result = await checkImageUrl("https://cdn.example/start.png", {
+      resolveHost: async (host) => (host === "cdn.example" ? ["1.1.1.1"] : ["8.8.4.4"]),
+      fetchPinned: async ({ url, addresses }) => {
+        const host = new URL(url).hostname;
+        seen.push({ host, addresses: [...addresses] });
+        if (host === "cdn.example") return res(302, { location: "https://images.example/b.png" });
+        return res(200, { "content-type": "image/png", "content-length": "4" });
+      },
+    });
+    expect(result).toMatchObject({ ok: true, finalUrl: "https://images.example/b.png" });
+    expect(seen).toEqual([
+      { host: "cdn.example", addresses: ["1.1.1.1"] },
+      { host: "images.example", addresses: ["8.8.4.4"] },
+    ]);
   });
 });

@@ -4,6 +4,10 @@
  * HEAD is not allowed. Guards against SSRF: only public hostnames, no
  * IP literals in private ranges, no credentials, manual redirects (max 3),
  * short timeout.
+ *
+ * When a resolver is supplied, the connection has to go through `fetchPinned`
+ * to an address from that same answer. A second lookup is not used. Host and
+ * TLS server name stay the URL hostname.
  */
 export const IMAGE_MAX_BYTES = 2 * 1024 * 1024;
 export const IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp", "image/avif"] as const;
@@ -88,42 +92,66 @@ export function precheckImageUrl(raw: string): ImageCheckResult | null {
 
 type FetchLike = (url: string, init: RequestInit) => Promise<Response>;
 
+export type PinnedFetchArgs = {
+  url: string;
+  method: "HEAD" | "GET";
+  headers: Record<string, string>;
+  /** Public addresses from the lookup for this exact URL. */
+  addresses: readonly string[];
+  signal: AbortSignal;
+};
+
+/** Connect to `addresses`. Do not resolve the URL hostname again. */
+export type PinnedFetch = (args: PinnedFetchArgs) => Promise<Response>;
+
 export async function checkImageUrl(
   raw: string,
   opts: {
     fetchImpl?: FetchLike;
+    fetchPinned?: PinnedFetch;
     timeoutMs?: number;
     maxRedirects?: number;
-    /** Resolve a hostname to IPs (DNS-rebinding guard); omitted in tests. */
+    /**
+     * One lookup for this URL. Required together with `fetchPinned`: the
+     * connection uses that answer, and `fetchImpl` is not called.
+     */
     resolveHost?: (hostname: string) => Promise<string[]>;
   } = {},
 ): Promise<ImageCheckResult> {
   const pre = precheckImageUrl(raw);
   if (pre) return pre;
-  const hostOk = async (u: string): Promise<ImageCheckResult | null> => {
-    if (!opts.resolveHost) return null;
+  const resolvePublic = async (
+    u: string,
+  ): Promise<{ addresses: string[] } | Extract<ImageCheckResult, { ok: false }>> => {
+    if (!opts.resolveHost) return { addresses: [] };
+    let ips: string[];
     try {
-      const ips = await opts.resolveHost(new URL(u).hostname);
-      if (ips.some(isPrivateHost)) return { ok: false, code: "private_host", error: "Image host resolves to a private address." };
-      return null;
+      ips = await opts.resolveHost(new URL(u).hostname);
     } catch {
       return { ok: false, code: "unreachable", error: "Image host could not be resolved." };
     }
+    if (ips.length === 0) return { ok: false, code: "unreachable", error: "Image host could not be resolved." };
+    if (ips.some(isPrivateHost)) {
+      return { ok: false, code: "private_host", error: "Image host resolves to a private address." };
+    }
+    if (!opts.fetchPinned) {
+      return { ok: false, code: "unreachable", error: "Image connection was not pinned to the resolved address." };
+    }
+    return { addresses: ips };
   };
-  const f = opts.fetchImpl ?? ((url, init) => fetch(url, init));
+  const loose = opts.fetchImpl ?? ((url, init) => fetch(url, init));
   const timeoutMs = opts.timeoutMs ?? 5_000;
   const maxRedirects = opts.maxRedirects ?? 3;
 
-  const once = async (url: string, method: "HEAD" | "GET"): Promise<Response> => {
+  const once = async (url: string, method: "HEAD" | "GET", addresses: readonly string[]): Promise<Response> => {
     const ctl = new AbortController();
     const t = setTimeout(() => ctl.abort(), timeoutMs);
+    const headers: Record<string, string> = method === "GET" ? { Range: "bytes=0-0" } : {};
     try {
-      return await f(url, {
-        method,
-        redirect: "manual",
-        signal: ctl.signal,
-        headers: method === "GET" ? { Range: "bytes=0-0" } : {},
-      });
+      if (opts.resolveHost) {
+        return await opts.fetchPinned!({ url, method, headers, addresses, signal: ctl.signal });
+      }
+      return await loose(url, { method, redirect: "manual", signal: ctl.signal, headers });
     } finally {
       clearTimeout(t);
     }
@@ -133,10 +161,10 @@ export async function checkImageUrl(
   let res: Response | null = null;
   try {
     for (let hop = 0; hop <= maxRedirects; hop++) {
-      const denied = await hostOk(url);
-      if (denied) return denied;
-      res = await once(url, "HEAD");
-      if (res.status === 405 || res.status === 501 || res.status === 403) res = await once(url, "GET");
+      const resolved = await resolvePublic(url);
+      if ("ok" in resolved) return resolved;
+      res = await once(url, "HEAD", resolved.addresses);
+      if (res.status === 405 || res.status === 501 || res.status === 403) res = await once(url, "GET", resolved.addresses);
       if (res.status >= 300 && res.status < 400) {
         const loc = res.headers.get("location");
         if (!loc) break;
