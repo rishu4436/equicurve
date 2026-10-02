@@ -20,6 +20,7 @@ import { formatAtomsExact } from "@/lib/amounts";
 import { setReceiptState, upsertReceiptItem, type LaunchReceipt } from "@/lib/dbc/receipt";
 import { FeeSplitAnswer, LpLockAnswer } from "@/components/issuer/IssuerAnswers";
 import { constraintFailureFromDesigned } from "@/lib/market/constraintNotice";
+import { SEARCH_MAX_RAISE_UI } from "@/lib/market/searchDomain";
 import { MarketDesignStep } from "./MarketDesignStep";
 import { LaunchReceiptCard } from "./LaunchReceiptCard";
 import { ImageUrlField } from "./ImageUrlField";
@@ -789,6 +790,10 @@ function StepGoals({
             value={state.targetRaise}
             onChange={(e) => patch({ targetRaise: e.target.value.trim() })}
           />
+          <p className="text-xs text-fg-muted">
+            Market-cap search accepts a raise up to {SEARCH_MAX_RAISE_UI.toLocaleString("en-US")} {state.quote}. Above
+            that, the search window would pass a market cap through a JavaScript number.
+          </p>
         </label>
         <label className="block space-y-1.5">
           <span className="ec-label">Typical order ({state.quote})</span>

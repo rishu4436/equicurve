@@ -17,6 +17,7 @@ import { constraintBudgetError, constraintPolicyFrom, loosenConstraintBudget } f
 import { constraintsFor, multiplesIn, refineMultiples, scenarioAssumptions, type DesignConstraints } from "./constraints";
 import { objectivePriorities, paretoFrontier, prefer, type FrontierMetrics } from "./pareto";
 import { namedScenarios, referenceBuy } from "./scenarios";
+import { SEARCH_MAX_MARKET_CAP, searchableRaiseError } from "./searchDomain";
 import { objectiveLabel } from "./score";
 import type {
   AssetKind,
@@ -135,6 +136,8 @@ export function parseBrief(input: LaunchBrief): ParsedBrief {
   if (typicalAtoms > targetAtoms * 1_000n) {
     throw new EquiCurveError("Typical trade is more than 1,000× the target raise.", "VALIDATION");
   }
+  const domainError = searchableRaiseError(atomsToNumber(targetAtoms, decimals));
+  if (domainError) throw new EquiCurveError(domainError, "VALIDATION");
   return {
     brief: {
       ...input,
@@ -203,11 +206,12 @@ function searchCaps(args: {
 }): { initial: number; migration: number; threshold: bigint } | null {
   const { presetId, multiple, decimals, supply, targetAtoms, targetUi, creatorPct, lpLockPct, antiSniper } = args;
   let lo = Math.max(targetUi * 0.05, 1e-4);
-  let hi = Math.max(targetUi * 40, lo * 4);
+  let hi = Math.min(Math.max(targetUi * 40, lo * 4), SEARCH_MAX_MARKET_CAP);
   const evalAt = (migration: number) => {
     const mig = roundCap(migration);
     const initial = roundCap(mig / multiple);
     if (!(mig > initial)) return null;
+    if (mig > SEARCH_MAX_MARKET_CAP || initial > SEARCH_MAX_MARKET_CAP) return null;
     const cfg = buildAt({ presetId, decimals, supply, initial, migration: mig, creatorPct, lpLockPct, antiSniper });
     if (!cfg) return null;
     return { initial, migration: mig, threshold: thresholdOf(cfg) };
@@ -216,7 +220,7 @@ function searchCaps(args: {
     const low = evalAt(lo);
     const high = evalAt(hi);
     if (low && low.threshold > targetAtoms) lo /= 4;
-    else if (high && high.threshold < targetAtoms) hi *= 4;
+    else if (high && high.threshold < targetAtoms && hi < SEARCH_MAX_MARKET_CAP) hi = Math.min(hi * 4, SEARCH_MAX_MARKET_CAP);
     else break;
   }
   let best = evalAt(lo) ?? evalAt(hi);
@@ -225,7 +229,10 @@ function searchCaps(args: {
     const midPoint = (lo + hi) / 2;
     const mid = evalAt(midPoint);
     if (!mid) {
-      lo = midPoint;
+      // A rejected cap is above the range the builder will construct. Raising the
+      // low bound walks into that rejection and keeps a cap far from the raise.
+      if (midPoint > best.migration) hi = midPoint;
+      else lo = midPoint;
       continue;
     }
     if (absGap(mid.threshold, targetAtoms) < absGap(best.threshold, targetAtoms)) best = mid;

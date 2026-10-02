@@ -17,6 +17,7 @@ export {
   toDesignedMarket,
 } from "./policy";
 export { namedScenarios, referenceBuy, replay } from "./scenarios";
+export { SEARCH_MAX_MARKET_CAP, SEARCH_MAX_RAISE_UI, searchableRaiseError } from "./searchDomain";
 export { assessRobustness, readConstraintMetrics, scaledParticipants } from "./robustness";
 export type {
   RobustnessAxis,
