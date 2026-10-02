@@ -1,7 +1,6 @@
 /**
- * Small server-side guards for public write routes: body size limit, JSON
- * parse, and a best-effort in-memory rate limiter (per instance — pair with a
- * platform limiter / Upstash ratelimit for multi-instance production).
+ * Small server-side guards for public routes: body size limit, JSON parse,
+ * and the in-memory rate limiter used when Upstash is unset.
  */
 
 export type BodyResult<T = unknown> =

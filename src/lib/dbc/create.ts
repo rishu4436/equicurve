@@ -13,6 +13,7 @@ import {
   WSOL_MINT,
   type QuoteLabel,
 } from "@/lib/constants";
+import { assertUsdcOverrideMint } from "./usdcOverride";
 import { AmountError, formatAtomsExact, parseUiAmountToBN } from "@/lib/amounts";
 import { EquiCurveError } from "@/lib/errors";
 import {
@@ -220,6 +221,7 @@ export async function prepareLaunchTransaction(args: {
         "VALIDATION",
       );
     }
+    await assertUsdcOverrideMint(connection);
     quoteMint = usdc;
     quoteDecimals = 6;
   }

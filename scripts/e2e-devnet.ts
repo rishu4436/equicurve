@@ -61,10 +61,8 @@ import {
   Step,
   connection,
   ensureSol,
-  explorerAddr,
   flush,
   getTx,
-  lamportDelta,
   loadState,
   log,
   results,
@@ -242,12 +240,22 @@ async function launch(st: Step, spec: LaunchSpec): Promise<LaunchResult> {
   return { spec, prepared, sigs, signed, registry, metaSource: meta.source };
 }
 
+type E2eConfig = {
+  partnerLiquidityPercentage?: unknown;
+  poolCreationFee?: unknown;
+  migrationQuoteThreshold?: unknown;
+  sqrtStartPrice?: unknown;
+  curve?: { sqrtPrice: BN; liquidity: BN }[];
+  poolFees?: { baseFee?: { cliffFeeNumerator?: unknown } };
+  tokenType?: unknown;
+};
+
 /** Scenario 4: on-chain accounts exist and fields match inputs. */
 async function verifyLaunch(st: Step, r: LaunchResult) {
   const { spec, prepared } = r;
   const snap = await fetchPoolSnapshot(connection, new PublicKey(prepared.poolPubkey));
   const client = getDbcClient(connection);
-  const cfg = (await client.state.getPoolConfig(new PublicKey(prepared.configPubkey))) as unknown as Record<string, any>;
+  const cfg = (await client.state.getPoolConfig(new PublicKey(prepared.configPubkey))) as unknown as E2eConfig;
   const expected = buildPresetConfig(spec.presetId, {
     totalTokenSupply: 1_000_000_000,
     creatorTradingFeePercentage: spec.fee,
@@ -257,7 +265,7 @@ async function verifyLaunch(st: Step, r: LaunchResult) {
     quoteDecimals: spec.quote === "USDC" ? 6 : 9,
     tokenType: spec.profile === "open-spl" ? "spl" : "token-2022",
     allowMintAuthority: false,
-  }) as unknown as Record<string, any>;
+  }) as unknown as E2eConfig;
   const eqBN = (a: unknown, b: unknown) => new BN(String(a)).eq(new BN(String(b)));
 
   st.check(snap.creator === creator.publicKey.toBase58(), `pool.creator = creator (${snap.creator})`);
@@ -277,15 +285,15 @@ async function verifyLaunch(st: Step, r: LaunchResult) {
   st.check(eqBN(cfg.poolCreationFee, 1_000_000), `poolCreationFee = ${cfg.poolCreationFee} lamports (0.001 SOL, not 1,000,000 SOL)`);
   st.check(eqBN(cfg.migrationQuoteThreshold, expected.migrationQuoteThreshold), `migrationQuoteThreshold = ${cfg.migrationQuoteThreshold} (built ${expected.migrationQuoteThreshold})`);
   st.check(eqBN(cfg.sqrtStartPrice, expected.sqrtStartPrice), "sqrtStartPrice matches built curve");
-  const onCurve = (cfg.curve as { sqrtPrice: BN; liquidity: BN }[]).filter((p) => !new BN(String(p.sqrtPrice)).isZero());
-  const builtCurve = expected.curve as { sqrtPrice: BN; liquidity: BN }[];
+  const onCurve = (cfg.curve ?? []).filter((p) => !new BN(String(p.sqrtPrice)).isZero());
+  const builtCurve = expected.curve ?? [];
   st.check(
     onCurve.length === builtCurve.length && builtCurve.every((p, i) => eqBN(p.sqrtPrice, onCurve[i].sqrtPrice) && eqBN(p.liquidity, onCurve[i].liquidity)),
     `curve points (${onCurve.length}) match preset ${spec.presetId}`,
   );
-  const bf = cfg.poolFees?.baseFee ?? {};
-  const ebf = expected.poolFees?.baseFee ?? {};
-  st.check(eqBN(bf.cliffFeeNumerator, ebf.cliffFeeNumerator), `base fee cliffFeeNumerator = ${bf.cliffFeeNumerator} (built ${ebf.cliffFeeNumerator})`);
+  const bf = cfg.poolFees?.baseFee;
+  const ebf = expected.poolFees?.baseFee;
+  st.check(eqBN(bf?.cliffFeeNumerator, ebf?.cliffFeeNumerator), `base fee cliffFeeNumerator = ${bf?.cliffFeeNumerator} (built ${ebf?.cliffFeeNumerator})`);
   st.check(Number(cfg.tokenType) === (spec.profile === "open-spl" ? 0 : 1), `tokenType = ${cfg.tokenType}`);
   // Mint account.
   const mintInfo = await connection.getAccountInfo(new PublicKey(prepared.baseMintPubkey));

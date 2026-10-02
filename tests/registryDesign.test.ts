@@ -11,7 +11,7 @@ import {
 import { authorizeRegistration, refreshFromChain } from "@/lib/registry/authorize";
 import { constraintPolicyFrom } from "@/lib/market/constraintBudget";
 import type { ConstraintBudget } from "@/lib/market/types";
-import { registryDesignSchema, resolveDeploymentRecord, type RegistryDesign } from "@/lib/registry/design";
+import { parseStoredDesign, registryDesignSchema, resolveDeploymentRecord, type RegistryDesign } from "@/lib/registry/design";
 import { coerceStoredLaunch, toPublicLaunch } from "@/lib/registry/normalize";
 import { getRecordedDeployment } from "@/lib/registry/publicDeployments";
 import { WSOL_MINT } from "@/lib/constants";
@@ -78,7 +78,7 @@ describe("registry design attestation", () => {
     const now = Date.now();
     const design = attest();
     const badFingerprint = await authorizeRegistration({
-      body: await signed(kp, { design: { ...design, fingerprint: "0123456789abcdef" } }, new Date(now)),
+      body: await signed(kp, { design: { ...design, fingerprint: "0123456789abcdef0123456789abcdef" } }, new Date(now)),
       ...deps(kp, now),
     });
     expect(badFingerprint).toMatchObject({ ok: false, status: 400 });
@@ -320,10 +320,10 @@ describe("resolveDeploymentRecord", () => {
     expect(registryDesignSchema.safeParse({ ...attest(), acceptedRelaxation: requested }).success).toBe(false);
   });
 
-  it("accepts the recorded Pylon design", () => {
+  it("accepts the recorded Pylon design as stored and rejects it as a new signature", () => {
     const row = getRecordedDeployment(PYLON);
     expect(row).not.toBeNull();
-    const parsed = registryDesignSchema.safeParse({
+    const recorded = {
       fingerprint: row!.fingerprint,
       migrationQuoteThresholdAtoms: row!.migrationQuoteThresholdAtoms,
       canonicalConfig: row!.canonicalConfig,
@@ -331,7 +331,9 @@ describe("resolveDeploymentRecord", () => {
       profileName: row!.profileName,
       constraintsPassed: row!.constraintsPassed,
       transaction: row!.transaction,
-    });
-    expect(parsed.success).toBe(true);
+    };
+    expect(row!.fingerprint).toMatch(/^[0-9a-f]{16}$/);
+    expect(parseStoredDesign(recorded)?.fingerprint).toBe(row!.fingerprint);
+    expect(registryDesignSchema.safeParse(recorded).success).toBe(false);
   });
 });

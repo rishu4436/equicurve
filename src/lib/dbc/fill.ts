@@ -85,6 +85,6 @@ export function planBuy(args: {
     requestedIn,
     fillableIn,
     unusedIn: requestedIn - fillableIn,
-    completesCurve: left > 0n || exact == null,
+    completesCurve: left > 0n,
   };
 }

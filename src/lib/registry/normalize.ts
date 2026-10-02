@@ -4,8 +4,39 @@ import { isValidPublicKey, PRESET_IDS, SECTORS } from "@/lib/validation";
 
 export const MAX_REGISTRY_ENTRIES = 500;
 
+export class StaleRegistryWrite extends Error {
+  readonly code = "stale_authorization" as const;
+  constructor() {
+    super("A newer authorization for this pool is already stored");
+    this.name = "StaleRegistryWrite";
+  }
+}
+
+export function isStaleRegistryWrite(error: unknown): boolean {
+  return error instanceof StaleRegistryWrite || (error instanceof Error && error.name === "StaleRegistryWrite");
+}
+
+export function readRegistryRevision(raw: unknown): number {
+  let obj: unknown = raw;
+  if (typeof raw === "string") {
+    try {
+      obj = JSON.parse(raw);
+    } catch {
+      return 0;
+    }
+  }
+  if (!obj || typeof obj !== "object") return 0;
+  const rev = (obj as { revision?: unknown }).revision;
+  if (typeof rev === "number" && Number.isInteger(rev) && rev >= 0) return rev;
+  if (typeof rev === "string" && /^\d+$/.test(rev)) {
+    const n = Number(rev);
+    return Number.isSafeInteger(n) ? n : 0;
+  }
+  return 0;
+}
+
 export function emptyRegistryPayload(): RegistryFilePayload {
-  return { version: 2, updatedAt: new Date().toISOString(), launches: [] };
+  return { version: 2, revision: 0, updatedAt: new Date().toISOString(), launches: [] };
 }
 
 export function sortLaunchesNewestFirst(launches: RegistryLaunch[]): RegistryLaunch[] {
@@ -88,21 +119,38 @@ export function parseRegistryPayload(raw: unknown): RegistryFilePayload {
   const p = obj as { updatedAt?: unknown; launches: unknown[] };
   return {
     version: 2,
+    revision: readRegistryRevision(obj),
     updatedAt: typeof p.updatedAt === "string" ? p.updatedAt : new Date().toISOString(),
     launches: p.launches.map(coerceStoredLaunch).filter((x): x is RegistryLaunch => !!x),
   };
 }
 
-/** Replace/insert by pool, newest first, capped. */
-export function mergeEntry(
-  payload: RegistryFilePayload,
-  entry: RegistryLaunch,
-): RegistryFilePayload {
-  const rest = payload.launches.filter((l) => l.pool !== entry.pool);
+export type MergeResult =
+  | { ok: true; payload: RegistryFilePayload }
+  | { ok: false; reason: "stale_authorization" };
+
+function olderAuthorization(prev: RegistryLaunch, entry: RegistryLaunch): boolean {
+  if (!prev.authIssuedAt) return false;
+  if (!entry.authIssuedAt) return true;
+  const prevMs = Date.parse(prev.authIssuedAt);
+  const nextMs = Date.parse(entry.authIssuedAt);
+  if (!Number.isFinite(prevMs) || !Number.isFinite(nextMs)) return false;
+  return nextMs < prevMs;
+}
+
+/** Replace/insert by pool, newest first, capped. A strictly older authorization is refused. */
+export function mergeEntry(payload: RegistryFilePayload, entry: RegistryLaunch): MergeResult {
+  const prev = payload.launches.find((row) => row.pool === entry.pool);
+  if (prev && olderAuthorization(prev, entry)) return { ok: false, reason: "stale_authorization" };
+  const rest = payload.launches.filter((row) => row.pool !== entry.pool);
   return {
-    version: 2,
-    updatedAt: new Date().toISOString(),
-    launches: [entry, ...rest].slice(0, MAX_REGISTRY_ENTRIES),
+    ok: true,
+    payload: {
+      version: 2,
+      revision: payload.revision ?? 0,
+      updatedAt: new Date().toISOString(),
+      launches: [entry, ...rest].slice(0, MAX_REGISTRY_ENTRIES),
+    },
   };
 }
 

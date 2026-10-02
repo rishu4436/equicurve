@@ -104,6 +104,9 @@ export function expectMismatches(
   const feasible = policy.candidates.filter((row) => row.feasible).length;
   const mismatches: string[] = [];
   const check = (name: string, actual: unknown, expected: unknown) => {
+    if (name === "configFingerprint" && typeof actual === "string" && typeof expected === "string") {
+      if ((expected.length === 16 || expected.length === 32) && /^[0-9a-f]+$/.test(expected) && actual.startsWith(expected)) return;
+    }
     if (actual !== expected) mismatches.push(`${name}: search returned ${JSON.stringify(actual)}, saved brief expects ${JSON.stringify(expected)}`);
   };
   check("candidateCount", policy.candidates.length, expect.candidateCount);

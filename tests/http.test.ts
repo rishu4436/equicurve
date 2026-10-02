@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { checkRateLimit, readJsonBody, resetRateLimits } from "@/lib/server/http";
+import { limitRequest } from "@/lib/server/rateLimit";
 
 describe("readJsonBody", () => {
   it("rejects wrong content-type, oversized and malformed bodies", async () => {
@@ -22,5 +23,21 @@ describe("checkRateLimit", () => {
     expect(blocked.retryAfterSec).toBeGreaterThan(0);
     expect(checkRateLimit("k", 3, 60_000, t + 61_000).ok).toBe(true);
     expect(checkRateLimit("other", 3, 60_000, t + 10).ok).toBe(true);
+  });
+
+  it("uses the in-memory limiter when Upstash is unset", async () => {
+    const keys = ["UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN", "KV_REST_API_URL", "KV_REST_API_TOKEN"] as const;
+    const saved = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
+    for (const key of keys) delete process.env[key];
+    try {
+      expect((await limitRequest("mem", 2, 60_000)).ok).toBe(true);
+      expect((await limitRequest("mem", 2, 60_000)).ok).toBe(true);
+      expect((await limitRequest("mem", 2, 60_000)).ok).toBe(false);
+    } finally {
+      for (const key of keys) {
+        if (saved[key] === undefined) delete process.env[key];
+        else process.env[key] = saved[key];
+      }
+    }
   });
 });

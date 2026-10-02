@@ -12,23 +12,62 @@ export type ImageCheckResult =
   | { ok: true; contentType: string; bytes: number | null; finalUrl: string }
   | { ok: false; code: "not_https" | "private_host" | "bad_status" | "bad_type" | "too_large" | "unreachable" | "invalid_url"; error: string };
 
+function ipv4Private(a: number, b: number): boolean {
+  if (a === 10 || a === 127 || a === 0) return true;
+  if (a === 169 && b === 254) return true;
+  if (a === 172 && b >= 16 && b <= 31) return true;
+  if (a === 192 && b === 168) return true;
+  if (a === 100 && b >= 64 && b <= 127) return true;
+  return false;
+}
+
+function octetChoices(part: string): number[] {
+  if (/^0x[0-9a-f]+$/i.test(part)) {
+    const n = Number.parseInt(part, 16);
+    return n >= 0 && n <= 255 ? [n] : [];
+  }
+  if (!/^\d+$/.test(part)) return [];
+  const choices: number[] = [];
+  const decimal = Number(part);
+  if (decimal >= 0 && decimal <= 255) choices.push(decimal);
+  if (/^0[0-7]+$/.test(part)) {
+    const octal = Number.parseInt(part, 8);
+    if (octal !== decimal && octal >= 0 && octal <= 255) choices.push(octal);
+  }
+  return choices;
+}
+
+function dottedAddressPrivate(host: string): boolean | null {
+  const parts = host.split(".");
+  if (parts.length !== 4) return null;
+  const choices = parts.map(octetChoices);
+  if (choices.some((choice) => choice.length === 0)) return null;
+  let combos: number[][] = [[]];
+  for (const choice of choices) {
+    const next: number[][] = [];
+    for (const prefix of combos) for (const n of choice) next.push([...prefix, n]);
+    combos = next;
+  }
+  return combos.some(([a, b]) => ipv4Private(a ?? -1, b ?? -1));
+}
+
+function dwordPrivate(value: number): boolean {
+  if (!Number.isSafeInteger(value) || value < 0 || value > 0xffffffff) return false;
+  return ipv4Private((value >>> 24) & 255, (value >>> 16) & 255);
+}
+
 export function isPrivateHost(hostname: string): boolean {
   const h = hostname.toLowerCase().replace(/^\[|\]$/g, "");
   if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".local") || h.endsWith(".internal")) return true;
-  if (h === "0.0.0.0" || h === "::" || h === "::1") return true;
-  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(h);
-  if (m) {
-    const [a, b] = [Number(m[1]), Number(m[2])];
-    if (a === 10 || a === 127 || a === 0) return true;
-    if (a === 169 && b === 254) return true;
-    if (a === 172 && b >= 16 && b <= 31) return true;
-    if (a === 192 && b === 168) return true;
-    if (a === 100 && b >= 64 && b <= 127) return true;
-    return false;
-  }
+  if (h === "0.0.0.0" || h === "::" || h === "::1" || h === "0:0:0:0:0:0:0:0" || h === "0:0:0:0:0:0:0:1") return true;
+  const dotted = dottedAddressPrivate(h);
+  if (dotted != null) return dotted;
+  if (/^\d+$/.test(h)) return dwordPrivate(Number(h));
+  if (/^0x[0-9a-f]+$/i.test(h)) return dwordPrivate(Number.parseInt(h, 16));
+  if (/^0[0-7]+$/.test(h)) return dwordPrivate(Number.parseInt(h, 8));
   if (h.includes(":")) {
-    // IPv6 literal: block loopback / link-local / unique-local / mapped.
-    return /^(fe80|fc|fd|::ffff:)/.test(h);
+    // Loopback, link-local, unique-local, and every IPv4-mapped form.
+    return /^(fe80|fc|fd|::ffff:)/.test(h) || /^(?:0:){4,5}ffff:/i.test(h);
   }
   return false;
 }

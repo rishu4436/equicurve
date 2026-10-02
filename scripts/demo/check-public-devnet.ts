@@ -12,7 +12,7 @@
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { Keypair, PublicKey, Transaction, type Connection } from "@solana/web3.js";
+import { Keypair, PublicKey, Transaction } from "@solana/web3.js";
 import type { WalletContextState } from "@solana/wallet-adapter-react";
 import type { Sector } from "@/lib/demo/offerings";
 import type { ExpectedMarketConfig } from "@/lib/dbc/deploymentReadback";

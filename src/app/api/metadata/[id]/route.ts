@@ -13,7 +13,8 @@ import {
 import { serverLookup } from "@/lib/registry/chain";
 import { serverCheckImage } from "@/lib/server/imageCheck";
 import { withRpcRetry } from "@/lib/rpc";
-import { checkRateLimit, clientKey, readJsonBody } from "@/lib/server/http";
+import { clientKey, readJsonBody } from "@/lib/server/http";
+import { limitRequest } from "@/lib/server/rateLimit";
 
 export const runtime = "nodejs";
 
@@ -57,7 +58,7 @@ export async function PUT(req: Request, ctx: Ctx) {
   if (!isValidMetadataId(id)) {
     return NextResponse.json({ error: "Metadata id must be a mint address" }, { status: 400 });
   }
-  const rl = checkRateLimit(clientKey(req, "metadata:put"), 20, 10 * 60 * 1000);
+  const rl = await limitRequest(clientKey(req, "metadata:put"), 20, 10 * 60 * 1000);
   if (!rl.ok) {
     return NextResponse.json(
       { error: "Too many metadata writes — slow down." },

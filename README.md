@@ -1,12 +1,46 @@
 # EquiCurve
 
-**EquiCurve designs the market for a programmable token launch on Meteora's Dynamic Bonding Curve, then deploys that design.** Equity and real-world-asset launches are one use of it. The app builds a DBC config, lets the market trade the curve, and graduates liquidity into a Meteora DAMM v2 pool when the raise threshold is reached. EquiCurve does not create shares, act as a broker, or verify NAV or custody.
+EquiCurve is a constrained market-design engine for Meteora DBC launches.
+
+Instead of selecting a bonding curve first, an issuer specifies:
+
+- raise target
+- typical trade
+- participants
+- market objective
+- explicit impact, concentration, and participation constraints
+
+EquiCurve searches candidate DBC configurations, simulates them, shows constraint conflicts, lets the issuer explicitly negotiate the budget, fingerprints the selected configuration, and verifies the resulting deployment against on-chain state.
+
+**Judge path:** Brief → Search → Conflict → Negotiation → Robustness → Fingerprint → Deployment → Readback → Explore
+
+**Verify it:**
+
+- [Canonical Journey evidence](docs/canonical-evidence.md) — one public-devnet deployment, from the issuer brief through on-chain readback
+- [Six click-through screens](docs/judge-screens/README.md) — hero, brief, conflict, negotiation, robustness envelope, verified deployment
+
+### Evidence boundaries
+
+EquiCurve proves:
+
+- ✓ candidate configurations were evaluated
+- ✓ constraints were evaluated against those simulations
+- ✓ the issuer-selected configuration has a deterministic fingerprint
+- ✓ the deployed pool can be read back and compared
+- ✓ the recorded deployment matches the expected configuration
+
+EquiCurve does not claim:
+
+- × that synthetic scenarios predict real market behavior
+- × that a constraint is economically optimal
+- × that an RWA token establishes legal ownership
+- × that deployment verification proves regulatory compliance
 
 > EquiCurve is software for launching tokens on Meteora's bonding curve. It is **not** a broker, exchange, transfer agent or securities platform, makes **no claim of securities-law compliance**, and does **not** create shareholder rights.
 
 Built for [Superteam Earn · Meteora DBC](https://superteam.fun/earn/listing/meteora-dbc) + Colosseum Crypto World's Fair sidetrack. **Deadline:** 2026-10-13 · Design: [DESIGN.md](./DESIGN.md)
 
-**For judges:** [Canonical Journey evidence](docs/canonical-evidence.md) · [Click-through screens](docs/judge-screens/README.md) · [Architecture + lifecycle diagram](docs/ARCHITECTURE.md) · [Reproducible walkthrough](docs/WALKTHROUGH.md) · [On-chain e2e evidence](docs/e2e-devnet-evidence.md) (localnet with Meteora programs cloned from devnet, **not public devnet**; see [below](#e2e-evidence)).
+Further reading: [Architecture + lifecycle diagram](docs/ARCHITECTURE.md) · [Reproducible walkthrough](docs/WALKTHROUGH.md) · [On-chain e2e evidence](docs/e2e-devnet-evidence.md) (localnet with Meteora programs cloned from devnet, **not public devnet**; see [below](#e2e-evidence)).
 
 ## What EquiCurve is (and is not): three separate layers
 

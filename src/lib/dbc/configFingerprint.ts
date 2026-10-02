@@ -126,7 +126,9 @@ export function canonicalMarketConfig(cfg: ConfigParameters): string {
   ].join("\n");
 }
 
-/** 16 hex chars. Stable for the same config. Not a security hash of a secret. */
+/** New ids are 32 hex chars. Deployed proofs may still store the first 16. Not a secret. */
+export const FINGERPRINT_HEX_LEN = 32;
+
 export function marketConfigFingerprint(cfg: ConfigParameters): string {
-  return sha256Hex(canonicalMarketConfig(cfg)).slice(0, 16);
+  return sha256Hex(canonicalMarketConfig(cfg)).slice(0, FINGERPRINT_HEX_LEN);
 }

@@ -95,6 +95,20 @@ describe("image URL check", () => {
     expect(isPrivateHost("192.168.1.2")).toBe(true);
     expect(isPrivateHost("172.20.0.1")).toBe(true);
     expect(isPrivateHost("8.8.8.8")).toBe(false);
+    expect(precheckImageUrl("https://[::1]/a.png")).toMatchObject({ code: "private_host" });
+    expect(precheckImageUrl("https://[::ffff:127.0.0.1]/a.png")).toMatchObject({ code: "private_host" });
+    expect(precheckImageUrl("https://[::ffff:7f00:1]/a.png")).toMatchObject({ code: "private_host" });
+    expect(precheckImageUrl("https://2130706433/a.png")).toMatchObject({ code: "private_host" });
+    expect(precheckImageUrl("https://0x7f000001/a.png")).toMatchObject({ code: "private_host" });
+    expect(precheckImageUrl("https://0x7f.0x0.0x0.0x1/a.png")).toMatchObject({ code: "private_host" });
+    expect(precheckImageUrl("https://0177.0.0.1/a.png")).toMatchObject({ code: "private_host" });
+    expect(isPrivateHost("2130706433")).toBe(true);
+    expect(isPrivateHost("0x7f000001")).toBe(true);
+    expect(isPrivateHost("0x7f.0x0.0x0.0x1")).toBe(true);
+    expect(isPrivateHost("0177.0.0.1")).toBe(true);
+    expect(isPrivateHost("::ffff:10.1.1.1")).toBe(true);
+    expect(isPrivateHost("8.8.8.8")).toBe(false);
+    expect(isPrivateHost("134744072")).toBe(false);
   });
 
   it("accepts png under 2 MB via HEAD", async () => {
@@ -143,6 +157,47 @@ describe("image URL check", () => {
       await checkImageUrl("https://evil.example/a.png", {
         resolveHost: async () => ["127.0.0.1"],
         fetchImpl: async () => res(200, { "content-type": "image/png" }),
+      }),
+    ).toMatchObject({ ok: false, code: "private_host" });
+    expect(
+      await checkImageUrl("https://evil.example/a.png", {
+        resolveHost: async () => ["::1"],
+        fetchImpl: async () => res(200, { "content-type": "image/png" }),
+      }),
+    ).toMatchObject({ ok: false, code: "private_host" });
+    expect(
+      await checkImageUrl("https://evil.example/a.png", {
+        resolveHost: async () => ["::ffff:10.1.1.1"],
+        fetchImpl: async () => res(200, { "content-type": "image/png" }),
+      }),
+    ).toMatchObject({ ok: false, code: "private_host" });
+  });
+
+  it("follows at most three redirects and refuses a private hop", async () => {
+    let hops = 0;
+    const allowed = await checkImageUrl("https://cdn.example/start.png", {
+      fetchImpl: async () => {
+        hops += 1;
+        if (hops <= 3) return res(302, { location: `https://cdn.example/${hops}.png` });
+        return res(200, { "content-type": "image/png", "content-length": "12" });
+      },
+    });
+    expect(allowed).toMatchObject({ ok: true });
+    expect(hops).toBe(4);
+
+    let blocked = 0;
+    const tooMany = await checkImageUrl("https://cdn.example/loop.png", {
+      fetchImpl: async () => {
+        blocked += 1;
+        return res(302, { location: `https://cdn.example/loop-${blocked}.png` });
+      },
+    });
+    expect(tooMany).toMatchObject({ ok: false, code: "unreachable" });
+    expect(blocked).toBe(4);
+
+    expect(
+      await checkImageUrl("https://cdn.example/a.png", {
+        fetchImpl: async () => res(302, { location: "https://2130706433/secret.png" }),
       }),
     ).toMatchObject({ ok: false, code: "private_host" });
   });

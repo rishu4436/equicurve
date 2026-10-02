@@ -87,7 +87,8 @@ function curveSignature(cfg: object): string {
 }
 
 function withoutClock(policy: LaunchPolicy) {
-  const { createdAt, ...rest } = policy;
+  const { createdAt: _createdAt, ...rest } = policy;
+  void _createdAt;
   return rest;
 }
 
@@ -256,6 +257,26 @@ describe("dynamic fee replay", () => {
     );
     expect(broken.dynamicFee).toBeNull();
     expect(broken.dynamicFeeUnreadable).toBe(true);
+    const partial = openBook(
+      {
+        ...cfg,
+        poolFees: {
+          ...cfg.poolFees,
+          dynamicFee: {
+            initialized: 1,
+            binStep: 1,
+            filterPeriod: 10,
+            decayPeriod: 120,
+            reductionFactor: 5_000,
+            variableFeeControl: 1_000,
+            maxVolatilityAccumulator: 100_000,
+          },
+        },
+      } as never,
+      9,
+    );
+    expect(partial.dynamicFee).toBeNull();
+    expect(partial.dynamicFeeUnreadable).toBe(true);
   });
 });
 

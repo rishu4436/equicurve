@@ -112,71 +112,83 @@ export const constraintPolicySchema = z
   })
   .strict();
 
-export const registryDesignSchema = z
-  .object({
-    fingerprint: z.string().regex(/^[0-9a-f]{16}$/, "fingerprint must be 16 hex characters"),
-    migrationQuoteThresholdAtoms: z
-      .string()
-      .regex(/^\d{1,40}$/, "migration threshold must be a decimal atom string"),
-    canonicalConfig: z.string().min(1).max(6000),
-    expected: expectedMarketConfigSchema,
-    profileName: z.string().min(1).max(80),
-    constraintsPassed: z.boolean(),
-    /**
-     * Requested budget, the budget the search used, and the fields that moved.
-     * Omitted on older designs and on an unresolved search.
-     */
-    constraintPolicy: constraintPolicySchema.optional(),
-    transaction: z
-      .string()
-      .regex(/^[1-9A-HJ-NP-Za-km-z]{64,100}$/, "transaction must be a base58 signature")
-      .optional(),
-  })
-  .strict()
-  .superRefine((design, ctx) => {
-    if (!recordedFingerprintMatches(design.canonicalConfig, design.fingerprint)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["fingerprint"],
-        message: "fingerprint does not match the canonical config",
-      });
-    }
-    if (design.expected.migrationQuoteThreshold !== design.migrationQuoteThresholdAtoms) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["migrationQuoteThresholdAtoms"],
-        message: "migration threshold does not match the canonical config",
-      });
-    }
-    const policy = design.constraintPolicy;
-    if (!policy) return;
-    if (!budgetOnlyLoosens(policy.requested, policy.applied)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["constraintPolicy", "applied"],
-        message: "applied budget tightens a requested limit",
-      });
-    }
-    if (!sameConstraintChanges(policy.relaxed, constraintPolicyFrom(policy.requested, policy.applied).relaxed)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["constraintPolicy", "relaxed"],
-        message: "relaxed fields do not match the requested and applied budgets",
-      });
-    }
-    if (policy.relaxed.length > 0 && design.constraintsPassed) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["constraintsPassed"],
-        message: "a relaxed budget cannot be marked as meeting the original constraints",
-      });
-    }
-  });
+function designSchema(fingerprint: z.ZodString) {
+  return z
+    .object({
+      fingerprint,
+      migrationQuoteThresholdAtoms: z
+        .string()
+        .regex(/^\d{1,40}$/, "migration threshold must be a decimal atom string"),
+      canonicalConfig: z.string().min(1).max(6000),
+      expected: expectedMarketConfigSchema,
+      profileName: z.string().min(1).max(80),
+      constraintsPassed: z.boolean(),
+      /**
+       * Requested budget, the budget the search used, and the fields that moved.
+       * Omitted on older designs and on an unresolved search.
+       */
+      constraintPolicy: constraintPolicySchema.optional(),
+      transaction: z
+        .string()
+        .regex(/^[1-9A-HJ-NP-Za-km-z]{64,100}$/, "transaction must be a base58 signature")
+        .optional(),
+    })
+    .strict()
+    .superRefine((design, ctx) => {
+      if (!recordedFingerprintMatches(design.canonicalConfig, design.fingerprint)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["fingerprint"],
+          message: "fingerprint does not match the canonical config",
+        });
+      }
+      if (design.expected.migrationQuoteThreshold !== design.migrationQuoteThresholdAtoms) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["migrationQuoteThresholdAtoms"],
+          message: "migration threshold does not match the canonical config",
+        });
+      }
+      const policy = design.constraintPolicy;
+      if (!policy) return;
+      if (!budgetOnlyLoosens(policy.requested, policy.applied)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["constraintPolicy", "applied"],
+          message: "applied budget tightens a requested limit",
+        });
+      }
+      if (!sameConstraintChanges(policy.relaxed, constraintPolicyFrom(policy.requested, policy.applied).relaxed)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["constraintPolicy", "relaxed"],
+          message: "relaxed fields do not match the requested and applied budgets",
+        });
+      }
+      if (policy.relaxed.length > 0 && design.constraintsPassed) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["constraintsPassed"],
+          message: "a relaxed budget cannot be marked as meeting the original constraints",
+        });
+      }
+    });
+}
+
+/** Incoming signed designs. New fingerprints are 32 hex characters. */
+export const registryDesignSchema = designSchema(
+  z.string().regex(/^[0-9a-f]{32}$/, "fingerprint must be 32 hex characters"),
+);
+
+/** Catalog rows and previously stored designs may still carry a 16-hex id. */
+export const storedDesignSchema = designSchema(
+  z.string().regex(/^[0-9a-f]{16}$|^[0-9a-f]{32}$/, "fingerprint must be 16 or 32 hex characters"),
+);
 
 export type RegistryDesign = z.infer<typeof registryDesignSchema>;
 
 export function parseStoredDesign(raw: unknown): RegistryDesign | null {
-  const parsed = registryDesignSchema.safeParse(raw);
+  const parsed = storedDesignSchema.safeParse(raw);
   return parsed.success ? parsed.data : null;
 }
 

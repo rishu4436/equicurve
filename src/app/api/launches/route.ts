@@ -10,8 +10,9 @@ import {
   listRegistryLaunches,
   putRegistryLaunch,
 } from "@/lib/registry/store";
-import { checkRateLimit, clientKey, readJsonBody } from "@/lib/server/http";
-import { toPublicLaunch } from "@/lib/registry/normalize";
+import { clientKey, readJsonBody } from "@/lib/server/http";
+import { limitRequest } from "@/lib/server/rateLimit";
+import { isStaleRegistryWrite, toPublicLaunch } from "@/lib/registry/normalize";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -40,7 +41,7 @@ export async function GET() {
 
 /** Register / update profile — requires a creator-signed payload. */
 export async function POST(req: Request) {
-  const rl = checkRateLimit(clientKey(req, "launches:post"), WRITE_LIMIT, WRITE_WINDOW_MS);
+  const rl = await limitRequest(clientKey(req, "launches:post"), WRITE_LIMIT, WRITE_WINDOW_MS);
   if (!rl.ok) return err(429, "Too many registry writes — slow down.", "rate_limited", { "Retry-After": String(rl.retryAfterSec) });
   const body = await readJsonBody(req, MAX_SIGNED_BODY_BYTES);
   if (!body.ok) return err(body.status, body.error, "invalid_body");
@@ -56,7 +57,10 @@ export async function POST(req: Request) {
   if (!result.ok) return err(result.status, result.error, result.code);
   try {
     await putRegistryLaunch(result.entry);
-  } catch {
+  } catch (error) {
+    if (isStaleRegistryWrite(error)) {
+      return err(409, "A newer authorization for this pool is already stored", "stale_authorization");
+    }
     return err(
       503,
       "Registry storage is unavailable. The pool was not saved for Explore.",
@@ -74,7 +78,7 @@ export async function POST(req: Request) {
 
 /** Refresh chain-derived fields (status, graduation, DAMM pool). Body: { pool }. */
 export async function PATCH(req: Request) {
-  const rl = checkRateLimit(clientKey(req, "launches:patch"), WRITE_LIMIT * 2, WRITE_WINDOW_MS);
+  const rl = await limitRequest(clientKey(req, "launches:patch"), WRITE_LIMIT * 2, WRITE_WINDOW_MS);
   if (!rl.ok) return err(429, "Too many refresh requests — slow down.", "rate_limited", { "Retry-After": String(rl.retryAfterSec) });
   const body = await readJsonBody(req, 1024);
   if (!body.ok) return err(body.status, body.error, "invalid_body");
@@ -91,7 +95,10 @@ export async function PATCH(req: Request) {
   if (!result.ok) return err(result.status, result.error, result.code);
   try {
     await putRegistryLaunch(result.entry);
-  } catch {
+  } catch (error) {
+    if (isStaleRegistryWrite(error)) {
+      return err(409, "A newer authorization for this pool is already stored", "stale_authorization");
+    }
     return err(503, "Registry storage is unavailable. The refresh was not saved.", "storage_unavailable");
   }
   invalidateExploreCache();

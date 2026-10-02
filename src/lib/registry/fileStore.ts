@@ -1,6 +1,12 @@
 import { mkdir, readFile, rename, writeFile } from "fs/promises";
 import path from "path";
-import { emptyRegistryPayload, mergeEntry, parseRegistryPayload, sortLaunchesNewestFirst } from "./normalize";
+import {
+  emptyRegistryPayload,
+  mergeEntry,
+  parseRegistryPayload,
+  sortLaunchesNewestFirst,
+  StaleRegistryWrite,
+} from "./normalize";
 import type { LaunchRegistryStore, RegistryFilePayload, RegistryLaunch } from "./types";
 
 const DIR = path.join(process.cwd(), "data", "launches");
@@ -41,7 +47,10 @@ export function createFileStore(): LaunchRegistryStore {
     },
     put(entry: RegistryLaunch): Promise<RegistryLaunch> {
       return serialized(async () => {
-        await writeFileSafe(mergeEntry(await readFileSafe(), entry));
+        const current = await readFileSafe();
+        const merged = mergeEntry(current, entry);
+        if (!merged.ok) throw new StaleRegistryWrite();
+        await writeFileSafe({ ...merged.payload, revision: (current.revision ?? 0) + 1 });
         return entry;
       });
     },

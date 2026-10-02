@@ -34,26 +34,71 @@ export function zeroVol(): VolState {
   return { lastUpdate: 0n, sqrtRef: 0n, volAcc: 0n, volRef: 0n };
 }
 
+function integerField(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return Math.trunc(value);
+  if (typeof value === "bigint") {
+    if (value < 0n || value > BigInt(Number.MAX_SAFE_INTEGER)) return null;
+    return Number(value);
+  }
+  const text = numericText(value);
+  if (text == null) return null;
+  const n = Number(text);
+  return Number.isSafeInteger(n) ? n : null;
+}
+
+function numericText(value: unknown): string | null {
+  if (typeof value === "string" && /^\d+$/.test(value)) return value;
+  if (value && typeof value === "object" && "toString" in value) {
+    const text = (value as { toString(): string }).toString();
+    if (/^\d+$/.test(text)) return text;
+  }
+  return null;
+}
+
+function nonNegativeBig(value: unknown): bigint | null {
+  if (typeof value === "bigint") return value >= 0n ? value : null;
+  if (typeof value === "number" && Number.isFinite(value) && value >= 0) return BigInt(Math.trunc(value));
+  const text = numericText(value);
+  return text == null ? null : BigInt(text);
+}
+
+/** Missing required fields stay unreadable. Defaults would quote a fee the config never set. */
 export function readDynamicFee(raw: unknown): DynamicFeeParams | null {
   if (!raw || typeof raw !== "object") return null;
   const d = raw as Record<string, unknown>;
   if (d.initialized === 0) return null;
-  const binStep = typeof d.binStep === "number" ? d.binStep : 0;
-  if (binStep <= 0) return null;
-  const u128 = d.binStepU128;
-  const binStepU128 =
-    u128 != null && typeof (u128 as { toString?: () => string }).toString === "function"
-      ? BigInt((u128 as { toString(): string }).toString())
-      : DEFAULT_BIN_STEP_U128;
-  const max = d.maxVolatilityAccumulator;
+  const binStep = integerField(d.binStep);
+  const filterPeriod = integerField(d.filterPeriod);
+  const decayPeriod = integerField(d.decayPeriod);
+  const reductionFactor = integerField(d.reductionFactor);
+  const variableFeeControl = integerField(d.variableFeeControl);
+  const maxVolatilityAccumulator = nonNegativeBig(d.maxVolatilityAccumulator);
+  const binStepU128 = nonNegativeBig(d.binStepU128);
+  if (
+    binStep == null ||
+    binStep <= 0 ||
+    filterPeriod == null ||
+    filterPeriod < 0 ||
+    decayPeriod == null ||
+    decayPeriod < 0 ||
+    reductionFactor == null ||
+    reductionFactor < 0 ||
+    variableFeeControl == null ||
+    variableFeeControl < 0 ||
+    maxVolatilityAccumulator == null ||
+    binStepU128 == null ||
+    binStepU128 <= 0n
+  ) {
+    return null;
+  }
   return {
     binStep,
-    binStepU128: binStepU128 > 0n ? binStepU128 : DEFAULT_BIN_STEP_U128,
-    filterPeriod: typeof d.filterPeriod === "number" ? d.filterPeriod : 10,
-    decayPeriod: typeof d.decayPeriod === "number" ? d.decayPeriod : 120,
-    reductionFactor: typeof d.reductionFactor === "number" ? d.reductionFactor : 5_000,
-    maxVolatilityAccumulator: typeof max === "number" ? BigInt(Math.max(0, Math.floor(max))) : 0n,
-    variableFeeControl: typeof d.variableFeeControl === "number" ? d.variableFeeControl : 0,
+    binStepU128,
+    filterPeriod,
+    decayPeriod,
+    reductionFactor,
+    maxVolatilityAccumulator,
+    variableFeeControl,
   };
 }
 

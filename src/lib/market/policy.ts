@@ -10,6 +10,7 @@ import {
 } from "@/lib/dbc/presets";
 import type { PresetId } from "@/lib/dbc/types";
 import { EquiCurveError } from "@/lib/errors";
+import { LIMITS } from "@/lib/validation";
 import { openBook } from "./book";
 import { runCohortStress } from "./cohorts";
 import { sha256Hex } from "./hash";
@@ -105,8 +106,11 @@ export function parseBrief(input: LaunchBrief): ParsedBrief {
     throw new EquiCurveError("Participants must be a whole number from 1 to 1,000,000.", "VALIDATION");
   }
   const supply = input.totalSupply ?? DEFAULT_SUPPLY;
-  if (!Number.isInteger(supply) || supply < 1 || supply > 1_000_000_000_000) {
-    throw new EquiCurveError("Total supply must be a whole number from 1 to 1e12.", "VALIDATION");
+  if (!Number.isInteger(supply) || supply < 1 || supply > LIMITS.totalSupplyMax) {
+    throw new EquiCurveError(
+      `Total supply must be a whole number from 1 to ${LIMITS.totalSupplyMax}.`,
+      "VALIDATION",
+    );
   }
   const paths = input.stressPaths ?? 16;
   if (!Number.isInteger(paths) || paths < 1 || paths > 5_000) {

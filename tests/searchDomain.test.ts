@@ -34,6 +34,11 @@ describe("market-cap search domain", () => {
     expect(() => parseBrief({ ...maxRaise, targetRaise: String(SEARCH_MAX_RAISE_UI + 1) })).toThrow(/quote tokens/);
   });
 
+  it("uses the wizard supply maximum", () => {
+    expect(parseBrief({ ...maxRaise, totalSupply: 10_000_000_000 }).supply).toBe(10_000_000_000);
+    expect(() => parseBrief({ ...maxRaise, totalSupply: 10_000_000_001 })).toThrow(/10000000000/);
+  });
+
   it("still rejects a SOL raise that cannot fit in u64 atoms", () => {
     expect(() =>
       parseBrief({

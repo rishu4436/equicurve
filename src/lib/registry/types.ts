@@ -82,5 +82,7 @@ export interface LaunchRegistryStore {
 export type RegistryFilePayload = {
   version: 1 | 2;
   updatedAt: string;
+  /** Compare-and-set counter. Missing on older blobs, which read as 0. */
+  revision: number;
   launches: RegistryLaunch[];
 };

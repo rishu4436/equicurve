@@ -25,7 +25,7 @@ import {
 import { chainStatusFromCurve } from "@/lib/dbc/curveState";
 import { migrationConfigForSnapshot } from "@/lib/dbc/migrate";
 import { PoolNotFoundError } from "@/lib/dbc/poolAccount";
-import { formatAtomsExact, tryFormatAtoms } from "@/lib/amounts";
+import { formatAtomsExact } from "@/lib/amounts";
 import {
   DBC_PROGRAM_ID,
   DAMM_V2_PROGRAM,

@@ -1,5 +1,5 @@
 import { DAMM_V2_MIGRATION_FEE_ADDRESS, type ConfigParameters } from "@meteora-ag/dynamic-bonding-curve-sdk";
-import { canonicalMarketConfig, marketConfigFingerprint, migrationAttestation } from "@/lib/dbc/configFingerprint";
+import { canonicalMarketConfig, migrationAttestation } from "@/lib/dbc/configFingerprint";
 import { sha256Hex } from "@/lib/market/hash";
 
 /** Plain fields of the config that was fingerprinted and deployed. */
@@ -158,13 +158,19 @@ export function canonicalConfigText(cfg: ConfigParameters): string {
   return canonicalMarketConfig(cfg);
 }
 
-/** The recorded fingerprint has to be the hash of the stored canonical config. */
+const RECORDED_FINGERPRINT = /^[0-9a-f]{16}$|^[0-9a-f]{32}$/;
+
+/**
+ * A recorded id matches when it is the 16- or 32-hex prefix of the canonical
+ * config digest. Older proofs stored 16. New signatures store 32.
+ */
 export function recordedFingerprintMatches(canonicalConfig: string, fingerprint: string): boolean {
-  return sha256Hex(canonicalConfig).slice(0, 16) === fingerprint;
+  if (!RECORDED_FINGERPRINT.test(fingerprint)) return false;
+  return sha256Hex(canonicalConfig).startsWith(fingerprint);
 }
 
 export function recordedConfigMatchesFingerprint(cfg: ConfigParameters, fingerprint: string): boolean {
-  return marketConfigFingerprint(cfg) === fingerprint && recordedFingerprintMatches(canonicalConfigText(cfg), fingerprint);
+  return recordedFingerprintMatches(canonicalConfigText(cfg), fingerprint);
 }
 
 function same(expected: string, actual: unknown): boolean {

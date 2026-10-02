@@ -54,6 +54,20 @@ describe("planBuy (buy larger than remaining curve)", () => {
     expect(plan.mode).toBe("partial_fill");
     expect(plan.unusedIn).toBe(0n);
     expect(plan.fillableIn).toBe(2_990n);
+    expect(plan.completesCurve).toBe(false);
+  });
+
+  it("does not claim the curve completed when ExactIn failed and nothing was left unused", () => {
+    const plan = planBuy({
+      requestedIn: 1_000n,
+      remainingToThreshold: 50n,
+      quoteExactIn: () => {
+        throw new Error("Insufficient Liquidity");
+      },
+      quotePartialFill: () => q(40, 0, { includedFeeInputAmount: new BN(1_000), amountLeft: new BN(0) }),
+    });
+    expect(plan.mode).toBe("partial_fill");
+    expect(plan.completesCurve).toBe(false);
   });
 
   it("unrelated quote errors propagate", () => {

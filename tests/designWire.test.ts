@@ -91,7 +91,7 @@ describe("wizard design wiring", () => {
     const plain = buildLaunchReview(reviewBase);
     expect(custom.errors).toEqual([]);
     expect(custom.migrationQuoteThresholdAtoms).not.toBe(plain.migrationQuoteThresholdAtoms);
-    expect(custom.configFingerprint).toMatch(/^[0-9a-f]{16}$/);
+    expect(custom.configFingerprint).toMatch(/^[0-9a-f]{32}$/);
     expect(custom.configFingerprint).not.toBe(plain.configFingerprint);
   });
 

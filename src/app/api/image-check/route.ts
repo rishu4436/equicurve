@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { serverCheckImage } from "@/lib/server/imageCheck";
-import { checkRateLimit, clientKey } from "@/lib/server/http";
+import { clientKey } from "@/lib/server/http";
+import { limitRequest } from "@/lib/server/rateLimit";
 
 export const runtime = "nodejs";
 
@@ -10,7 +11,7 @@ export const runtime = "nodejs";
  * again on the signed metadata write, so this is advisory only.
  */
 export async function GET(req: Request) {
-  const rl = checkRateLimit(clientKey(req, "image-check"), 30, 10 * 60 * 1000);
+  const rl = await limitRequest(clientKey(req, "image-check"), 30, 10 * 60 * 1000);
   if (!rl.ok) {
     return NextResponse.json(
       { ok: false, code: "rate_limited", error: "Too many image checks — slow down." },
