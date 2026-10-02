@@ -80,45 +80,67 @@ describe("robustness of one design", () => {
     });
     expect(snapshot(policy.chosen)).toEqual(before);
     expect(report.fingerprint).toBe(policy.chosen.configFingerprint);
-    expect(report.caseCount).toBe(4);
-    expect(report.cases.map((item) => item.id)).toEqual([
-      "base",
-      "whale-plus",
-      "typical-plus",
-      "participants-minus",
-    ]);
-    expect(report.insideCount).toBe(report.cases.filter((item) => item.insideBudget).length);
+    expect(report.shockCount).toBe(10);
+    expect(report.axes.map((axis) => axis.id)).toEqual(["whale", "typical", "participants", "sell", "late"]);
+    expect(report.shockInsideCount).toBe(
+      report.axes.flatMap((axis) => axis.cells).filter((cell) => cell.level !== "base" && cell.insideBudget).length,
+    );
     expect(report.note).toMatch(/do not select another design/i);
+    expect(report.note).toMatch(/no robustness score/i);
 
-    const base = report.cases[0];
-    const whale = report.cases[1];
-    const typical = report.cases[2];
-    const participants = report.cases[3];
-    const value = (id: "reference" | "whale" | "retail", item: typeof base) =>
+    const axis = (id: "whale" | "typical" | "participants" | "sell" | "late") =>
+      report.axes.find((item) => item.id === id)!;
+    const cell = (id: "whale" | "typical" | "participants" | "sell" | "late", level: "minus" | "base" | "plus") =>
+      axis(id).cells.find((item) => item.level === level)!;
+    const value = (id: "reference" | "whale" | "retail", item: ReturnType<typeof cell>) =>
       item.metrics.find((metric) => metric.id === id)?.value ?? 0;
+    const budgetShape = (item: ReturnType<typeof cell>) =>
+      item.metrics.map((metric) => ({ id: metric.id, value: metric.value, passed: metric.passed }));
     const ids = ["threshold", "reference", "whale", "concentration", "retail"];
 
-    expect(value("whale", whale)).toBeGreaterThanOrEqual(before.whale ?? 0);
-    expect(value("reference", typical)).toBeGreaterThanOrEqual(before.impact);
-    expect(base.metrics.map((metric) => metric.id)).toEqual(ids);
-    expect(whale.metrics.map((metric) => metric.id)).toEqual(ids);
-    expect(typical.metrics.map((metric) => metric.id)).toEqual(ids);
-    expect(participants.metrics.map((metric) => metric.id)).toEqual(ids);
-    for (const item of report.cases) {
+    expect(value("whale", cell("whale", "plus"))).toBeGreaterThanOrEqual(before.whale ?? 0);
+    expect(value("reference", cell("typical", "plus"))).toBeGreaterThanOrEqual(before.impact);
+    expect(value("retail", cell("participants", "minus"))).toBeLessThanOrEqual(before.retail ?? 0);
+    expect(cell("participants", "minus").note).toMatch(/from 8 to 6/);
+    expect(cell("participants", "plus").note).toMatch(/from 8 to 10/);
+    expect(cell("whale", "plus").metrics.find((metric) => metric.focus)?.id).toBe("whale");
+    expect(budgetShape(cell("sell", "plus"))).toEqual(budgetShape(cell("sell", "base")));
+    expect(budgetShape(cell("late", "plus"))).toEqual(budgetShape(cell("late", "base")));
+    expect(budgetShape(cell("sell", "base"))).toEqual(budgetShape(cell("whale", "base")));
+    expect(cell("sell", "plus").observation?.detail).toMatch(/4375 bps/);
+    expect(cell("sell", "minus").observation?.detail).toMatch(/2625 bps/);
+    expect(cell("sell", "plus").observation?.detail).toMatch(/not one of the five budget limits/);
+    expect(cell("late", "plus").observation?.detail).toMatch(/not one of the five budget limits/);
+
+    for (const item of report.axes.flatMap((row) => row.cells)) {
+      expect(item.metrics.map((metric) => metric.id)).toEqual(ids);
       expect(item.insideBudget).toBe(item.blocking.length === 0);
       expect(item.blocking).toEqual(item.metrics.filter((metric) => !metric.passed).map((metric) => metric.label));
     }
-    expect(whale.metrics.find((metric) => metric.focus)?.id).toBe("whale");
-    expect(value("retail", participants)).toBeLessThanOrEqual(before.retail ?? 0);
-    expect(participants.note).toMatch(/from 8 to 6/);
+    const labels = report.axes.map((row) => row.label);
+    expect(report.mostSensitive.every((name) => labels.includes(name))).toBe(true);
+    expect(report.leastSensitive.every((name) => labels.includes(name))).toBe(true);
+    const highest = Math.max(...report.axes.map((row) => row.departures));
+    if (highest === 0 || report.tied) {
+      expect(report.mostSensitive).toEqual([]);
+      expect(report.leastSensitive).toEqual([]);
+    } else {
+      expect(report.mostSensitive).toEqual(
+        report.axes.filter((row) => row.departures === highest).map((row) => row.label),
+      );
+    }
 
     const again = assessRobustness({
       chosen: policy.chosen,
       brief: policy.brief,
       budget: policy.negotiation.applied,
     });
-    expect(again.cases.map((item) => item.metrics)).toEqual(report.cases.map((item) => item.metrics));
-    expect(again.cases.map((item) => item.insideBudget)).toEqual(report.cases.map((item) => item.insideBudget));
+    expect(again.axes.map((row) => row.cells.map((item) => item.metrics))).toEqual(
+      report.axes.map((row) => row.cells.map((item) => item.metrics)),
+    );
+    expect(again.axes.map((row) => row.cells.map((item) => item.insideBudget))).toEqual(
+      report.axes.map((row) => row.cells.map((item) => item.insideBudget)),
+    );
     expect(snapshot(policy.chosen)).toEqual(before);
   }, 60_000);
 });

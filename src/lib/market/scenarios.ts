@@ -117,11 +117,17 @@ export function namedScenarios(args: {
   asset?: AssetKind;
   /** When set, the five whale buys use this size instead of typical × the asset multiple. */
   whaleSizeAtoms?: bigint;
+  /** When set, the sell-pressure path sells this fraction instead of the asset default. */
+  sellFractionBps?: number;
+  /** When set, each of the four late buys uses this size instead of 4× the typical order. */
+  lateBuyAtoms?: bigint;
 }): ScenarioReport[] {
   const { book, typicalAtoms, participants, feeDurationSec } = args;
   const assumptions = scenarioAssumptions(args.asset ?? "private-company");
   const sample = Math.min(SAMPLE_CAP, Math.max(1, participants));
   const whaleSize = args.whaleSizeAtoms ?? typicalAtoms * BigInt(assumptions.whaleMultiple);
+  const sellBps = args.sellFractionBps ?? assumptions.sellFractionBps;
+  const lateSize = args.lateBuyAtoms ?? typicalAtoms * 4n;
   const duration = Math.max(0, feeDurationSec);
   const lateAt = Math.floor(duration * assumptions.lateStart);
 
@@ -156,11 +162,13 @@ export function namedScenarios(args: {
     book,
     "late",
     "Late capital",
-    "Some size arrives at launch. The rest arrives later in the fee window. When that starts depends on the asset profile.",
+    args.lateBuyAtoms == null
+      ? "Some size arrives at launch. The rest arrives later in the fee window. When that starts depends on the asset profile."
+      : "Some size arrives at launch. The rest arrives later, at a size set for this check. When that starts depends on the asset profile.",
     null,
     [
       ...spreadBuys(earlyCount, typicalAtoms, 0, 0),
-      ...spreadBuys(lateCount, typicalAtoms * 4n, 0, lateAt),
+      ...spreadBuys(lateCount, lateSize, 0, lateAt),
     ],
   );
 
@@ -168,11 +176,11 @@ export function namedScenarios(args: {
     book,
     "sell-pressure",
     "Sell pressure",
-    `Buyers take a position, then sell ${assumptions.sellFractionBps / 100}% of the base they received.`,
+    `Buyers take a position, then sell ${sellBps / 100}% of the base they received.`,
     null,
     [
       ...spreadBuys(sample, typicalAtoms, Math.floor(duration / 2), 0),
-      { side: "sellFraction", fractionBps: assumptions.sellFractionBps, atSec: duration },
+      { side: "sellFraction", fractionBps: sellBps, atSec: duration },
     ],
   );
 

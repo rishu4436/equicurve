@@ -18,7 +18,13 @@ export {
 } from "./policy";
 export { namedScenarios, referenceBuy, replay } from "./scenarios";
 export { assessRobustness, readConstraintMetrics, scaledParticipants } from "./robustness";
-export type { RobustnessCase, RobustnessMetric, RobustnessReport } from "./robustness";
+export type {
+  RobustnessAxis,
+  RobustnessCell,
+  RobustnessMetric,
+  RobustnessObservation,
+  RobustnessReport,
+} from "./robustness";
 export { constraintBudgetChanges, constraintFailureCopy, constraintFailureFromDesigned } from "./constraintNotice";
 export {
   CONSTRAINT_FIELDS,
