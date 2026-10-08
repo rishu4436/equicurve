@@ -1,6 +1,6 @@
 # EquiCurve — Market Studio redesign
 
-Implemented October 8, 2026. Scope: the presentation and interaction layer of the existing Next.js app.
+Implemented October 8, 2026 in `45f79aab9ad1c6efbd5e7ceb1dd3695da010570a`. This document records that UI commit and its original verification, before the separately documented submission-hardening pass. Scope: the presentation and interaction layer of the existing Next.js app.
 
 ## Design
 

@@ -1,5 +1,7 @@
 import { Keypair } from "@solana/web3.js";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { knownUsdcMints, WSOL_MINT, USDC_MINT_MAINNET, USDC_MINT_DEVNET } from "@/lib/constants";
+import { registryUsdcMints, supportedQuoteLabel } from "@/lib/registry/quote";
 import {
   authorizeRegistration,
   refreshFromChain,
@@ -23,6 +25,21 @@ function deps(kp: Keypair, over: Partial<Parameters<typeof authorizeRegistration
 }
 
 describe("authorizeRegistration", () => {
+  it.each([
+    [false, WSOL_MINT.toBase58(), 503, "config_unavailable"],
+    [true, null, 503, "config_unavailable"],
+    [true, Keypair.generate().publicKey.toBase58(), 400, "unsupported_quote"],
+  ] as const)("fails closed for configRead=%s quote=%s", async (configRead, quoteMint, status, code) => {
+    const kp = Keypair.generate();
+    const body = await signed(kp);
+    const lookup = async (): Promise<ChainLookupResult> => ({ status: "verified", snapshot: snapshot({ creator: kp.publicKey.toBase58(), configRead, quoteMint }) });
+    expect(await authorizeRegistration({ body, ...deps(kp, { lookup }) })).toMatchObject({ ok: false, status, code });
+    // Even an otherwise idempotent registration must re-verify the quote/config.
+    const prior = await authorizeRegistration({ body, ...deps(kp) });
+    if (!prior.ok) throw new Error("setup");
+    expect(await authorizeRegistration({ body, ...deps(kp, { lookup, getExisting: async () => prior.entry }) })).toMatchObject({ ok: false, status, code });
+  });
+
   it("accepts a creator-signed payload and derives every chain field from chain", async () => {
     const kp = Keypair.generate();
     const body = await signed(kp);
@@ -136,6 +153,24 @@ describe("authorizeRegistration", () => {
 
 describe("refreshFromChain", () => {
   const existing = { pool: POOL, status: "raising" } as unknown as RegistryLaunch;
+  it.each([
+    [false, WSOL_MINT.toBase58(), 503],
+    [true, null, 503],
+    [true, Keypair.generate().publicKey.toBase58(), 400],
+  ] as const)("does not refresh unverifiable or unsupported quote %s / %s", async (configRead, quoteMint, status) => {
+    const kp = Keypair.generate();
+    const prior = await authorizeRegistration({ body: await signed(kp), ...deps(kp) });
+    if (!prior.ok) throw new Error("setup");
+    const before = structuredClone(prior.entry);
+    const verifyDamm = vi.fn(async () => null);
+    const result = await refreshFromChain({
+      body: { pool: POOL }, ...deps(kp), getExisting: async () => prior.entry, verifyDamm,
+      lookup: async () => ({ status: "verified", snapshot: snapshot({ configRead, quoteMint, isMigrated: true }) }),
+    });
+    expect(result).toMatchObject({ ok: false, status });
+    expect(prior.entry).toEqual(before);
+    expect(verifyDamm).not.toHaveBeenCalled();
+  });
 
   it("accepts only { pool }", async () => {
     const r = await refreshFromChain({
@@ -183,6 +218,17 @@ describe("refreshFromChain", () => {
 import { coerceStoredLaunch, toPublicLaunch } from "@/lib/registry/normalize";
 
 describe("registry verified flag", () => {
+  it("does not verify stored unknown/missing quotes or mismatched denominations", async () => {
+    const kp = Keypair.generate();
+    const r = await authorizeRegistration({ body: await signed(kp), ...deps(kp) });
+    if (!r.ok) throw new Error("setup");
+    const unknown = { ...r.entry, quoteMint: Keypair.generate().publicKey.toBase58() };
+    expect(coerceStoredLaunch(unknown)).toBeNull();
+    expect(toPublicLaunch(unknown).verified).toBe(false);
+    expect(toPublicLaunch({ ...r.entry, quote: "USDC" }).verified).toBe(false);
+    const missing = coerceStoredLaunch({ ...r.entry, quoteMint: null });
+    expect(missing && toPublicLaunch(missing).verified).toBe(false);
+  });
   it("chain-verified, creator-signed entries are verified: true", async () => {
     const kp = Keypair.generate();
     const r = await authorizeRegistration({ body: await signed(kp), ...deps(kp) });
@@ -198,6 +244,7 @@ describe("registry verified flag", () => {
       config: Keypair.generate().publicKey.toBase58(),
       creator: Keypair.generate().publicKey.toBase58(),
       name: "Legacy",
+      quote: "SOL",
       ticker: "LEG",
       status: "graduated",
     });
@@ -212,5 +259,34 @@ describe("registry verified flag", () => {
     const r = await authorizeRegistration({ body: await signed(kp), ...deps(kp) });
     if (!r.ok) throw new Error("setup");
     expect(toPublicLaunch({ ...r.entry, creator: Keypair.generate().publicKey.toBase58() }).verified).toBe(false);
+  });
+});
+
+describe("supported registry quotes", () => {
+  afterEach(() => vi.unstubAllEnvs());
+  it("keeps lightweight registry mint recognition identical to knownUsdcMints", () => {
+    for (const cluster of ["devnet", "testnet", "mainnet", "mainnet-beta", "MAINNET", "other"]) {
+      for (const override of ["", "invalid", ` ${Keypair.generate().publicKey.toBase58()} `]) {
+        vi.stubEnv("NEXT_PUBLIC_CLUSTER", cluster);
+        vi.stubEnv("NEXT_PUBLIC_USDC_MINT_OVERRIDE", override);
+        expect(registryUsdcMints()).toEqual(knownUsdcMints());
+      }
+    }
+  });
+  it("accepts WSOL, both Circle mints and the configured non-mainnet override", async () => {
+    vi.stubEnv("NEXT_PUBLIC_CLUSTER", "devnet");
+    const override = Keypair.generate().publicKey.toBase58();
+    vi.stubEnv("NEXT_PUBLIC_USDC_MINT_OVERRIDE", override);
+    const usdcMints = knownUsdcMints();
+    for (const [quoteMint, quote] of [[WSOL_MINT.toBase58(), "SOL"], [USDC_MINT_MAINNET.toBase58(), "USDC"], [USDC_MINT_DEVNET.toBase58(), "USDC"], [override, "USDC"]] as const) {
+      expect(supportedQuoteLabel(quoteMint, usdcMints)).toBe(quote);
+      const kp = Keypair.generate();
+      const r = await authorizeRegistration({ body: await signed(kp), ...deps(kp, { usdcMints, lookup: async () => ({ status: "verified", snapshot: snapshot({ creator: kp.publicKey.toBase58(), quoteMint }) }) }) });
+      expect(r.ok && r.entry.quote).toBe(quote);
+    }
+    expect(supportedQuoteLabel(null, usdcMints)).toBeNull();
+    expect(supportedQuoteLabel(Keypair.generate().publicKey.toBase58(), usdcMints)).toBeNull();
+    vi.stubEnv("NEXT_PUBLIC_CLUSTER", "mainnet-beta");
+    expect(supportedQuoteLabel(override, knownUsdcMints())).toBeNull();
   });
 });

@@ -5,14 +5,14 @@ Two ways to check EquiCurve end to end:
 - **A. In the browser on public devnet**: what a judge or issuer sees, with a real wallet.
 - **B. Scripted, on a local validator with the Meteora programs cloned from devnet**: the path the committed evidence ([e2e-devnet-evidence.md](e2e-devnet-evidence.md)) comes from.
 
-> Honesty note: path B is what was actually run for the committed evidence (the public devnet faucet was rate-limited for this machine). Path A uses the same code and program IDs, but has not been recorded end to end on public devnet in this repo.
+> Evidence boundary: the full scripted lifecycle below was run on a local validator, not public devnet. The separate [canonical Journey evidence](canonical-evidence.md) records an existing public-devnet launch and readback; it does not claim the entire browser lifecycle below was performed publicly. The October 8 Market Studio hardening checks are browse/simulation-only, without wallet signing.
 
 Nothing here touches mainnet. Keys used by the scripted suite live outside the repo (`E2E_KEYS_DIR`) and are never committed.
 
 ## Prerequisites
 
 - Node 20+, `npm install`
-- For A: a browser wallet (Phantom, Solflare or Backpack) set to **devnet**, with devnet SOL. Graduating a SOL **Short raise** needs about 3.1 SOL through the curve (threshold 3.090169943 SOL) plus fees, possibly spread over two wallets.
+- For A's transaction steps: a browser wallet (Phantom or Solflare; wallet-standard wallets may also be discovered) set to **devnet**, with devnet SOL. A SOL **Short raise** preset has a reference threshold of 3.090169943 SOL plus fees; a market design produced by search has its own displayed exact threshold.
 - For B: the Solana CLI (`solana-test-validator`; the evidence run used Agave 4.2.2)
 
 ## A. Browser, public devnet
@@ -25,12 +25,12 @@ npm run dev                       # http://localhost:3000
 1. **Read the positioning.** Home, `/trust` and `/docs` show the three layers: token launch (on-chain), equity representation (the issuer's legal framework; no shareholder rights are created), RWA verification (off-chain). `/trust` lists the trust assumptions and program IDs.
 2. **Pick a preset.** `/presets` shows each preset's threshold in **SOL and USDC**, price multiple, fee schedule, and who each preset suits.
 3. **Create** (`/create`, connect your wallet):
-   - Basics: name, symbol, description, an https image URL. The field checks type and size and shows a preview.
-   - Offering: self-attested checklist (stored locally, not reviewed).
-   - Curve: choose **SOL** quote and **Short raise**. The wizard shows the migration threshold, **3.090169943 SOL**.
-   - Fees & locks: creator fee % (the actual creator / partner / protocol split is shown), LP lock ≥ 10%.
-   - **Review**: every on-chain setting grouped as Token / Curve / Fees / Liquidity / Authorities / Seed buy / Network. It covers the quote mint, token program, supply, decimals, curve points, threshold atoms, fee split, lock %, mint authority, feeClaimer, the exact seed buy in atoms, and the 0.001 SOL pool creation fee. Edit links go back to each step.
-   - **Launch**: sign. The receipt lists config, pool, mint and each transaction signature with explorer links. States go from `estimate`/`pending` to `confirmed` once they are read back from chain.
+   - **Asset**: name, symbol, description, and an https image URL. The field checks type and size and shows a preview; advanced metadata controls remain available.
+   - **Market goals**: asset kind, objective, quote, raise target, typical trade, participants, supply, seed buy, transfer profile, and the self-attested disclosure checklist (stored locally, not reviewed). The asset/objective set the initial constraints; the explicit budget editor is in Market design. To reproduce Journey's conflict use the recorded brief in [canonical evidence](canonical-evidence.md); synthetic analysis is not prediction.
+   - **Terms**: creator fee % (actual creator / partner / protocol split), fee claimer, LP lock ≥ 10%, anti-sniper and mint-authority settings.
+   - **Market design**: simulate the finite candidate set. Review conflicts, compare candidates and explicitly negotiate a limit with **Use 3.8% & recalculate** where the Journey retail proposal is shown. Constraints never change silently. Inspect robustness of the selected fingerprint. A preset's reference threshold is not a substitute for the selected design's exact threshold.
+   - **Policy review**: every on-chain setting grouped as Token / Curve / Fees / Liquidity / Authorities / Seed buy / Network. It covers quote mint, token program, supply, decimals, curve points, threshold atoms, fee split, lock %, mint authority, feeClaimer, exact seed buy atoms, and the 0.001 SOL pool creation fee. Edit links return to the corresponding step. New designs use 32-character fingerprints; Journey retains historical `16ac1e49b68f4a4c`.
+   - **Deploy**: connect and sign only when intentionally performing a funded devnet launch. The receipt lists config, pool, mint and transaction signatures with explorer links. States move from `estimate`/`pending` to `confirmed` only after chain readback. Browse-only hardening stops before this action.
 4. **Trade on the curve** (`/o/<pool>`): enter an amount → **Review**. The summary shows exact input, estimated output, minimum output, fee and slippage. Wait more than 15 s and press Confirm: the app re-quotes and asks you to confirm again.
 5. **Buy past the threshold**: enter more than the "remaining" shown on the Graduation card. The review shows a **partial fill** notice (only the fillable part is taken and the rest stays in your wallet), and the buy completes the curve. Before PASS 3 this failed with DBC error 6033.
 6. **Graduate**: the Graduation card shows threshold, raised, exact remaining, and the expected DAMM v2 pool. Press Migrate (any wallet can). The DAMM v2 pool is shown as **verified** only after its account is fetched.

@@ -8,6 +8,7 @@ import { unwrapPoolState } from "@/lib/dbc/poolAccount";
 import type { PresetId } from "@/lib/dbc/types";
 import { entryFromChain, type ChainLookupResult } from "@/lib/registry/authorize";
 import { USDC_MINTS } from "@/lib/registry/chain";
+import { supportedQuoteLabel } from "@/lib/registry/quote";
 import { resolveDeploymentRecord } from "@/lib/registry/design";
 import { getRecordedDeployment } from "@/lib/registry/publicDeployments";
 import { getRegistryMeta, listRegistryLaunches, putRegistryLaunch } from "@/lib/registry/store";
@@ -114,6 +115,9 @@ async function discoverBySharedConfig(
   try {
     const connection = getServerConnection();
     const client = getDbcClient(connection);
+    const config = await withRpcRetry(() => client.state.getPoolConfig(configKey), { timeoutMs: 15_000 });
+    const quote = supportedQuoteLabel(config?.quoteMint?.toBase58() ?? null, USDC_MINTS);
+    if (!quote) return { offerings: [], count: 0, warning: "Shared config quote is unavailable or unsupported; only SOL and known USDC markets are indexed." };
     const pools = await withRpcRetry(() => client.state.getPoolsByConfig(configKey), { timeoutMs: 15_000 });
     const offerings: ExploreOffering[] = [];
     for (const p of pools.slice(0, MAX_CONFIG_GPA)) {
@@ -133,7 +137,7 @@ async function discoverBySharedConfig(
               ticker: mint.slice(0, 4).toUpperCase(),
               thesis: "Discovered via shared PoolConfig (getPoolsByConfig) — no creator profile.",
               sector: "Other",
-              quote: "SOL",
+              quote,
               raiseTarget: 0,
               quoteProgress: null,
               presetId: "flat",
@@ -192,7 +196,7 @@ async function markLiveDeployments(
     });
     const lookup = lookups.get(offering.pool);
     const quoteMint = record ? quoteMintFor(record.quote) : null;
-    if (!record || !quoteMint || lookup?.status !== "verified") continue;
+    if (!record || !quoteMint || lookup?.status !== "verified" || !offering.verified) continue;
     try {
       const onChain = await getDbcClient(connection).state.getPoolConfig(new PublicKey(record.config));
       if (!onChain) continue;
@@ -233,7 +237,7 @@ async function persistStatusChanges(registry: RegistryLaunch[], offerings: Explo
       nowIso: new Date().toISOString(),
       usdcMints: USDC_MINTS,
     });
-    await putRegistryLaunch(entry).catch(() => undefined);
+    if (entry) await putRegistryLaunch(entry).catch(() => undefined);
   }
 }
 

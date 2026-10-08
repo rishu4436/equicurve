@@ -17,7 +17,7 @@ EquiCurve searches candidate DBC configurations, simulates them, shows constrain
 **Verify it:**
 
 - [Canonical Journey evidence](docs/canonical-evidence.md) — one public-devnet deployment, from the issuer brief through on-chain readback
-- [Six click-through screens](docs/judge-screens/README.md) — hero, brief, conflict, negotiation, robustness envelope, verified deployment
+- [Judge screens and capture provenance](docs/judge-screens/README.md) — dated Market Studio captures and clearly labelled pre-redesign historical screens; canonical evidence remains authoritative
 
 ### Evidence boundaries
 
@@ -62,7 +62,7 @@ The same explainer is on Home, `/trust` and `/docs` (`src/lib/positioning.ts` is
 | **Trade on curve** (`/o/[id]`, `/trade/[pool]`) | Real DBC quote + swap. Pre-sign summary: exact input, estimated and minimum output, fee, slippage; re-quoted if older than 15s or the pool changed. Buys larger than the remaining curve become a partial fill. | — |
 | **Graduation** | Threshold, raised, remaining (exact, quote units) read from chain; `migrateToDammV2`; DAMM v2 pool shown as *verified* only after its account is fetched. | Before verification the DAMM pool address is labelled *expected (derived)*. |
 | **DAMM v2 ticket** | Real cp-amm quote + swap + position-fee claim, same pre-sign summary. | Add/remove liquidity not built. |
-| **Explore** | Registry rows carry `verified: true` only after a creator signature **and** an on-chain read succeeded. | Browser-local launches and the **Show examples / `?demo=1`** cards (badged *Illustrative · not live*, trade disabled). |
+| **Explore** | Registry rows carry `verified: true` only after a creator signature and a readable on-chain configuration with an explicit WSOL or known USDC quote. | Browser-local launches and the **Show examples / `?demo=1`** cards (badged *Illustrative · not live*, trade disabled). |
 | **Price chart** | Swap-derived points from confirmed txs; live spot from pool `sqrtPrice`. | The theoretical curve line (x-axis = raise progress, not time). |
 | **Portfolio** | Wallet token balances read from chain (SPL + Token-2022), exact atoms. | Launches and activity recorded in this browser (labelled local). |
 | **Issuer attestation / docs checklist** | — | Self-reported, stored in the browser, not reviewed, **not KYC**. |
@@ -88,7 +88,7 @@ The same explainer is on Home, `/trust` and `/docs` (`src/lib/positioning.ts` is
 
 | Route | Status |
 | --- | --- |
-| `/` Home | Positioning + 3-layer explainer + How it works + local launch strip |
+| `/` Home | Market Studio hero + illustrative curve preview + Journey evidence + workflow + local launch strip |
 | `/explore` | Tabs + shared registry + local launches; examples behind toggle / `?demo=1` |
 | `/create` | 6-step wizard; quote-aware presets + threshold; full on-chain review before signing; launch receipt |
 | `/presets` | Short raise · Flat · Exponential · Long (+ Equity-tuned); SOL + USDC thresholds, price multiple, tradeoffs, issuer FAQ |
@@ -164,16 +164,16 @@ Health check: `GET /api/health` → `{ ok, cluster, rpcHost, slot, registry: { b
 | `NEXT_PUBLIC_POOL_CONFIG_KEY` | No | Reuse partner PoolConfig; else each launch creates config+pool |
 | `NEXT_PUBLIC_DAMM_V2_CONFIG` | No | Optional sanity override only. Migration always uses `DAMM_V2_MIGRATION_FEE_ADDRESS[config.migrationFeeOption]`; if this is set and differs, migration is refused with a clear message. |
 | `NEXT_PUBLIC_TRANSFER_HOOK_PROGRAM` | No | Executable Token-2022 transfer-hook program (no fake default) |
-| `UPSTASH_REDIS_REST_URL` | No | With token → durable Upstash Redis registry (recommended on Vercel) |
+| `UPSTASH_REDIS_REST_URL` | No | With token → durable registry, hosted metadata, and shared rate limiting (recommended on Vercel) |
 | `UPSTASH_REDIS_REST_TOKEN` | No | REST token from Upstash console — never commit |
 
 **Never commit private keys or Upstash tokens.** Devnet by default.
 
-### Durable registry (Upstash) on Vercel
+### Durable registry, metadata, and shared rate limits (Upstash) on Vercel
 
 Local `next dev` uses `data/launches/registry.json` (file backend) when Upstash env is unset.
 
-On serverless the filesystem is ephemeral. To keep Explore launches across deploys:
+On serverless the filesystem is ephemeral. The same Upstash credentials persist the launch registry and hosted metadata, and provide shared rate limiting where applicable. Metadata uses one key per mint: `equicurve:metadata:<mint>`. Without credentials, metadata uses local JSON files. `KV_REST_API_URL` / `KV_REST_API_TOKEN` are supported aliases. To preserve data across deploys:
 
 1. Create a **free** Redis database at [console.upstash.com](https://console.upstash.com/).
 2. Open the DB → **REST API** → copy `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`.
@@ -184,8 +184,8 @@ If Upstash is empty and a local registry file exists on that instance, the serve
 
 ## Brand
 
-- Background `#0B0F14` · elevated `#121821` · accent teal `#2DD4BF` · gold `#E8C547`
-- Inter + JetBrains Mono — **not** neon casino / pump FOMO chrome
+- Market Studio: base `#0D1215` · elevated `#151C20` · mint accent `#6DE0C5` · gold `#E8C547`
+- Inter + JetBrains Mono; readable data, restrained motion, and explicit evidence labels
 
 ## Program IDs
 
@@ -201,7 +201,8 @@ If Upstash is empty and a local registry file exists on that instance, the serve
 - **Metadata (`PUT /api/metadata/<mint>`)** uses the same signed payload. Before launch (mint not on-chain) the signer becomes the owner; afterwards only the owner / on-chain creator can edit.
 - On a public cluster, Create refuses to send the launch unless the creator signs the registry message. A wallet without `signMessage`, or a declined prompt, stops the launch before the create transaction is sent.
 - On a local validator, the same missing signature still launches. The offering stays local-only and metadata is inlined as a `data:` URI.
-- Rate limits are in-memory per server instance (best-effort, not a WAF).
+- Registration and refresh fail closed with 503 when configuration/quote evidence is unavailable, and reject unsupported quote mints with 400. Unknown mints never default to SOL. Failed refreshes preserve the prior stored entry.
+- Rate limits use shared Redis when Upstash is configured; absent credentials or Redis failures fall back to per-process memory (best-effort, not a WAF).
 
 ## Verification states (Explore / offering page)
 

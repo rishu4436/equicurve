@@ -6,6 +6,7 @@
 import { chainStatusFromCurve } from "@/lib/dbc/curveState";
 import type { ChainLookupResult } from "@/lib/registry/authorize";
 import type { ExploreCounts, ExploreOffering } from "./types";
+import { quoteVerificationError, supportedQuoteLabel } from "@/lib/registry/quote";
 
 export function applyChainLookup(
   o: ExploreOffering,
@@ -16,12 +17,22 @@ export function applyChainLookup(
 ): ExploreOffering {
   if (lookup.status === "verified") {
     const s = lookup.snapshot;
+    const error = quoteVerificationError(s, usdcMints);
+    const quote = supportedQuoteLabel(s.quoteMint, usdcMints);
+    if (error || !quote) {
+      return {
+        ...markNotChecked(o, cluster),
+        status: "unknown",
+        deploymentVerified: false,
+        verification: { state: error?.status === 503 ? "rpc_unavailable" : "not_checked", checkedAt, cluster, error: error?.error },
+      };
+    }
     return {
       ...o,
       mint: s.baseMint,
       config: s.config,
       creator: s.creator,
-      quote: s.quoteMint && usdcMints.includes(s.quoteMint) ? "USDC" : "SOL",
+      quote,
       lockPct: s.lockPct ?? o.lockPct,
       quoteProgress: s.curve.progress,
       status: chainStatusFromCurve(s.curve, s.quoteReserve),

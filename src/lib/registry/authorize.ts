@@ -7,6 +7,7 @@
  *   - signature + freshness verified (ed25519)
  *   - cluster must match the server cluster
  *   - pool must exist on-chain (404 if not, 503 if RPC unavailable)
+ *   - config/quote must be readable (503); quote must be WSOL or known USDC (400 otherwise)
  *   - on-chain baseMint must equal payload.mint; on-chain creator must equal signer
  *   - replay / stale: issuedAt must be newer than the stored authorization
  *   - an omitted design keeps the stored design; a different design needs a newer signature
@@ -26,6 +27,7 @@ import {
 import { addressSchema, firstIssue, type LaunchProfile } from "@/lib/validation";
 import type { RegistryDesign } from "./design";
 import type { RegistryLaunch } from "./types";
+import { quoteVerificationError, supportedQuoteLabel } from "./quote";
 
 export type ChainLookupResult =
   | { status: "verified"; snapshot: PoolSnapshot }
@@ -40,11 +42,7 @@ function fail(status: number, code: string, error: string): RegistryWriteResult 
   return { ok: false, status, code, error };
 }
 
-function quoteLabel(snapshot: PoolSnapshot, usdcMints: readonly string[]): "SOL" | "USDC" {
-  return snapshot.quoteMint && usdcMints.includes(snapshot.quoteMint) ? "USDC" : "SOL";
-}
-
-/** Build an entry from chain facts + (optional) creator profile. */
+/** Build from supported, readable chain facts; null never reaches registry persistence. */
 export function entryFromChain(args: {
   snapshot: PoolSnapshot;
   profile: LaunchProfile | null;
@@ -56,8 +54,10 @@ export function entryFromChain(args: {
   dammPool?: string | null;
   /** Undefined keeps the previous design. Null clears nothing by itself; pass the next value. */
   design?: RegistryDesign | null;
-}): RegistryLaunch {
+}): RegistryLaunch | null {
   const { snapshot: s, profile, prev, cluster, nowIso, usdcMints, auth } = args;
+  const quote = supportedQuoteLabel(s.quoteMint, usdcMints);
+  if (s.configRead !== true || !quote) return null;
   const status = chainStatusFromCurve(s.curve, s.quoteReserve);
   const base = profile ?? {
     name: prev?.name ?? `Pool ${s.pool.slice(0, 4)}…`,
@@ -74,7 +74,7 @@ export function entryFromChain(args: {
     config: s.config,
     creator: s.creator,
     quoteMint: s.quoteMint,
-    quote: quoteLabel(s, usdcMints),
+    quote,
     feeClaimer: s.feeClaimer,
     lockPct: s.lockPct,
     creatorFeePct: s.creatorFeePct,
@@ -148,6 +148,8 @@ export async function authorizeRegistration(args: {
     return fail(503, "rpc_unavailable", "RPC unavailable — could not verify pool on-chain. Retry shortly.");
   }
   const snap = chain.snapshot;
+  const quoteError = quoteVerificationError(snap, args.usdcMints);
+  if (quoteError) return quoteError;
   if (snap.baseMint !== payload.mint) {
     return fail(400, "mint_mismatch", "payload.mint does not match the pool's on-chain base mint");
   }
@@ -179,6 +181,7 @@ export async function authorizeRegistration(args: {
     existing.authSigner === v.signer &&
     sameProfile(existing, payload.profile) &&
     sameDesign(existing.design, nextDesign);
+  if (!entry) return fail(503, "config_unavailable", "Pool configuration could not be verified");
   return { ok: true, entry, unchanged };
 }
 
@@ -208,6 +211,8 @@ export async function refreshFromChain(args: {
     return fail(503, "rpc_unavailable", "RPC unavailable — could not refresh from chain");
   }
   let dammPool: string | null | undefined;
+  const quoteError = quoteVerificationError(chain.snapshot, args.usdcMints);
+  if (quoteError) return quoteError;
   if (chain.snapshot.isMigrated && args.verifyDamm) {
     dammPool = await args.verifyDamm(chain.snapshot);
   }
@@ -220,5 +225,6 @@ export async function refreshFromChain(args: {
     usdcMints: args.usdcMints,
     dammPool,
   });
+  if (!entry) return fail(503, "config_unavailable", "Pool configuration could not be verified");
   return { ok: true, entry, unchanged: false };
 }

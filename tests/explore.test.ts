@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   applyChainLookup,
   countVerification,
@@ -40,6 +40,16 @@ function offering(pool: string, over: Partial<ExploreOffering> = {}): ExploreOff
 }
 
 describe("verification mapping", () => {
+  it("does not verify unreadable, missing or unsupported quote configuration", () => {
+    for (const patch of [{ configRead: false }, { quoteMint: null }, { quoteMint: "11111111111111111111111111111111" }]) {
+      const o = applyChainLookup(offering("p", { quote: "USDC", verified: true, deploymentVerified: true }), { status: "verified", snapshot: snapshot(patch) }, "t", "devnet", []);
+      expect(o.verified).toBe(false);
+      expect(o.deploymentVerified).toBe(false);
+      expect(o.status).toBe("unknown");
+      expect(o.quoteProgress).toBeNull();
+      expect(o.quote).toBe("USDC"); // Preserve the explicitly unverified stored claim; never fabricate SOL.
+    }
+  });
   it("verified lookup overrides registry status with chain status", () => {
     const o = applyChainLookup(offering("p1"), { status: "verified", snapshot: snapshot() }, "t", "devnet", []);
     expect(o.status).toBe("raising");
@@ -77,7 +87,10 @@ describe("verification mapping", () => {
 });
 
 describe("enrichOfferings", () => {
+  afterEach(() => vi.useRealTimers());
   it("bounds concurrency, times out slow pools, caps checks", async () => {
+    // Keep the 5ms successes ahead of the 50ms timeout regardless of host load.
+    vi.useFakeTimers();
     let inFlight = 0;
     let peak = 0;
     const lookup = async (pool: string): Promise<ChainLookupResult> => {
@@ -93,13 +106,15 @@ describe("enrichOfferings", () => {
       }
     };
     const pools = ["slow", "throws", ...Array.from({ length: 10 }, (_, i) => `p${i}`)];
-    const r = await enrichOfferings(pools.map((p) => offering(p)), {
+    const pending = enrichOfferings(pools.map((p) => offering(p)), {
       lookup,
       cluster: "devnet",
       timeoutMs: 50,
       concurrency: 3,
       maxEnrich: 8,
     });
+    await vi.runAllTimersAsync();
+    const r = await pending;
     expect(peak).toBeLessThanOrEqual(3);
     const byPool = Object.fromEntries(r.offerings.map((o) => [o.pool, o]));
     expect(byPool.slow.verification.state).toBe("rpc_unavailable");

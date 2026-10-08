@@ -1,6 +1,7 @@
 import type { PublicRegistryLaunch, RegistryFilePayload, RegistryLaunch } from "./types";
 import { parseStoredDesign } from "./design";
 import { isValidPublicKey, PRESET_IDS, SECTORS } from "@/lib/validation";
+import { registryUsdcMints, supportedQuoteLabel } from "./quote";
 
 export const MAX_REGISTRY_ENTRIES = 500;
 
@@ -52,13 +53,20 @@ const str = (v: unknown, max = 200): string =>
  * Coerce a stored row (possibly legacy v1, written before authorization
  * existed) into the current shape. Legacy rows keep their descriptive fields
  * but are marked unverified: status "unknown", chainCheckedAt/authSigner null.
- * Rows with invalid addresses are dropped.
+ * Rows with invalid addresses or unsupported quote mints are dropped. Legacy
+ * rows without a quote mint retain only an explicit stored denomination and
+ * remain unverified; a missing label is never invented.
  */
 export function coerceStoredLaunch(raw: unknown): RegistryLaunch | null {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as Record<string, unknown>;
   if (!isValidPublicKey(r.pool) || !isValidPublicKey(r.mint)) return null;
-  const verified = typeof r.authSigner === "string" && typeof r.chainCheckedAt === "string";
+  const quoteMint = isValidPublicKey(r.quoteMint) ? r.quoteMint : null;
+  const chainQuote = supportedQuoteLabel(quoteMint, registryUsdcMints());
+  // Legacy labels remain unverified claims; unknown mints are never relabelled SOL.
+  const quote = chainQuote ?? (!quoteMint && (r.quote === "SOL" || r.quote === "USDC") ? r.quote : null);
+  if (!quote) return null;
+  const verified = !!chainQuote && typeof r.authSigner === "string" && typeof r.chainCheckedAt === "string";
   const now = new Date().toISOString();
   const status = r.status;
   return {
@@ -66,8 +74,8 @@ export function coerceStoredLaunch(raw: unknown): RegistryLaunch | null {
     mint: r.mint,
     config: isValidPublicKey(r.config) ? r.config : "",
     creator: isValidPublicKey(r.creator) ? r.creator : "",
-    quoteMint: isValidPublicKey(r.quoteMint) ? r.quoteMint : null,
-    quote: r.quote === "USDC" ? "USDC" : "SOL",
+    quoteMint,
+    quote,
     feeClaimer: isValidPublicKey(r.feeClaimer) ? r.feeClaimer : null,
     lockPct: typeof r.lockPct === "number" ? r.lockPct : null,
     creatorFeePct:
@@ -155,8 +163,9 @@ export function mergeEntry(payload: RegistryFilePayload, entry: RegistryLaunch):
 }
 
 /** True only after server-side chain verification succeeded for this row. */
-export function isRegistryVerified(r: Pick<RegistryLaunch, "authSigner" | "chainCheckedAt" | "creator">): boolean {
+export function isRegistryVerified(r: Pick<RegistryLaunch, "authSigner" | "chainCheckedAt" | "creator" | "quoteMint" | "quote">): boolean {
   return (
+    supportedQuoteLabel(r.quoteMint, registryUsdcMints()) === r.quote &&
     typeof r.authSigner === "string" &&
     typeof r.chainCheckedAt === "string" &&
     r.chainCheckedAt.length > 0 &&

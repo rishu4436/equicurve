@@ -10,7 +10,7 @@ function row(pool: string, mint: string, when: string, name: string): RegistryLa
     mint,
     config: pool,
     creator: mint,
-    quoteMint: null,
+    quoteMint: "So11111111111111111111111111111111111111112",
     quote: "SOL",
     feeClaimer: null,
     lockPct: null,
