@@ -1,6 +1,6 @@
 {
   "name": "equicurve",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "license": "ISC",
   "description": "EquiCurve — constrained market-design engine for Meteora DBC launches",

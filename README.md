@@ -2,6 +2,8 @@
 
 EquiCurve is a constrained market-design engine for Meteora DBC launches.
 
+**Current release:** `v0.2.0` · [Changelog](./CHANGELOG.md) · [Roadmap](./ROADMAP.md) · [Architecture](./docs/ARCHITECTURE.md)
+
 Instead of selecting a bonding curve first, an issuer specifies:
 
 - raise target
@@ -41,6 +43,10 @@ EquiCurve does not claim:
 Built for [Superteam Earn · Meteora DBC](https://superteam.fun/earn/listing/meteora-dbc) + Colosseum Crypto World's Fair sidetrack. **Deadline:** 2026-10-13 · Design: [DESIGN.md](./DESIGN.md)
 
 Further reading: [Architecture + lifecycle diagram](docs/ARCHITECTURE.md) · [Reproducible walkthrough](docs/WALKTHROUGH.md) · [On-chain e2e evidence](docs/e2e-devnet-evidence.md) (localnet with Meteora programs cloned from devnet, **not public devnet**; see [below](#e2e-evidence)).
+
+## Product direction
+
+The current Market Studio is EquiCurve's reference application. The next planned surfaces are a headless Design API, a typed SDK, a verification API, and an event/data plane. The UI stays a first-party client of the same engine, so integrations can preserve the design → fingerprint → deploy → verify invariant. These developer surfaces are planned, not shipped in v0.2.0. See the [directional roadmap](./ROADMAP.md) for sequencing and exit criteria.
 
 ## What EquiCurve is (and is not): three separate layers
 
