@@ -5,7 +5,7 @@ Dates express product intent, not a promise of delivery.
 Protocol changes, security findings, partner feedback, and evidence quality
 can change sequencing.
 
-**Current baseline: v0.2.0 Market Studio.** Everything described as a future milestone below is planned, not shipped. This document publishes direction; it does not introduce APIs, SDKs, streams, webhooks, indexers, or agent tools. See the [changelog](./CHANGELOG.md) for shipped capabilities.
+**Current release: v0.3.0 Developer Preview.** Shipped and planned scope is identified explicitly below. See the [changelog](./CHANGELOG.md) for released capabilities.
 
 ## North star
 
@@ -50,30 +50,30 @@ Official references:
 
 ## Q4 2026 — Headless developer preview
 
-**Target: v0.3.x. Theme: expose the engine without rewriting it.**
+**SHIPPED IN v0.3.0. Theme: expose the engine without rewriting it.**
 
 ### Developer API v1
 
-Proposed routes, not currently published contracts:
+Developer Preview routes and planned follow-ons:
 
-| Route | Intended responsibility |
-| --- | --- |
-| `POST /api/v1/design` | Return evaluated count, candidates, feasible set, constraint conflicts, Pareto frontier, preferred candidate, policy ID, config fingerprint, and `deploymentAllowed`. |
-| `POST /api/v1/robustness` | Evaluate the SAME exact selected design under the documented shocks; do not substitute a new configuration. |
-| `POST /api/v1/config` | Emit canonical serializable configuration for client-side transaction construction; the server holds no wallet keys. |
-| `GET /api/v1/deployments/:pool/verify` | Compare recorded design/configuration with chain readback and report unavailable evidence explicitly. |
-| `GET /api/v1/markets/:pool` | Return normalized lifecycle state with observation context. |
+| Status | Route | Responsibility |
+| --- | --- | --- |
+| **SHIPPED** | `POST /api/v1/design` | Return evaluated candidates, constraint conflicts, Pareto frontier, preferred candidate, policy/config identity, and explicit requested-versus-applied feasibility semantics. |
+| **SHIPPED** | `POST /api/v1/robustness` | Evaluate the same exact selected design under documented synthetic shocks without substituting a configuration. |
+| **SHIPPED** | `POST /api/v1/config` | Return fingerprint-bound canonical market configuration; wallet and transaction inputs remain outside the preview. |
+| **PLANNED** | `GET /api/v1/deployments/:pool/verify` | Compare recorded design/configuration with chain readback and report unavailable evidence explicitly. |
+| **PLANNED** | `GET /api/v1/markets/:pool` | Return normalized lifecycle state with observation context. |
 
-Contract discipline includes Zod / JSON Schema, OpenAPI, machine-readable error codes, request IDs, `schemaVersion`, `engineVersion`, and `fingerprintVersion`. Deterministic fixtures, a Journey golden response, and compatibility tests must distinguish historical evidence from newly generated designs.
+The shipped preview includes strict Zod validation, machine-readable error codes, version metadata, deterministic fixtures, and compatibility tests. OpenAPI generation and request IDs remain planned.
 
 ### TypeScript SDK and examples
 
-A proposed `EquiCurveClient` exposes `design()`, `robustness()`, `buildConfig()`, `verifyDeployment()`, and `getMarket()`. It remains a thin client: no duplicated market math or independent candidate-ranking implementation.
+The shipped source-only `EquiCurveClient` exposes `design()`, `getDesignReference()`, `robustness()`, `buildConfig()`, and `assertPipelineIntegrity()`. It remains a thin client with no duplicated market math or independent candidate-ranking implementation. `verifyDeployment()` and `getMarket()` remain planned.
 
-Two reference integrations establish the contract:
+Reference integration status:
 
-1. **Launchpad adapter:** brief → design → explicit negotiation → config → client-side wallet signing.
-2. **Terminal panel:** pool → provenance → lifecycle → deployment verification.
+1. **SHIPPED — launchpad adapter:** brief → design → explicit negotiation → robustness → canonical configuration.
+2. **PLANNED — terminal panel:** pool → provenance → lifecycle → deployment verification.
 
 ### Security and exit criteria
 
@@ -203,8 +203,8 @@ Explore other protocol adapters where the constrained-design abstraction fits, c
 | Version | Scope | Status |
 | --- | --- | --- |
 | v0.1.0 | Initial lifecycle MVP/evidence | Historical baseline |
-| v0.2.0 | Current Market Studio + constrained engine + verification | Current release |
-| v0.3.x | Developer API + TypeScript SDK | Planned |
+| v0.2.0 | Market Studio + constrained engine + verification | Previous release |
+| v0.3.0 | Developer API + source-only TypeScript client + launchpad example | Current Developer Preview |
 | v0.4.x | Intelligence API + webhooks + integration kit | Planned |
 | v0.5–0.6 | Partner platform + indexer + replay | Planned |
 | v0.7–0.9 | Advanced market design | Planned |

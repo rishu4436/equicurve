@@ -2,7 +2,7 @@
 
 EquiCurve is a constrained market-design engine for Meteora DBC launches.
 
-**Current release:** `v0.2.0` · [Changelog](./CHANGELOG.md) · [Roadmap](./ROADMAP.md) · [Architecture](./docs/ARCHITECTURE.md)
+**Current release:** `v0.3.0 Developer Preview` · [Changelog](./CHANGELOG.md) · [Roadmap](./ROADMAP.md) · [Architecture](./docs/ARCHITECTURE.md)
 
 Instead of selecting a bonding curve first, an issuer specifies:
 
@@ -46,7 +46,29 @@ Further reading: [Architecture + lifecycle diagram](docs/ARCHITECTURE.md) · [Re
 
 ## Product direction
 
-The current Market Studio is EquiCurve's reference application. The next planned surfaces are a headless Design API, a typed SDK, a verification API, and an event/data plane. The UI stays a first-party client of the same engine, so integrations can preserve the design → fingerprint → deploy → verify invariant. These developer surfaces are planned, not shipped in v0.2.0. See the [directional roadmap](./ROADMAP.md) for sequencing and exit criteria.
+Market Studio remains EquiCurve's reference application. v0.3.0 begins the Developer Preview with a headless market-design API, a thin source-included TypeScript client, and an external launchpad example. Verification API, market intelligence, events, authentication, and broader integration tooling remain planned. See the [directional roadmap](./ROADMAP.md) for shipped and future scope.
+
+## Developer Preview
+
+EquiCurve exposes its existing market-design engine through a stateless HTTP interface and thin TypeScript client:
+
+- `POST /api/v1/design`
+- `POST /api/v1/robustness`
+- `POST /api/v1/config`
+
+```text
+Issuer brief
+  → design
+  → explicit constraint acceptance
+  → robustness
+  → fingerprint-bound canonical configuration
+```
+
+The API uses the same engine as Market Studio and does not duplicate market math. It has no wallet custody and performs no signing or transaction submission. Canonical configuration is not a complete transaction DTO; the integrating application supplies token/profile inputs and wallet authorization.
+
+The preview supports server-to-server and same-origin integration. Arbitrary cross-origin browser API access is not yet enabled.
+
+Developer documentation: [API contract](./docs/DEVELOPER_API.md) · [TypeScript client](./packages/equicurve-client/README.md) · [external launchpad example](./examples/launchpad-integration/README.md)
 
 ## What EquiCurve is (and is not): three separate layers
 

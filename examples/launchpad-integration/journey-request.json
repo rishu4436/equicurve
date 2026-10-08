@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "1",
+  "quote": "SOL",
+  "raiseTarget": "100",
+  "typicalTrade": "0.2",
+  "participants": 20,
+  "objective": "controlled-discovery",
+  "market": {
+    "asset": "private-company",
+    "stressPaths": 8,
+    "seed": 60428
+  },
+  "constraints": {
+    "maxThresholdGap": 0.05,
+    "maxReferenceImpactBps": 1200,
+    "maxWhaleImpactBps": 1800,
+    "maxConcentration": 0.55,
+    "minRetailProgress": 0.25
+  }
+}

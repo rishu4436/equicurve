@@ -8,7 +8,43 @@ changes must be documented explicitly.
 
 ## [Unreleased]
 
-Planned work belongs in [ROADMAP.md](./ROADMAP.md) and is not considered shipped. No public developer API or standalone SDK is released by this documentation update.
+Planned work belongs in [ROADMAP.md](./ROADMAP.md) and is not considered shipped.
+
+## [0.3.0] - 2026-10-08
+
+Developer Preview — headless market-design API and TypeScript client.
+
+### Developer API
+
+- Added `POST /api/v1/design`, `POST /api/v1/robustness`, and `POST /api/v1/config` with strict request validation and stable error envelopes.
+- Added stateless selected-design references with server-side recomputation and schema, engine, fingerprint-version, candidate, and configuration-fingerprint continuity checks.
+- Preserved requested constraints separately from explicitly accepted constraints. A zero-feasible result is a successful design outcome and never triggers automatic relaxation.
+- Added fingerprint-bound canonical market configuration output. The API does not construct, sign, or submit transactions.
+
+### TypeScript Client
+
+- Added the thin, source-included `EquiCurveClient` with `design()`, `getDesignReference()`, `robustness()`, `buildConfig()`, and `assertPipelineIntegrity()`.
+- Added typed API, transport, and protocol errors; runtime success-response validation; and version/fingerprint continuity checks.
+- Kept all market math on the server. The client does not rank candidates or calculate fingerprints and is not yet published to npm.
+
+### External integration proof
+
+- Added an external launchpad flow: external launchpad → `EquiCurveClient` → HTTP → EquiCurve API → existing market engine.
+- Journey proof evaluated 20 candidates, found 0 feasible under requested constraints, preserved explicit retail-progress acceptance from 25% to 3.84%, and selected `Exponential · 3×` under the current engine output.
+- Verified 8 / 10 synthetic robustness shocks inside the accepted budget and canonical configuration integrity with fingerprint `d44dbb02bb2d68ef00e9e714da519e58`. No transaction was submitted.
+
+### Contract hardening
+
+- Made malformed success payloads fail as protocol errors and preserved version metadata through copied or serialized references.
+- Added fail-closed cross-request candidate/fingerprint checks, explicit quote identity and unit metadata, clarified requested-versus-applied feasibility fields, and renamed the synthetic cohort graduation field.
+- Classified unsupported quotes consistently across design, robustness, and configuration routes.
+
+### Preview limitations
+
+- Server-to-server and same-origin integrations are supported; arbitrary cross-origin browser calls are not yet supported.
+- Anonymous IP rate limiting is preview-grade rather than tenant-grade.
+- Client DTOs remain independently defined and may move to a shared schema or OpenAPI contract before stable v1.
+- `/config` returns canonical market configuration, not a complete transaction DTO. Token/profile inputs, wallet construction, signing, and submission remain with the integrator.
 
 ## [0.2.0] - 2026-10-08
 
@@ -71,6 +107,6 @@ Original hackathon lifecycle MVP and evidence foundation:
 
 ## Versioning Notes
 
-- The web app and engine version together until public API/SDK extraction. v0.1.0 names the original lifecycle MVP; v0.2.0 names the mature Market Studio and its audited evidence foundation.
-- Future v0.3.x developer APIs will expose `schemaVersion` and `engineVersion`; compatibility and breaking changes will be documented explicitly.
+- v0.1.0 names the original lifecycle MVP; v0.2.0 names the mature Market Studio and its audited evidence foundation; v0.3.0 names the Developer Preview release.
+- Application release version, API `schemaVersion`, market `engineVersion`, fingerprint version, and robustness model version are independent compatibility concepts. v0.3.0 keeps the audited market engine at `0.2.0`.
 - Fingerprint versioning stays separate from application versioning so historical designs remain verifiable. A new app version must not rewrite an existing deployment's fingerprint.
