@@ -9,6 +9,7 @@ Measured with `npm audit --omit=dev --json` and `npm audit --json`, before chang
 
 ## Changes
 
+- CI compatibility: regenerated the lockfile with npm 10 after npm 12 omitted five nested optional `utf-8-validate` 5.0.10 peer entries required by CI's installer. No direct dependency version changed in this correction.
 - Removed unused direct `@solana/wallet-adapter-wallets` (locked 0.19.39). Repository imports and the provider configuration use Phantom and Solflare directly; both remain. The bundle removal eliminated 593 lockfile package paths, including unused hardware/multichain wallet integrations. Other direct packages were retained after inspecting source imports, tooling, peer dependencies, and SDK use; no further unused duplicate was established.
 - Compatible transitive updates: `shell-quote` 1.10.0 → 1.12.0, `sharp` 0.35.4 → 0.35.5 (with matching platform/libvips packages), `source-map-js` 1.2.1 → 1.2.2. No core SDK, Next, React, or wallet-adapter version changed. No forced audit fix or major migration.
 
