@@ -14,7 +14,7 @@ const TONE: Record<ReceiptState, string> = {
 
 export function ReceiptBadge({ state }: { state: ReceiptState }) {
   return (
-    <span className={clsx("shrink-0 rounded-pill border px-2 py-0.5 text-[10px] font-medium", TONE[state])}>
+    <span className={clsx("shrink-0 rounded-pill border px-2 py-0.5 text-xs font-medium", TONE[state])}>
       {RECEIPT_STATE_LABEL[state]}
     </span>
   );
@@ -31,7 +31,7 @@ export function LaunchReceiptCard({ receipt }: { receipt: LaunchReceipt }) {
     <div className="ec-card space-y-2 border-accent/40 p-4 text-xs" data-testid="launch-receipt">
       <div className="flex items-center justify-between">
         <p className="font-semibold text-fg-primary">Launch receipt</p>
-        <span className="font-mono text-[10px] text-fg-muted">{receipt.cluster}</span>
+        <span className="font-mono text-xs text-fg-muted">{receipt.cluster}</span>
       </div>
       <ul className="divide-y divide-line">
         {receipt.items.map((it) => (
@@ -50,13 +50,13 @@ export function LaunchReceiptCard({ receipt }: { receipt: LaunchReceipt }) {
                   {it.value}
                 </a>
               )}
-              {it.note && <p className="mt-0.5 text-[10px] text-fg-muted">{it.note}</p>}
+              {it.note && <p className="mt-0.5 text-xs text-fg-muted">{it.note}</p>}
             </div>
             <ReceiptBadge state={it.state} />
           </li>
         ))}
       </ul>
-      <p className="text-[10px] text-fg-muted">
+      <p className="text-xs text-fg-muted">
         confirmed = transaction confirmed or account read back from chain · pending = submitted, not yet read · estimate
         = derived or computed, not proven on-chain · local only = stored in this browser.
       </p>

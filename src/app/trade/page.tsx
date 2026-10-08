@@ -18,30 +18,33 @@ export default function TradeIndexPage() {
   }, []);
 
   return (
-    <div className="mx-auto max-w-lg space-y-6">
+    <div className="mx-auto max-w-xl space-y-8 py-6 sm:py-12">
       <div>
-        <h1 className="text-3xl font-semibold text-fg-primary">Trade</h1>
+        <p className="ec-eyebrow mb-3">Your next position</p>
+        <h1 className="ec-page-title">Open a market.</h1>
         <p className="mt-1 text-sm text-fg-secondary">
-          Enter a DBC virtual pool address to quote and swap on the bonding
-          curve — teal ticket, not casino chrome.
+          Enter a DBC pool address to view the market and review a swap quote.
         </p>
       </div>
       <form
-        className="space-y-3"
+        className="ec-card space-y-4 p-6 sm:p-8"
         onSubmit={(e) => {
           e.preventDefault();
           if (pool.trim()) router.push(`/trade/${pool.trim()}`);
         }}
       >
+        <label htmlFor="trade-pool" className="ec-label block">Pool address</label>
         <input
+          id="trade-pool"
           value={pool}
           onChange={(e) => setPool(e.target.value)}
-          placeholder="Pool pubkey"
+          placeholder="Paste a Solana pool address"
           className="ec-input font-mono"
         />
         <button type="submit" className="ec-btn-primary w-full">
           Open market
         </button>
+        <p className="text-center text-xs text-fg-muted">Looking for a market? <Link href="/explore" className="text-accent hover:underline">Explore offerings →</Link></p>
       </form>
       {locals.length > 0 && (
         <div className="ec-card space-y-2 p-4">
@@ -53,7 +56,7 @@ export default function TradeIndexPage() {
               className="block rounded-input border border-line bg-subtle px-3 py-2 text-sm hover:border-accent/40"
             >
               <span className="text-fg-primary">${l.ticker}</span>
-              <span className="ml-2 font-mono text-[10px] text-fg-muted">
+              <span className="ml-2 font-mono text-xs text-fg-muted">
                 {l.pool.slice(0, 12)}…
               </span>
             </Link>

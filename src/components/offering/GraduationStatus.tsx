@@ -110,11 +110,11 @@ export function GraduationStatusCard({
     <div className={clsx("rounded-input border px-3 py-2 text-xs", STYLES[view.state])}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="font-semibold">{view.label}</span>
-        <span className="font-mono text-[10px] opacity-80">{view.state.replace("_", " ")}</span>
+        <span className="font-mono text-xs opacity-80">{view.state.replace("_", " ")}</span>
       </div>
       {!compact && <p className="mt-1 opacity-90">{view.detail}</p>}
       {!compact && dest && (
-        <p className="mt-1 break-all text-[10px] opacity-80">
+        <p className="mt-1 break-all text-xs opacity-80">
           Expected DAMM v2 pool{" "}
           <a
             className="underline"

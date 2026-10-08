@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ReadingLayout } from "@/components/ui/ReadingLayout";
 import { DOCS } from "@/lib/constants";
 import { CURVE_PRESETS, presetPriceMultiple } from "@/lib/dbc/presets";
 import { IssuerFaq, PresetShapeNote, presetThresholdLabel } from "@/components/issuer/IssuerAnswers";
@@ -9,7 +10,7 @@ const STEPS = [
     n: "1",
     title: "Create",
     href: "/create",
-    body: "Issuer runs the 6-step wizard: Basics → Offering (self-attest docs) → Curve preset → Fees & locks (≥10% LP) → Review → Launch. Review lists every on-chain setting (quote mint, token program, supply, curve points, threshold, fee split, lock, authorities, exact seed buy, 0.001 SOL pool fee). Launch signs real DBC transactions and shows a receipt where each item is confirmed, pending or an estimate.",
+    body: "Follow six steps: Asset → Market goals → Terms → Market design → Policy review → Deploy. Review lists every on-chain setting (quote mint, token program, supply, curve points, threshold, fee split, lock, authorities, exact seed buy, 0.001 SOL pool fee). Deployment signs real DBC transactions and shows a receipt where each item is confirmed, pending or an estimate.",
   },
   {
     n: "2",
@@ -27,9 +28,10 @@ const STEPS = [
 
 export default function DocsPage() {
   return (
-    <div className="mx-auto max-w-3xl space-y-8">
+    <ReadingLayout>
       <header>
-        <h1 className="text-3xl font-semibold text-fg-primary">Docs</h1>
+        <p className="ec-eyebrow mb-3">The EquiCurve guide</p>
+        <h1 className="ec-page-title">A clearer path to launch.</h1>
         <p className="mt-2 text-sm text-fg-secondary">
           Short how-it-works for Create → Trade → Graduate, preset glossary, and
           local env setup. For program IDs and risk posture see{" "}
@@ -100,7 +102,7 @@ export default function DocsPage() {
                     ({p.tagline})
                   </span>
                 </h3>
-                <span className="font-mono text-[10px] text-fg-muted">
+                <span className="font-mono text-xs text-fg-muted">
                   graduates at {presetThresholdLabel(p.id, "SOL")} or {presetThresholdLabel(p.id, "USDC")} ·{" "}
                   {presetPriceMultiple(p.id)}× price range
                 </span>
@@ -255,7 +257,6 @@ export default function DocsPage() {
           </li>
         </ul>
       </section>
-    </div>
+    </ReadingLayout>
   );
 }
-

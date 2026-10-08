@@ -55,7 +55,7 @@ export function ImageUrlField({ value, onChange }: { value: string; onChange: (v
         />
       </label>
       <div className="flex items-center gap-3">
-        <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-card border border-line bg-subtle text-[10px] text-fg-muted">
+        <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-card border border-line bg-subtle text-xs text-fg-muted">
           {ok ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={value} alt="Token image preview" className="h-full w-full object-cover" referrerPolicy="no-referrer" />

@@ -11,16 +11,16 @@ export function JourneyProofCard() {
   return (
     <aside className="ec-card overflow-hidden shadow-glow" data-testid="journey-proof">
       <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-3">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-fg-muted">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-fg-muted">
           Public devnet · Journey
         </p>
-        <p className="font-mono text-[10px] text-accent">{JOURNEY_PROOF.policyId}</p>
+        <p className="font-mono text-xs text-accent">{JOURNEY_PROOF.policyId}</p>
       </div>
 
       <div className="grid sm:grid-cols-2">
         <div className="space-y-4 border-b border-line p-5 sm:border-b-0 sm:border-r">
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-fg-muted">Market design</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-fg-muted">Market design</p>
             <dl className="mt-3 space-y-2 font-mono text-sm text-fg-primary">
               <div className="flex items-baseline justify-between gap-3">
                 <dt className="text-fg-muted">Raise</dt>
@@ -37,7 +37,7 @@ export function JourneyProofCard() {
             </dl>
           </div>
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-fg-muted">Constraints</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-fg-muted">Constraints</p>
             <ul className="mt-3 space-y-2 font-mono text-xs text-fg-secondary">
               {LIMITS.map(([label, value]) => (
                 <li key={label} className="flex items-baseline justify-between gap-3">
@@ -50,7 +50,7 @@ export function JourneyProofCard() {
         </div>
 
         <div className="space-y-3 p-5">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-fg-muted">Search</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-fg-muted">Search</p>
           <p className="font-mono text-3xl text-fg-primary">{JOURNEY_PROOF.evaluated}</p>
           <p className="text-xs text-fg-muted">configurations evaluated</p>
           <p className="text-sm text-fg-secondary">
@@ -66,7 +66,7 @@ export function JourneyProofCard() {
 
       <div className="space-y-3 border-t border-line px-5 py-4">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-fg-muted">Fingerprint</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-fg-muted">Fingerprint</p>
           <p className="mt-1 font-mono text-sm text-accent">{JOURNEY_PROOF.fingerprint}</p>
         </div>
         <ul className="grid grid-cols-2 gap-y-1 text-xs text-fg-secondary">

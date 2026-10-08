@@ -279,7 +279,7 @@ export function TradePanel({
               <ProgressRing value={progressPct} size={compact ? 40 : 48} stroke={4} />
             )}
             <div>
-              <div className="text-[10px] uppercase tracking-wider text-fg-muted">
+              <div className="text-xs uppercase tracking-wider text-fg-muted">
                 Curve
               </div>
               <div className="font-mono text-sm text-fg-primary">
@@ -290,7 +290,7 @@ export function TradePanel({
           {!compact && (
             <>
               <div className="ec-card p-3">
-                <div className="text-[10px] uppercase tracking-wider text-fg-muted">
+                <div className="text-xs uppercase tracking-wider text-fg-muted">
                   Base progress
                 </div>
                 <div className="mt-1 font-mono text-sm text-fg-primary">
@@ -298,7 +298,7 @@ export function TradePanel({
                 </div>
               </div>
               <div className="ec-card p-3">
-                <div className="text-[10px] uppercase tracking-wider text-fg-muted">
+                <div className="text-xs uppercase tracking-wider text-fg-muted">
                   Migrated
                 </div>
                 <div className="mt-1 font-mono text-sm text-fg-primary">
@@ -306,7 +306,7 @@ export function TradePanel({
                 </div>
               </div>
               <div className="ec-card p-3">
-                <div className="text-[10px] uppercase tracking-wider text-fg-muted">
+                <div className="text-xs uppercase tracking-wider text-fg-muted">
                   Threshold
                 </div>
                 <div className="mt-1 font-mono text-sm text-fg-primary">
@@ -319,7 +319,7 @@ export function TradePanel({
           )}
           {compact && (
             <div className="ec-card p-3">
-              <div className="text-[10px] uppercase tracking-wider text-fg-muted">
+              <div className="text-xs uppercase tracking-wider text-fg-muted">
                 Status
               </div>
               <div className="mt-1 text-sm text-fg-primary">
@@ -345,17 +345,18 @@ export function TradePanel({
             </span>
           </h2>
         )}
-        <div className="mb-4 flex gap-2">
+        <div className="ec-tabs mb-6" role="group" aria-label="Trade direction">
           {(["buy", "sell"] as const).map((d) => (
             <button
               key={d}
               type="button"
+              aria-pressed={direction === d}
               onClick={() => {
                 setDirection(d);
                 setQuoteOut(null);
               }}
               className={clsx(
-                "flex-1 rounded-pill px-4 py-2 text-sm capitalize transition",
+                "min-h-11 flex-1 rounded-lg px-4 py-2 text-sm capitalize transition-colors",
                 direction === d
                   ? d === "buy"
                     ? "bg-accent text-base font-semibold"
@@ -378,7 +379,7 @@ export function TradePanel({
               setQuoteOut(null);
             }}
             inputMode="decimal"
-            className="ec-input font-mono"
+            className="ec-input py-5 text-2xl tabular-nums"
           />
         </label>
 
@@ -398,7 +399,7 @@ export function TradePanel({
           />
         ) : (
           <>
-            <p className="mt-3 text-[11px] text-signal-warn">
+            <p className="mt-3 text-xs text-signal-warn">
               Bonding price ≠ NAV. Review disclosures before trading.
             </p>
             <div className="mt-4">
@@ -411,6 +412,8 @@ export function TradePanel({
               >
                 {busy ? "Quoting…" : direction === "buy" ? "Review buy" : "Review sell"}
               </button>
+              {!wallet.publicKey && <p className="mt-3 text-center text-xs text-fg-muted">Connect your wallet to request a quote.</p>}
+              {wallet.publicKey && curvePhase !== "raising" && <p className="mt-3 text-center text-xs text-fg-muted">Trading becomes available when this curve is verified as raising.</p>}
             </div>
           </>
         )}

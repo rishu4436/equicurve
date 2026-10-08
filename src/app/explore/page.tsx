@@ -243,16 +243,17 @@ function ExploreInner() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
+          <p className="ec-eyebrow mb-3">Discover on-chain markets</p>
           <h1 className="text-3xl font-semibold text-fg-primary">
-            Explore offerings
+            Explore markets.
           </h1>
           <p className="mt-1 text-sm text-fg-secondary">
             {exploreMeta?.label ??
               "EquiCurve registry (not a full chain indexer)"}
             {" · "}
-            shared discovery + this browser’s localStorage
+            shared registry + your browser’s launches
             {liveCount > 0 && (
-              <span className="text-accent"> · {liveCount} live</span>
+              <span className="text-accent"> · {liveCount} pools</span>
             )}
             {exploreMeta?.counts != null && (
               <span className="text-fg-muted">
@@ -264,7 +265,7 @@ function ExploreInner() {
             )}
           </p>
           {exploreMeta && (
-            <p className="mt-1 text-xs text-fg-muted">
+            <details className="mt-3 text-xs text-fg-muted"><summary className="py-1 text-fg-secondary">Discovery status · {exploreMeta.counts.verified} verified</summary><p className="mt-2 max-w-2xl leading-relaxed">
               Cluster <span className="font-mono">{exploreMeta.cluster}</span> · RPC{" "}
               <span
                 className={clsx(
@@ -281,10 +282,10 @@ function ExploreInner() {
               {exploreMeta.cached &&
                 ` · cached ${Math.round(exploreMeta.cacheAgeMs / 1000)}s (TTL ${exploreMeta.cacheTtlSec}s)`}
               . Status is shown as verified only when the pool was read on-chain.
-            </p>
+            </p></details>
           )}
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
           <button
             type="button"
             className="ec-btn-secondary text-xs"
@@ -294,6 +295,7 @@ function ExploreInner() {
             {loading ? "Refreshing…" : "Refresh"}
           </button>
           <input
+            aria-label="Search name, ticker, or pool address"
             className="ec-input max-w-xs"
             placeholder="Search name, ticker, or pool"
             value={q}
@@ -317,14 +319,15 @@ function ExploreInner() {
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap gap-2 border-b border-line pb-3">
+        <div className="ec-tabs max-w-full" role="group" aria-label="Market status">
           {TABS.map((t) => (
             <button
               key={t.id}
               type="button"
               onClick={() => selectTab(t.id)}
+              aria-pressed={tab === t.id}
               className={clsx(
-                "rounded-pill px-4 py-1.5 text-sm transition",
+                "min-h-11 whitespace-nowrap rounded-lg px-3 py-2 text-sm transition-colors",
                 tab === t.id
                   ? "bg-accent/15 text-accent"
                   : "text-fg-secondary hover:text-fg-primary",
@@ -358,8 +361,9 @@ function ExploreInner() {
             key={s}
             type="button"
             onClick={() => setSector(s)}
+            aria-pressed={sector === s}
             className={clsx(
-              "ec-chip transition",
+              "ec-chip min-h-10 px-4 transition-colors",
               sector === s && "border-accent/50 text-accent",
             )}
           >
@@ -376,7 +380,7 @@ function ExploreInner() {
               : "No shared or local launches yet."}
           </p>
           <Link href="/create" className="ec-btn-primary">
-            Create an equity offering
+            Design a market
           </Link>
           {!showExamples && (
             <button

@@ -199,10 +199,15 @@ export function IssuerDashboard() {
   return (
     <div className="space-y-6">
       <div>
+        <p className="ec-eyebrow mb-3">Manage your launches</p>
         <h1 className="text-3xl font-semibold text-fg-primary">
           Issuer dashboard
         </h1>
         <p className="mt-1 text-sm text-fg-secondary">
+          Track your launches and claim the trading fees assigned to your wallet.
+          Creator and partner shares follow the pool&apos;s on-chain configuration.
+        </p>
+        <details className="mt-4 text-xs text-fg-muted"><summary className="py-2 text-fg-secondary">How fee claims work</summary><p className="mt-2 max-w-3xl leading-relaxed">
           Trading fees split on-chain between{" "}
           <strong className="text-fg-primary">creator</strong> (
           <code className="text-accent-soft">claimCreatorTradingFee</code>) and{" "}
@@ -212,7 +217,7 @@ export function IssuerDashboard() {
           <code className="text-accent-soft">feeClaimer</code> set at Create —
           the deployer does not automatically receive it. Amounts use the pool
           quote mint decimals (SOL=9, USDC=6).
-        </p>
+        </p></details>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -240,9 +245,9 @@ export function IssuerDashboard() {
             v: String(launches.length),
           },
         ].map((x) => (
-          <div key={x.k} className="ec-card p-4">
+          <div key={x.k} className="ec-card p-6">
             <p className="text-xs text-fg-muted">{x.k}</p>
-            <p className="mt-1 font-mono text-lg text-fg-primary">{x.v}</p>
+            <p className="mt-4 break-words text-2xl font-medium tracking-tight text-fg-primary tabular-nums">{x.v}</p>
           </div>
         ))}
       </div>
@@ -290,7 +295,7 @@ export function IssuerDashboard() {
                         ${l.ticker}
                       </span>{" "}
                       <span className="text-fg-muted">{l.name}</span>
-                      <div className="mt-0.5 flex flex-wrap gap-1 text-[10px]">
+                      <div className="mt-0.5 flex flex-wrap gap-1 text-xs">
                         {asCreator && (
                           <span className="rounded bg-accent/15 px-1.5 py-0.5 text-accent">
                             creator
@@ -302,7 +307,7 @@ export function IssuerDashboard() {
                           </span>
                         )}
                       </div>
-                      <div className="font-mono text-[10px] text-fg-muted">
+                      <div className="font-mono text-xs text-fg-muted">
                         {l.pool.slice(0, 12)}…
                       </div>
                     </button>
@@ -326,7 +331,7 @@ export function IssuerDashboard() {
                 <p className="text-xs text-signal-warn">{feeError}</p>
               )}
               {roles && (
-                <dl className="grid grid-cols-1 gap-1 text-[11px] sm:grid-cols-2">
+                <dl className="grid grid-cols-1 gap-1 text-xs sm:grid-cols-2">
                   <div>
                     <dt className="text-fg-muted">On-chain creator</dt>
                     <dd>
@@ -422,7 +427,7 @@ export function IssuerDashboard() {
                   {busyCreator ? "Claiming…" : "Claim creator fees"}
                 </button>
                 {!isCreator && wallet.publicKey && roles && (
-                  <p className="text-[11px] text-fg-muted">
+                  <p className="text-xs text-fg-muted">
                     Disabled — connect as {shortPk(roles.creator)} (creator) to
                     claim this share.
                   </p>
@@ -496,14 +501,14 @@ export function IssuerDashboard() {
                   {busyPartner ? "Claiming…" : "Claim partner fees"}
                 </button>
                 {!isPartner && wallet.publicKey && roles && (
-                  <p className="text-[11px] text-fg-muted">
+                  <p className="text-xs text-fg-muted">
                     Disabled — connect as {shortPk(roles.feeClaimer)}{" "}
                     (feeClaimer) to claim the partner share. Create-time
                     feeClaimer is authoritative on-chain.
                   </p>
                 )}
                 {isPartner && !isCreator && (
-                  <p className="text-[11px] text-fg-muted">
+                  <p className="text-xs text-fg-muted">
                     You are the partner feeClaimer for this pool — creator fees
                     require the deployer wallet.
                   </p>

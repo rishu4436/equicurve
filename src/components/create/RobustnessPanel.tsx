@@ -70,9 +70,9 @@ export function RobustnessPanel({
   const budgetWords = budgetLabel === "accepted" ? "the budget you accepted" : "the requested budget";
 
   return (
-    <div className="ec-card ec-scroll-target space-y-3 p-4" data-testid="robustness-check">
+    <div className="ec-card ec-scroll-target space-y-5 p-5 sm:p-6" data-testid="robustness-check">
       <div>
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-fg-muted">Robustness envelope</p>
+        <h3 className="text-lg font-semibold tracking-tight">How resilient is this design?</h3>
         <p className="mt-1 text-sm text-fg-secondary">
           How this exact design behaves when whale size, the typical order, the participant count, sell pressure, or
           late capital moves by 25%. The curve stays the one you select. This is not a score.
@@ -103,7 +103,8 @@ export function RobustnessPanel({
             )}
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[420px] text-left">
+            <table className="w-full text-left">
+              <caption className="sr-only">Robustness envelope: budget outcome for each assumption at minus 25%, base, and plus 25%</caption>
               <thead className="text-fg-muted">
                 <tr>
                   <th className="py-1 pr-3 font-medium">Assumption</th>
@@ -117,8 +118,10 @@ export function RobustnessPanel({
                   <tr key={axis.id} data-testid={`robustness-axis-${axis.id}`}>
                     <td className="py-1 pr-3 text-fg-primary">{axis.label}</td>
                     {axis.cells.map((cell) => (
-                      <td key={cell.level} className="py-1 pr-3 font-mono">
-                        {cell.insideBudget ? "✓" : "✕"}
+                      <td key={cell.level} className="py-1 pr-2">
+                        <span className={`inline-flex min-h-9 items-center justify-center rounded-lg px-2 sm:min-w-20 ${cell.insideBudget ? "bg-accent/10 text-accent" : "bg-signal-warn/10 text-signal-warn"}`}>
+                          {cell.insideBudget ? "✓" : "✕"}<span className="ml-1.5 hidden sm:inline">{cell.insideBudget ? "Inside" : "Outside"}</span><span className="sr-only sm:hidden">{cell.insideBudget ? "Inside budget" : "Outside budget"}</span>
+                        </span>
                       </td>
                     ))}
                   </tr>
@@ -129,10 +132,11 @@ export function RobustnessPanel({
           <ul className="space-y-3">
             {report.axes.map((axis) => (
               <li key={axis.id}>
-                <p className="font-medium text-fg-primary">{axis.label}</p>
-                <ul className="mt-1 space-y-2">
+                <details className="rounded-xl border border-line p-4">
+                <summary className="font-medium text-fg-primary">{axis.label} <span className="ml-2 font-normal text-fg-muted">View exact results</span></summary>
+                <ul className="mt-4 grid gap-4 lg:grid-cols-3">
                   {axis.cells.map((cell) => (
-                    <li key={cell.level} data-testid={`robustness-${axis.id}-${cell.level}`}>
+                    <li key={cell.level} className="space-y-2 rounded-lg bg-base/50 p-3" data-testid={`robustness-${axis.id}-${cell.level}`}>
                       <p>
                         {cell.insideBudget ? "✓ Inside the budget" : "✕ Outside the budget"} · {levelLabel(cell.level)}
                       </p>
@@ -151,6 +155,7 @@ export function RobustnessPanel({
                     </li>
                   ))}
                 </ul>
+                </details>
               </li>
             ))}
           </ul>

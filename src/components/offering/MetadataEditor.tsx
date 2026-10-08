@@ -117,7 +117,7 @@ export function MetadataEditor({ pool, mint, creator }: { pool: string; mint: st
           <button type="button" className="ec-btn-primary" disabled={busy} onClick={() => void save()}>
             {busy ? "Signing…" : "Sign & save metadata"}
           </button>
-          <p className="text-[10px] text-fg-muted">
+          <p className="text-xs text-fg-muted">
             Free message signature, no transaction. Wallets and explorers may cache the old JSON for a while.
           </p>
         </>

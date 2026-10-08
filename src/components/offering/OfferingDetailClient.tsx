@@ -322,7 +322,7 @@ export function OfferingDetailClient({ id, demo }: Props) {
           </p>
         )}
 
-        <header className="ec-card flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+        <header className="flex flex-col gap-6 border-b border-line pb-8 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-4">
             <div className="flex h-14 w-14 items-center justify-center rounded-card border border-line bg-subtle text-xl font-semibold text-accent">
               {ticker.slice(0, 2)}
@@ -334,22 +334,22 @@ export function OfferingDetailClient({ id, demo }: Props) {
                 <span className="ec-chip">{sector}</span>
                 <StatusPill status={status} unverified={statusUnverified} />
                 {illustrative && (
-                  <span className="rounded-pill border border-signal-warn/40 bg-signal-warn/10 px-2 py-0.5 text-[10px] text-signal-warn">
+                  <span className="rounded-pill border border-signal-warn/40 bg-signal-warn/10 px-2 py-0.5 text-xs text-signal-warn">
                     Illustrative · not live
                   </span>
                 )}
                 {mintRetained && (
-                  <span className="rounded-pill border border-signal-warn/40 bg-signal-warn/10 px-2 py-0.5 text-[10px] text-signal-warn">
+                  <span className="rounded-pill border border-signal-warn/40 bg-signal-warn/10 px-2 py-0.5 text-xs text-signal-warn">
                     Mint retained
                   </span>
                 )}
-                <span className="rounded-pill border border-line bg-subtle px-2 py-0.5 text-[10px] text-fg-secondary">
+                <span className="rounded-pill border border-line bg-subtle px-2 py-0.5 text-xs text-fg-secondary">
                   Lock ≥{lockPct}%
                 </span>
                 <span className="ec-chip">Quote: {quote}</span>
               </div>
               {(mint || poolAddress) && (
-                <p className="mt-2 font-mono text-[11px] text-fg-muted">
+                <p className="mt-2 font-mono text-xs text-fg-muted">
                   {mint ? (
                     <>
                       Mint:{" "}
@@ -390,7 +390,7 @@ export function OfferingDetailClient({ id, demo }: Props) {
               ) : (
                 <ProgressRing value={progressPct} size={72} />
               )}
-              <span className="text-[10px] text-fg-muted">
+              <span className="text-xs text-fg-muted">
                 {snapshot
                   ? "On-chain quote progress"
                   : illustrative
@@ -415,8 +415,8 @@ export function OfferingDetailClient({ id, demo }: Props) {
           )}
         </header>
 
-        <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-          <div className="space-y-4">
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_400px]">
+          <div className="min-w-0 space-y-5">
             <div className="ec-card p-5">
               <div className="mb-3 flex items-center justify-between">
                 <h2 className="font-semibold text-fg-primary">Market / curve</h2>
@@ -437,12 +437,11 @@ export function OfferingDetailClient({ id, demo }: Props) {
                 key={`${poolAddress ?? "none"}-${historyNonce}`}
                 poolAddress={poolAddress}
                 quoteLabel={quote}
-                progress={(progressPct ?? 0) / 100}
+                progress={progressPct == null ? null : progressPct / 100}
                 illustrative={illustrative}
                 priceMultiple={presetPriceMultiple(presetId, quote === "USDC" ? "USDC" : "SOL")}
               />
               <div className="mt-4 flex items-center gap-4 border-t border-line pt-4">
-                {progressPct != null && <ProgressRing value={progressPct} size={72} stroke={5} />}
                 <div className="space-y-1 text-sm text-fg-secondary">
                   <p>
                     Quote progress{" "}
@@ -473,7 +472,7 @@ export function OfferingDetailClient({ id, demo }: Props) {
                     <p className="text-xs text-signal-warn">{snapError}</p>
                   )}
                   {poolAddress && !illustrative && (
-                    <p className="text-[10px] text-fg-muted">
+                    <p className="text-xs text-fg-muted">
                       {getCluster()} · last checked{" "}
                       {snapCheckedAt ? new Date(snapCheckedAt).toLocaleTimeString() : "never"}
                     </p>
@@ -508,14 +507,15 @@ export function OfferingDetailClient({ id, demo }: Props) {
             </div>
 
             <div className="ec-card overflow-hidden">
-              <div className="flex flex-wrap gap-1 border-b border-line p-2">
+              <div className="flex gap-1 overflow-x-auto border-b border-line p-2" role="group" aria-label="Market information">
                 {TABS.map((t) => (
                   <button
                     key={t}
                     type="button"
                     onClick={() => setTab(t)}
+                    aria-pressed={tab === t}
                     className={clsx(
-                      "rounded-pill px-3 py-1.5 text-xs transition",
+                      "min-h-11 whitespace-nowrap rounded-lg px-4 py-2 text-sm transition-colors",
                       tab === t
                         ? "bg-accent/15 text-accent"
                         : "text-fg-secondary hover:text-fg-primary",
@@ -558,7 +558,7 @@ export function OfferingDetailClient({ id, demo }: Props) {
                       lockPct={snapshot?.lockPct ?? null}
                       creatorPct={snapshot?.creatorFeePct ?? null}
                     />
-                    <p className="text-[10px] text-fg-muted">
+                    <p className="text-xs text-fg-muted">
                       {snapshot?.lockPct != null
                         ? "Lock and fee split above are read from this pool's on-chain config."
                         : "Pool config not read: lock and fee split shown generically."}
@@ -616,7 +616,7 @@ export function OfferingDetailClient({ id, demo }: Props) {
                         </li>
                       ))}
                     </ul>
-                    <p className="text-[11px] text-fg-muted">
+                    <p className="text-xs text-fg-muted">
                       No PDF upload vault — attestations live in browser
                       localStorage from Create.
                     </p>
@@ -712,7 +712,7 @@ export function OfferingDetailClient({ id, demo }: Props) {
                         {holders.largest.map((row) => (
                           <div
                             key={row.address}
-                            className="flex items-center justify-between gap-3 rounded-input border border-line bg-subtle px-3 py-2 font-mono text-[11px]"
+                            className="flex items-center justify-between gap-3 rounded-input border border-line bg-subtle px-3 py-2 font-mono text-xs"
                           >
                             <a
                               href={explorerAddressUrl(row.address)}
@@ -758,7 +758,7 @@ export function OfferingDetailClient({ id, demo }: Props) {
                               <span className="font-mono text-fg-primary">
                                 {short(row.signature, 6)}
                               </span>
-                              <div className="text-[10px] text-fg-muted">
+                              <div className="text-xs text-fg-muted">
                                 {row.blockTime
                                   ? new Date(row.blockTime * 1000).toLocaleString()
                                   : `slot ${row.slot}`}
@@ -799,7 +799,7 @@ export function OfferingDetailClient({ id, demo }: Props) {
                                   {a.amount}
                                 </span>
                               ) : null}
-                              <div className="text-[10px] text-fg-muted">
+                              <div className="text-xs text-fg-muted">
                                 {new Date(a.at).toLocaleString()}
                               </div>
                             </div>

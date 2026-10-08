@@ -42,7 +42,7 @@ export function VerificationBadge({
     <span
       title={title}
       className={clsx(
-        "inline-flex items-center gap-1 rounded-pill border px-2 py-0.5 text-[10px]",
+        "inline-flex items-center gap-1 rounded-pill border px-2 py-0.5 text-xs",
         STYLES[verification.state],
       )}
     >

@@ -20,14 +20,15 @@ export function ClusterBanner() {
       role="status"
       className={
         warn
-          ? "border-b border-signal-warn/30 bg-signal-warn/10 text-signal-warn"
+          ? "border-b border-line/60 bg-elevated/50 text-fg-secondary"
           : "border-b border-line bg-elevated/80 text-fg-muted"
       }
     >
-      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-1.5 text-[11px] sm:text-xs">
+      <div className="mx-auto flex max-w-[1440px] flex-wrap items-center justify-between gap-2 px-5 py-2 text-xs sm:px-8">
         <p>
-          App RPC: <span className="font-mono font-medium">{cluster}</span>
-          <span className="text-fg-muted"> · {host}</span>
+          <span className={`mr-2 inline-block h-1.5 w-1.5 rounded-full ${warn ? "bg-signal-warn" : "bg-accent"}`} aria-hidden="true" />
+          <span className="font-medium capitalize">{cluster}</span>{warn && " · Test network"}
+          <span className="hidden text-fg-muted sm:inline"> · {host}</span>
           {wallet.connected && (
             <span className="text-fg-muted">
               {" "}
@@ -40,7 +41,7 @@ export function ClusterBanner() {
           href="/settings"
           className="shrink-0 underline decoration-transparent hover:decoration-current"
         >
-          Settings
+          Network settings ↗
         </Link>
       </div>
     </div>

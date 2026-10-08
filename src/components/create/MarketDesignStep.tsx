@@ -1,5 +1,6 @@
 "use client";
 
+import { LineChart } from "@/components/ui/LineChart";
 import { useState } from "react";
 import { toast } from "sonner";
 import { formatAtomsExact } from "@/lib/amounts";
@@ -65,53 +66,24 @@ function budgetKey(budget: ConstraintBudget | null | undefined): string {
   ].join(",");
 }
 
-const CHART_COLORS = ["#7c6bf2", "#e2b657", "#3dbe8c"];
+const CHART_COLORS = ["#6DE0C5", "#89BCEB", "#E8C47E"];
 
-function PathChart({
-  series,
-  mode,
-}: {
+function PathChart({ series, mode }: {
   series: { name: string; points: ScenarioTracePoint[] }[];
   mode: "price" | "progress";
 }) {
-  const width = 360;
-  const height = 140;
-  const pad = 18;
-  const points = series.flatMap((item) => item.points);
-  if (points.length === 0) {
-    return <p className="text-xs text-fg-muted">The pinned designs have no retail orders to chart.</p>;
-  }
-  const maxStep = Math.max(...points.map((point) => point.step), 1);
-  const values = points.map((point) => (mode === "price" ? point.priceMoveBps : point.progress));
-  let min = Math.min(...values, 0);
-  let max = Math.max(...values, mode === "progress" ? 1 : 0);
-  if (min === max) {
-    min -= 1;
-    max += 1;
-  }
-  const x = (step: number) => pad + ((width - pad * 2) * step) / maxStep;
-  const y = (value: number) => pad + ((height - pad * 2) * (max - value)) / (max - min);
-  return (
-    <svg
-      viewBox={`0 0 ${width} ${height}`}
-      className="h-36 w-full"
-      role="img"
-      aria-label={mode === "price" ? "Synthetic retail price path" : "Synthetic reserve progress"}
-    >
-      <line x1={pad} y1={y(0)} x2={width - pad} y2={y(0)} stroke="currentColor" strokeOpacity="0.2" />
-      {series.map((item, index) => (
-        <polyline
-          key={item.name}
-          fill="none"
-          stroke={CHART_COLORS[index % CHART_COLORS.length]}
-          strokeWidth="2"
-          points={item.points
-            .map((point) => `${x(point.step)},${y(mode === "price" ? point.priceMoveBps : point.progress)}`)
-            .join(" ")}
-        />
-      ))}
-    </svg>
-  );
+  return <LineChart
+    label={mode === "price" ? "Synthetic retail price path" : "Synthetic reserve progress"}
+    series={series.map((item, index) => ({
+      name: item.name, color: CHART_COLORS[index % CHART_COLORS.length],
+      points: item.points.map(point => ({ x: point.step, y: mode === "price" ? point.priceMoveBps : point.progress })),
+    }))}
+    xLabel="Simulated order" yLabel={mode === "price" ? "Price movement (bps)" : "Threshold progress (%)"}
+    floor={0} ceiling={mode === "progress" ? 1 : undefined}
+    formatX={value => String(Math.round(value))}
+    formatY={value => mode === "price" ? Math.round(value).toLocaleString() : `${Math.round(value * 100)}%`}
+    formatDetailY={value => mode === "price" ? `${Math.round(value).toLocaleString()} bps` : pct(value)}
+  />;
 }
 
 export function MarketDesignStep({
@@ -234,16 +206,19 @@ export function MarketDesignStep({
   return (
     <section className="space-y-4">
       <header>
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-fg-muted">EquiCurve · Market design</p>
-        <h1 className="text-2xl font-semibold text-fg-primary">Compare candidate policies</h1>
+        <p className="text-xs font-semibold uppercase tracking-wider text-fg-muted">EquiCurve · Market design</p>
+        <h1 className="ec-page-title mt-3">Find the right tradeoff.</h1>
         <p className="mt-1 text-sm text-fg-secondary">
-          Research mode. The search scores a sample of configs against the hard constraints, then marks one preferred
+          Simulate, compare, and review a configuration against your brief. Your limits stay in your control.
+        </p>
+        <details className="mt-4 text-xs leading-relaxed text-fg-muted"><summary className="py-2 text-fg-secondary">How the design search works</summary><p className="mt-2 max-w-3xl">
+          The search scores a sample of configs against the hard constraints, then marks one preferred
           candidate among those it evaluated. A row that fails a constraint stays available to inspect and is labeled as
           a tradeoff example, not a design that meets the brief. If nothing passes, EquiCurve does not relax a limit.
           You choose each limit. Widening one limit leaves the others at the requested value until you change them.
           Deploy stays blocked until that search admits a curve. Asset kind is a market-design assumption, not a legal
           claim. The row you deploy is the config the wallet will sign.
-        </p>
+        </p></details>
       </header>
 
       <div className="ec-card space-y-2 p-4 text-xs text-fg-secondary">
@@ -280,8 +255,8 @@ export function MarketDesignStep({
         )}
       </div>
 
-      <div className="ec-card space-y-1 p-4 text-xs text-fg-secondary">
-        <p className="font-medium text-fg-primary">What each metric means</p>
+      <details className="ec-card space-y-2 p-5 text-xs leading-relaxed text-fg-secondary">
+        <summary className="font-medium text-fg-primary">What each metric means</summary>
         <p>Typical impact: the opening buy of {state.typicalTrade} {state.quote} on an empty curve, in basis points.</p>
         <p>
           Whale impact: five buys of {assumptions.whaleMultiple}× {state.typicalTrade} {state.quote} at launch. The figure
@@ -294,7 +269,7 @@ export function MarketDesignStep({
         </p>
         <p>Graduation rate: the share of the simulated cohort paths that reached the threshold. The path count is the sample size. It is not a real-world probability.</p>
         <p>10th percentile and worst path: cohort progress toward the threshold. With few paths the 10th percentile sits near the worst path.</p>
-      </div>
+      </details>
 
       <button type="button" className="ec-btn-primary" onClick={() => run()} disabled={running}>
         {running ? "Simulating designs…" : policy ? "Run the search again" : "Simulate market designs"}
@@ -396,7 +371,7 @@ export function MarketDesignStep({
           )}
           {policy.negotiation.status === "accepted" && !adjustingBudget && (
             <div className="ec-card ec-scroll-target space-y-2 p-4" data-testid="preferred-design">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-fg-muted">Preferred design</p>
+              <p className="text-xs font-semibold uppercase tracking-wider text-fg-muted">Preferred design</p>
               <p className="font-medium text-fg-primary">{policy.chosen.profileName}</p>
               <p className="break-all font-mono text-xs text-fg-secondary">Fingerprint {policy.chosen.configFingerprint}</p>
             </div>
@@ -424,8 +399,8 @@ export function MarketDesignStep({
               ))}
             </div>
           )}
-          <div className="ec-card space-y-2 p-4 text-sm">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-fg-muted">
+          <div className="ec-card space-y-4 p-6 text-sm">
+            <p className="text-xs font-semibold uppercase tracking-wider text-fg-muted">
               {failure
                 ? "Preferred among the candidates evaluated · constraints not all met"
                 : "Feasible · Pareto frontier · selected for this objective"}
@@ -433,6 +408,8 @@ export function MarketDesignStep({
             <p className="font-medium text-fg-primary">
               {policy.chosen.profileName} · policy {policy.policyId}
             </p>
+            <p className="text-xs text-fg-muted">{policy.observedNote}</p>
+            <details className="border-t border-line pt-3"><summary className="py-2 text-sm text-fg-secondary">Why this design · model assumptions and limits</summary><div className="mt-3 space-y-3 leading-relaxed">
             <p className="text-xs text-fg-secondary">
               Model {policy.modelVersion} · SDK {policy.sdkVersion} · seed {policy.seed} · fingerprint{" "}
               {policy.chosen.configFingerprint}. Preference order: {policy.priorities.join(", ")}.
@@ -451,7 +428,7 @@ export function MarketDesignStep({
                 <li key={line}>{line}</li>
               ))}
             </ul>
-            <p className="text-xs text-fg-muted">{policy.observedNote}</p>
+            </div></details>
           </div>
 
           {!(policy.negotiation.status === "accepted" && !adjustingBudget) && (
@@ -479,7 +456,7 @@ export function MarketDesignStep({
                 <li key={row.profileId} className="ec-card ec-scroll-target space-y-3 p-4 text-sm">
                   <div>
                     <p className="font-semibold text-fg-primary">{row.profileName}</p>
-                    <p className="text-[10px] text-fg-muted">
+                    <p className="text-xs text-fg-muted">
                       {row.feasible ? "Feasible" : "Failed a constraint"}
                       {row.score > 0 ? ` · preference ${row.score}` : ""}
                     </p>
@@ -502,6 +479,20 @@ export function MarketDesignStep({
                       <dd className="font-mono text-fg-primary">{pct(row.stressGraduationRate)}</dd>
                     </div>
                   </dl>
+                  <details className="rounded-lg border border-line p-3 text-xs">
+                    <summary className="text-fg-secondary">All simulation metrics</summary>
+                    <dl className="mt-4 grid grid-cols-2 gap-4 [&_dt]:text-fg-muted [&_dd]:mt-1 [&_dd]:break-words [&_dd]:tabular-nums">
+                      <div><dt>Sell drawdown</dt><dd>{scenario(row, "sell-pressure")?.drawdownBps ?? "—"} bps</dd></div>
+                      <div><dt>Retail sample</dt><dd>{retail?.ordersRun ?? "—"} orders / {retail?.participantsAsked ?? state.participants} asked</dd></div>
+                      <div><dt>Median progress</dt><dd>{pct(row.stressMedianProgress)}</dd></div>
+                      <div><dt>10th percentile</dt><dd>{pct(row.stressP10Progress)}</dd></div>
+                      <div><dt>Worst path</dt><dd>{pct(row.stressWorstProgress)}</dd></div>
+                      <div><dt>Cohort paths</dt><dd>{row.stressPaths}</dd></div>
+                      <div><dt>Threshold</dt><dd>{formatAtomsExact(row.thresholdAtoms, decimals)} {state.quote}</dd></div>
+                      <div><dt>Threshold gap</dt><dd>{pct(row.thresholdGap)}</dd></div>
+                      <div className="col-span-2"><dt>Fee schedule</dt><dd>{row.feeLabel} · {feeStatusLabel(row.dynamicFeeStatus)}</dd></div>
+                    </dl>
+                  </details>
                   {row.rejected.length > 0 && (
                     <div className="text-xs text-signal-warn">
                       <p className="font-medium">Failed</p>
@@ -511,7 +502,7 @@ export function MarketDesignStep({
                     </div>
                   )}
                   <div>
-                    <p className="text-[10px] uppercase tracking-wider text-fg-muted">Fingerprint</p>
+                    <p className="text-xs uppercase tracking-wider text-fg-muted">Fingerprint</p>
                     <p className="break-all font-mono text-xs text-fg-secondary">{row.configFingerprint}</p>
                   </div>
                   <div className="flex flex-col gap-2">
@@ -569,17 +560,17 @@ export function MarketDesignStep({
                     <tr key={row.profileId} className="border-b border-line/60 align-top text-fg-secondary">
                       <td className="py-2 pr-3">
                         <p className="font-semibold text-fg-primary">{row.profileName}</p>
-                        <p className="text-[10px] text-fg-muted">
+                        <p className="text-xs text-fg-muted">
                           {row.score > 0 ? `On the frontier · preference ${row.score}` : "Outside the frontier"}
                           {row.feasible ? " · feasible" : " · failed a constraint"}
                         </p>
-                        <p className="font-mono text-[10px] text-fg-muted">{row.configFingerprint}</p>
+                        <p className="font-mono text-xs text-fg-muted">{row.configFingerprint}</p>
                         {row.rejected.map((reason) => (
-                          <p key={reason} className="text-[10px] text-signal-warn">
+                          <p key={reason} className="text-xs text-signal-warn">
                             {reason}
                           </p>
                         ))}
-                        <button type="button" className="mt-1 text-[10px] text-accent hover:underline" onClick={() => togglePin(row.profileId)}>
+                        <button type="button" className="mt-1 text-xs text-accent hover:underline" onClick={() => togglePin(row.profileId)}>
                           {pinnedRow ? "Unpin" : pins.length >= 3 ? "Three designs are pinned" : "Pin to compare"}
                         </button>
                       </td>
@@ -589,7 +580,7 @@ export function MarketDesignStep({
                       <td className="py-2 pr-3 font-mono">
                         {retail ? pct(retail.progress) : "—"}
                         {retail && (
-                          <span className="block text-[10px] text-fg-muted">
+                          <span className="block text-xs text-fg-muted">
                             {retail.ordersRun} orders
                             {retail.participantsAsked != null ? ` / ${retail.participantsAsked} asked` : ""}
                           </span>
@@ -600,15 +591,15 @@ export function MarketDesignStep({
                       <td className="py-2 pr-3 font-mono">{pct(row.stressWorstProgress)}</td>
                       <td className="py-2 pr-3 font-mono">
                         {pct(row.stressGraduationRate)}
-                        <span className="block text-[10px] text-fg-muted">{row.stressPaths} paths</span>
+                        <span className="block text-xs text-fg-muted">{row.stressPaths} paths</span>
                       </td>
                       <td className="py-2 pr-3 font-mono">
                         {formatAtomsExact(row.thresholdAtoms, decimals)} {state.quote}
-                        <span className="block text-[10px] text-fg-muted">{pct(row.thresholdGap)} from the raise</span>
+                        <span className="block text-xs text-fg-muted">{pct(row.thresholdGap)} from the raise</span>
                       </td>
                       <td className="py-2 pr-3">
                         {row.feeLabel}
-                        <span className="block text-[10px] text-fg-muted">{feeStatusLabel(row.dynamicFeeStatus)}</span>
+                        <span className="block text-xs text-fg-muted">{feeStatusLabel(row.dynamicFeeStatus)}</span>
                       </td>
                       <td className="py-2">
                         <button
@@ -693,16 +684,16 @@ export function MarketDesignStep({
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
                   <p className="text-xs font-medium text-fg-primary">Price path</p>
-                  <p className="text-[10px] text-fg-muted">Basis points versus the opening price, after each retail order.</p>
+                  <p className="text-xs text-fg-muted">Basis points versus the opening price, after each retail order.</p>
                   <PathChart series={chartSeries} mode="price" />
                 </div>
                 <div>
                   <p className="text-xs font-medium text-fg-primary">Reserve progress</p>
-                  <p className="text-[10px] text-fg-muted">Quote reserve divided by the migration threshold, after each retail order.</p>
+                  <p className="text-xs text-fg-muted">Quote reserve divided by the migration threshold, after each retail order.</p>
                   <PathChart series={chartSeries} mode="progress" />
                 </div>
               </div>
-              <ul className="flex flex-wrap gap-3 text-[10px] text-fg-muted">
+              <ul className="flex flex-wrap gap-3 text-xs text-fg-muted">
                 {pinned.map((row, index) => (
                   <li key={row.profileId} className="flex items-center gap-1">
                     <span className="inline-block h-2 w-2 rounded-full" style={{ background: CHART_COLORS[index % CHART_COLORS.length] }} />
@@ -715,9 +706,9 @@ export function MarketDesignStep({
 
           <div className="space-y-3">
             {pinned.map((row) => (
-              <div key={row.profileId} className="ec-card space-y-2 p-4 text-xs text-fg-secondary">
-                <p className="font-medium text-fg-primary">Named scenarios · {row.profileName}</p>
-                <ul className="space-y-2">
+              <details key={row.profileId} className="ec-card space-y-3 p-5 text-xs text-fg-secondary">
+                <summary className="font-medium text-fg-primary">Named scenarios · {row.profileName}</summary>
+                <ul className="space-y-3 leading-relaxed">
                   {row.scenarios.map((item) => (
                     <li key={item.id}>
                       <span className="font-medium text-fg-primary">{item.label}.</span> Progress {pct(item.progress)}
@@ -727,7 +718,7 @@ export function MarketDesignStep({
                     </li>
                   ))}
                 </ul>
-              </div>
+              </details>
             ))}
           </div>
         </>

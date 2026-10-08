@@ -40,6 +40,8 @@ export function HomeLocalStrip() {
   const raising = launches.filter((l) => l.status !== "graduated").length;
   const featured = launches.slice(0, 3).map(toCard);
 
+  if (launches.length === 0) return null;
+
   return (
     <>
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

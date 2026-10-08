@@ -37,14 +37,15 @@ export function GraduationCard({
   const migrated = snapshot?.curve.phase === "migrated";
 
   return (
-    <div className="rounded-card border border-line bg-subtle/40 p-4" data-testid="graduation-card">
+    <div className="rounded-card border border-line bg-base/40 p-5 sm:p-6" data-testid="graduation-card">
       <div className="mb-2 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-fg-primary">Graduation</h3>
-        <span className="text-[10px] text-fg-muted">
+        <span className="text-xs text-fg-muted">
           {snapshot ? `read ${new Date(snapshot.checkedAt).toLocaleTimeString()}` : "not read"}
         </span>
       </div>
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:grid-cols-4">
+      {nums.known && <div className="mb-6 mt-4 h-2 overflow-hidden rounded-full bg-subtle" role="progressbar" aria-label="Graduation threshold progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.min(100, nums.progressBps / 100)}><div className="h-full rounded-full bg-accent transition-[width] duration-500" style={{ width: `${Math.min(100, Math.max(0, nums.progressBps / 100))}%` }} /></div>}
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-5 text-xs sm:grid-cols-4 [&_dd]:mt-2 [&_dd]:break-words">
         <div>
           <dt className="text-fg-muted">Threshold</dt>
           <dd className="font-mono text-fg-primary">{nums.known ? fmt(nums.threshold) : "unknown"}</dd>
@@ -66,15 +67,15 @@ export function GraduationCard({
           </dd>
         </div>
       </dl>
-      {!nums.known && <p className="mt-2 text-[11px] text-signal-warn">Unknown: {nums.reason}</p>}
+      {!nums.known && <p className="mt-2 text-xs text-signal-warn">Unknown: {nums.reason}</p>}
       {nums.known && !nums.complete && dec != null && (
-        <p className="mt-2 text-[11px] text-fg-muted">
+        <p className="mt-2 text-xs text-fg-muted">
           A buy needs roughly {tryFormatAtoms(nums.remaining.toString(), dec, dec)} {quoteLabel} plus the trading fee to
           complete the curve. Larger buys are capped to what the curve can fill (partial fill); the rest stays in your
           wallet.
         </p>
       )}
-      <div className="mt-3 border-t border-line pt-2 text-[11px]">
+      <div className="mt-3 border-t border-line pt-2 text-xs">
         <span className="text-fg-muted">DAMM v2 pool after graduation: </span>
         {dest ? (
           <>
@@ -88,7 +89,7 @@ export function GraduationCard({
             </a>{" "}
             <span
               className={clsx(
-                "ml-1 rounded-pill border px-1.5 py-0.5 text-[10px]",
+                "ml-1 rounded-pill border px-1.5 py-0.5 text-xs",
                 migrated && destination === "exists"
                   ? "border-signal-grad/40 text-signal-grad"
                   : "border-line text-fg-muted",
@@ -107,7 +108,7 @@ export function GraduationCard({
           <span className="text-fg-muted">unknown (config not read)</span>
         )}
       </div>
-      <p className="mt-2 text-[10px] text-fg-muted">
+      <p className="mt-2 text-xs text-fg-muted">
         Threshold, reserve and remaining are read from the DBC pool and config accounts. The DAMM v2 address is derived
         from the pool&apos;s migration fee option and mints; it only counts as live once the account is fetched. Price
         and output figures elsewhere are estimates, not guarantees.

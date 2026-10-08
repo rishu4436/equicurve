@@ -172,18 +172,11 @@ export function GraduatePanel({ poolAddress }: { poolAddress: string }) {
     <div className="mx-auto max-w-2xl space-y-6">
       <div className="text-center">
         <p className="text-xs font-medium uppercase tracking-wider text-accent">
-          Graduation ceremony
+          Market lifecycle
         </p>
 
-      <p className="text-xs text-fg-muted">
-        Transfer-hook pools: DBC revokes the base mint&apos;s transfer-hook program
-        and authority when the curve completes (
-        <code className="text-accent-soft">EvtCurveCompleteWithTransferHook</code>
-        ), then the same <code className="text-accent-soft">migrateToDammV2</code>{" "}
-        path applies. Graduated DAMM v2 liquidity has no active transfer hook.
-      </p>
-        <h1 className="mt-1 text-3xl font-semibold text-fg-primary">
-          Curve complete → DAMM v2
+        <h1 className="mt-3 ec-page-title">
+          From curve to liquidity.
         </h1>
         <p className="mt-2 text-sm text-fg-secondary">
           When the bonding curve hits its migration quote threshold, DBC
@@ -201,12 +194,13 @@ export function GraduatePanel({ poolAddress }: { poolAddress: string }) {
           </a>
           .
         </p>
+        <details className="mt-4 text-xs leading-relaxed text-fg-muted"><summary className="py-2 text-fg-secondary">Transfer-hook migration details</summary><p className="mt-2">For transfer-hook pools, DBC revokes the base mint&apos;s transfer-hook program and authority when the curve completes (<code>EvtCurveCompleteWithTransferHook</code>). The same <code>migrateToDammV2</code> path then applies. Graduated DAMM v2 liquidity has no active transfer hook.</p></details>
       </div>
 
       {/* Morph visual */}
       <div
         className={clsx(
-          "ec-card relative overflow-hidden p-8 text-center",
+          "ec-card ec-hero-grid relative overflow-hidden px-6 py-10 text-center sm:py-12",
           morph && "ec-grad-morph",
           verified && "border-signal-grad/40 shadow-glow",
         )}
@@ -250,9 +244,8 @@ export function GraduatePanel({ poolAddress }: { poolAddress: string }) {
                 "flex h-20 w-20 items-center justify-center rounded-card border-2",
                 verified
                   ? "border-signal-grad bg-signal-grad/15 text-signal-grad"
-                  : "border-chart-damm/40 bg-subtle text-fg-muted",
+                  : "border-signal-raise/40 bg-subtle text-fg-muted",
               )}
-              style={{ borderColor: verified ? undefined : "#A78BFA66" }}
             >
               <span className="font-mono text-xs font-semibold">DAMM</span>
             </div>

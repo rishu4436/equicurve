@@ -21,7 +21,7 @@ export function CurveMiniViz({
       <path d="M4 4 V44" stroke="#243044" strokeWidth="1" />
       <path
         d={d}
-        stroke="url(#curveGrad)"
+        stroke="#6DE0C5"
         strokeWidth="2.5"
         strokeLinecap="round"
       />
@@ -30,16 +30,10 @@ export function CurveMiniViz({
         y1="4"
         x2="76"
         y2="4"
-        stroke="#A78BFA"
+        stroke="#89BCEB"
         strokeWidth="2"
         strokeLinecap="round"
       />
-      <defs>
-        <linearGradient id="curveGrad" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stopColor="#2DD4BF" />
-          <stop offset="100%" stopColor="#38BDF8" />
-        </linearGradient>
-      </defs>
     </svg>
   );
 }

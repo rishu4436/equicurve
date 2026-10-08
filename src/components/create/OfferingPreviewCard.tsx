@@ -12,7 +12,8 @@ export function OfferingPreviewCard({ state }: { state: WizardState }) {
   const feePlatform = 100 - state.feeIssuer;
 
   return (
-    <div className="ec-card space-y-4 p-5 shadow-glow lg:sticky lg:top-36">
+    <aside className="ec-card space-y-5 self-start p-5 lg:sticky lg:top-28">
+      <div className="flex justify-between border-b border-line pb-4 text-xs"><span className="font-medium text-fg-secondary">Your market brief</span><span className="text-fg-muted">Draft preview</span></div>
       <div className="flex items-start gap-3">
         <div className="flex h-12 w-12 items-center justify-center rounded-card border border-line bg-subtle text-lg font-semibold text-accent">
           {(state.ticker || "??").slice(0, 2)}
@@ -37,10 +38,11 @@ export function OfferingPreviewCard({ state }: { state: WizardState }) {
           <span>{preset.name} curve</span>
           <span className="text-signal-grad">→ DAMM v2</span>
         </div>
-        <CurveMiniViz preset={state.presetId} className="h-14 w-full" />
+        <CurveMiniViz preset={state.presetId} className="my-3 h-20 w-full" />
+        <p className="text-xs text-fg-muted">Illustrative shape · simulate to compare designs</p>
       </div>
 
-      <dl className="grid grid-cols-2 gap-2 text-xs">
+      <dl className="grid grid-cols-2 gap-5 text-xs [&_dd]:mt-1.5">
         <div>
           <dt className="text-fg-muted">Target raise</dt>
           <dd className="font-mono text-fg-primary">
@@ -52,7 +54,7 @@ export function OfferingPreviewCard({ state }: { state: WizardState }) {
           <dd className="text-fg-primary">≥{state.lpLockPct}%</dd>
         </div>
         <div>
-          <dt className="text-fg-muted">Fee split</dt>
+          <dt className="text-fg-muted">Non-protocol fee split</dt>
           <dd className="text-fg-primary">
             Creator {state.feeIssuer}% / partner {feePlatform}%
           </dd>
@@ -64,25 +66,25 @@ export function OfferingPreviewCard({ state }: { state: WizardState }) {
       </dl>
 
       <div className="flex flex-wrap gap-1.5">
-        <span className="rounded-pill border border-line bg-subtle px-2 py-0.5 text-[10px] text-fg-secondary">
+        <span className="rounded-pill border border-line bg-subtle px-2 py-0.5 text-xs text-fg-secondary">
           Quote: {state.quote}
         </span>
-        <span className="rounded-pill border border-line bg-subtle px-2 py-0.5 text-[10px] text-fg-secondary">
+        <span className="rounded-pill border border-line bg-subtle px-2 py-0.5 text-xs text-fg-secondary">
           {state.investorType}
         </span>
-        <span className="rounded-pill border border-line bg-subtle px-2 py-0.5 text-[10px] text-fg-secondary">
+        <span className="rounded-pill border border-line bg-subtle px-2 py-0.5 text-xs text-fg-secondary">
           {state.transferProfile === "open-spl" ? "Open SPL" : state.transferProfile === "token-2022" ? "Token-2022" : "Transfer hook"}
         </span>
         {state.mintRenounce ? (
-          <span className="rounded-pill border border-gold/40 bg-gold/10 px-2 py-0.5 text-[10px] text-gold">
+          <span className="rounded-pill border border-gold/40 bg-gold/10 px-2 py-0.5 text-xs text-gold">
             Mint renounce
           </span>
         ) : (
-          <span className="rounded-pill border border-signal-warn/40 bg-signal-warn/10 px-2 py-0.5 text-[10px] text-signal-warn">
+          <span className="rounded-pill border border-signal-warn/40 bg-signal-warn/10 px-2 py-0.5 text-xs text-signal-warn">
             Mint retained
           </span>
         )}
       </div>
-    </div>
+    </aside>
   );
 }

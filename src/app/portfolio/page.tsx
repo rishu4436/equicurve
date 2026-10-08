@@ -101,6 +101,7 @@ export default function PortfolioPage() {
   return (
     <div className="space-y-6">
       <div>
+        <p className="ec-eyebrow mb-3">Your markets, in view</p>
         <h1 className="text-3xl font-semibold text-fg-primary">Portfolio</h1>
         <p className="mt-1 text-sm text-fg-secondary">
           Two separate sources: <strong className="text-fg-primary">verified on-chain positions</strong> read from your
@@ -109,7 +110,7 @@ export default function PortfolioPage() {
         </p>
       </div>
 
-      <div className="flex gap-2 border-b border-line pb-2">
+      <div className="ec-tabs w-fit max-w-full" role="group" aria-label="Portfolio view">
         {(
           [
             ["positions", "Positions"],
@@ -121,10 +122,11 @@ export default function PortfolioPage() {
             key={id}
             type="button"
             onClick={() => setTab(id)}
+            aria-pressed={tab === id}
             className={
               tab === id
-                ? "rounded-pill bg-accent/15 px-4 py-1.5 text-sm text-accent"
-                : "rounded-pill px-4 py-1.5 text-sm text-fg-secondary"
+                ? "min-h-11 whitespace-nowrap rounded-lg bg-accent/15 px-4 py-2 text-sm text-accent"
+                : "min-h-11 whitespace-nowrap rounded-lg px-4 py-2 text-sm text-fg-secondary"
             }
           >
             {label}
@@ -138,7 +140,7 @@ export default function PortfolioPage() {
             <div className="flex items-center justify-between border-b border-line px-4 py-3">
               <div>
                 <h2 className="text-sm font-semibold text-fg-primary">Verified on-chain wallet positions</h2>
-                <p className="text-[11px] text-fg-muted">
+                <p className="text-xs text-fg-muted">
                   Exact balances from token accounts owned by the connected wallet (SPL + Token-2022), for mints
                   EquiCurve knows (registry + this browser).
                   {chain.state === "ok" && ` Read ${new Date(chain.readAt).toLocaleTimeString()}.`}
@@ -151,7 +153,7 @@ export default function PortfolioPage() {
               )}
             </div>
             {!wallet.publicKey ? (
-              <p className="p-4 text-sm text-fg-muted">Connect a wallet to read positions from chain.</p>
+              <div className="flex flex-col items-center gap-4 px-6 py-14 text-center"><span className="flex h-14 w-14 items-center justify-center rounded-2xl border border-accent/20 bg-accent/10 text-xl text-accent" aria-hidden="true">◈</span><h3 className="text-xl font-medium tracking-tight">Your portfolio starts here.</h3><p className="max-w-sm text-sm leading-relaxed text-fg-muted">Connect a wallet from the navigation to see your verified on-chain positions.</p><Link href="/explore" className="ec-btn-secondary">Explore markets →</Link></div>
             ) : chain.state === "loading" || chain.state === "idle" ? (
               <p className="p-4 text-sm text-fg-muted">Reading token accounts…</p>
             ) : chain.state === "error" ? (
@@ -185,7 +187,7 @@ export default function PortfolioPage() {
                         </td>
                         <td className="px-4 py-3 font-mono text-xs text-fg-primary">
                           {formatAtomsExact(p.atoms, p.decimals)}
-                          <span className="block text-[10px] text-fg-muted">
+                          <span className="block text-xs text-fg-muted">
                             {p.accounts} account{p.accounts === 1 ? "" : "s"} · {p.program}
                           </span>
                         </td>
@@ -213,7 +215,7 @@ export default function PortfolioPage() {
           <section className="ec-card overflow-x-auto" data-testid="local-launches">
             <div className="border-b border-line px-4 py-3">
               <h2 className="text-sm font-semibold text-fg-primary">Launched from this browser (local record)</h2>
-              <p className="text-[11px] text-fg-muted">
+              <p className="text-xs text-fg-muted">
                 Saved in localStorage at launch time. Status and lock shown here are the values recorded then, not a
                 chain read; open the offering for live state.
               </p>
@@ -269,7 +271,7 @@ export default function PortfolioPage() {
                 <div>
                   <span className="capitalize text-fg-primary">{a.kind}</span>
                   {a.amount && <span className="ml-2 font-mono text-fg-muted">{a.amount}</span>}
-                  <div className="font-mono text-[10px] text-fg-muted">
+                  <div className="font-mono text-xs text-fg-muted">
                     {a.pool.slice(0, 12)}… · {new Date(a.at).toLocaleString()}
                   </div>
                 </div>

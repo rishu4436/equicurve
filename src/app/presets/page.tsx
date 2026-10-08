@@ -32,7 +32,8 @@ export default function PresetsPage() {
   return (
     <div className="space-y-8">
       <header>
-        <h1 className="text-3xl font-semibold text-fg-primary">Market designs</h1>
+        <p className="ec-eyebrow mb-3">Explore the possibilities</p>
+        <h1 className="ec-page-title">The curve library.</h1>
         <p className="mt-2 max-w-3xl text-sm text-fg-secondary">
           A launch design is a real Meteora config: fee schedule, market caps, creator fee, and LP lock. The table
           below is one labelled simulation, not a ranking of live launches. Fee-schedule seeds further down are the
@@ -43,8 +44,8 @@ export default function PresetsPage() {
         </div>
       </header>
 
-      <section className="space-y-3">
-        <h2 className="text-lg font-semibold text-fg-primary">Illustrative brief, synthetic evidence</h2>
+      <details className="ec-card space-y-4 p-6">
+        <summary className="text-base font-medium text-fg-primary">Inside a sample simulation <span className="ml-2 text-xs font-normal text-fg-muted">Illustrative brief · synthetic evidence</span></summary>
         <p className="max-w-3xl text-sm text-fg-secondary">
           Private-company profile, controlled discovery, 100 SOL raise, 1 SOL typical order, 12 participants, 4 cohort
           paths, seed {sample?.seed ?? "—"}. Every metric here is simulated. There is no observed launch record on this
@@ -76,7 +77,7 @@ export default function PresetsPage() {
                     <tr key={row.profileId} className="border-b border-line/60">
                       <td className="py-2 pr-3 font-semibold text-fg-primary">
                         {row.profileName}
-                        <span className="block text-[10px] font-normal text-fg-muted">
+                        <span className="block text-xs font-normal text-fg-muted">
                           {row.score > 0 ? "On the frontier" : "Not on the frontier"}
                           {row.feasible ? "" : " · constraint failed"}
                         </span>
@@ -92,7 +93,7 @@ export default function PresetsPage() {
                 })}
               </tbody>
             </table>
-            <p className="mt-1 text-[10px] text-fg-muted">
+            <p className="mt-1 text-xs text-fg-muted">
               Policy {sample.policyId}. {sample.observedNote} No usage counts are shown because none have been read from
               chain.
             </p>
@@ -103,9 +104,9 @@ export default function PresetsPage() {
         <Link href="/create?step=design" className="ec-btn-primary inline-flex">
           Design a market
         </Link>
-      </section>
+      </details>
 
-      <h2 className="text-lg font-semibold text-fg-primary">Fee-schedule seeds</h2>
+      <h2 className="ec-section-title">Compare starting points</h2>
 
       <div className="overflow-x-auto">
         <table className="w-full min-w-[640px] text-left text-xs" data-testid="preset-table">
@@ -132,29 +133,29 @@ export default function PresetsPage() {
             ))}
           </tbody>
         </table>
-        <p className="mt-1 text-[10px] text-fg-muted">
+        <p className="mt-1 text-xs text-fg-muted">
           *Of the 80% left after Meteora&apos;s 20% protocol fee; partner / fee claimer gets the rest. Editable in Create.
         </p>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
         {CURVE_PRESETS.map((p) => (
-          <div key={p.id} className="ec-card flex flex-col p-5" id={p.id}>
-            <CurveMiniViz preset={p.id} className="mb-3 h-14 w-full" />
-            <div className="flex items-baseline justify-between gap-2">
+          <div key={p.id} className="ec-card ec-scroll-target flex flex-col p-6 sm:p-8" id={p.id}>
+            <div className="mb-6 rounded-xl border border-line bg-base/40 p-5"><CurveMiniViz preset={p.id} className="h-28 w-full" /><p className="mt-3 text-center text-xs text-fg-muted">Illustrative curve shape</p></div>
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
               <h2 className="text-lg font-semibold text-fg-primary">{p.name}</h2>
-              {p.id === "equity" && <span className="text-[10px] uppercase tracking-wider text-gold">EquiCurve default</span>}
+              {p.id === "equity" && <span className="text-xs uppercase tracking-wider text-gold">EquiCurve default</span>}
             </div>
             <p className="text-sm text-accent-soft">{p.tagline}</p>
             <p className="mt-2 text-sm text-fg-secondary">{p.description}</p>
             <div className="mt-4 flex-1">
               <PresetFacts id={p.id} quote="SOL" />
             </div>
-            <p className="mt-2 text-[10px] text-fg-muted">
+            <p className="mt-2 text-xs text-fg-muted">
               Shown for SOL quote. USDC quote: {presetThresholdLabel(p.id, "USDC")} before graduation.
             </p>
             <Link href={`/create?step=design&preset=${p.id}`} className="ec-btn-primary mt-5 w-full">
-              Design with this fee schedule available
+              Start with {p.name} →
             </Link>
           </div>
         ))}

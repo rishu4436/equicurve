@@ -62,7 +62,7 @@ export default function SettingsPage() {
     registry?.registry?.backend ?? health?.registry?.backend ?? null;
 
   return (
-    <main className="mx-auto max-w-2xl space-y-6 px-4 py-8">
+    <div className="mx-auto max-w-3xl space-y-8">
       <header>
         <p className="text-xs text-fg-muted">
           <Link href="/" className="hover:text-accent">
@@ -219,6 +219,6 @@ export default function SettingsPage() {
           </button>
         </div>
       </section>
-    </main>
+    </div>
   );
 }

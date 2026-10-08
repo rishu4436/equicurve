@@ -72,7 +72,7 @@ export function PresetFacts({ id, quote }: { id: PresetId; quote: PresetQuote })
 /** Honest note on how presets differ (they share one builder / curve shape). */
 export function PresetShapeNote() {
   return (
-    <p className="text-[11px] text-fg-muted">
+    <p className="text-xs text-fg-muted">
       All presets use Meteora&apos;s <code>buildCurveWithMarketCap</code>: a single constant-liquidity segment between the
       start and graduation market caps. They differ in price range (5× / 15× / 100×), raise size and fee schedule —
       &quot;Flat&quot; and &quot;Exponential&quot; have the same 15× price path; Exponential refers to its fee decay.

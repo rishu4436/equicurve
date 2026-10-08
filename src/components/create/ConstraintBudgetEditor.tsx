@@ -83,7 +83,7 @@ export function ConstraintBudgetEditor({
         Set each limit yourself. A suggested value updates that field and runs the search with every limit shown here.
         Typing a number waits until you recalculate.
       </p>
-      <ul className="space-y-3">
+      <ul className="grid gap-3 md:grid-cols-2">
         {CONSTRAINT_FIELDS.map((field) => {
           const suggestion = proposal ? constraintFieldProposal(field, requested, proposal) : null;
           const covered =
@@ -91,11 +91,11 @@ export function ConstraintBudgetEditor({
             (field === "minRetailProgress" ? start[field] <= suggestion.value : start[field] >= suggestion.value);
           const offer = suggestion?.inRange === true && !covered ? suggestion : null;
           return (
-            <li key={field} className="space-y-1">
+            <li key={field} className="space-y-3 rounded-xl border border-line bg-base/40 p-4">
               <label className="block text-xs font-medium text-fg-primary" htmlFor={`constraint-${field}`}>
                 {constraintFieldLabel(field)}
               </label>
-              <p className="text-[10px] text-fg-muted">Requested {formatConstraintValue(field, requested[field])}</p>
+              <p className="text-xs text-fg-muted">Requested {formatConstraintValue(field, requested[field])}</p>
               <div className="flex flex-wrap items-center gap-2">
                 <input
                   id={`constraint-${field}`}
@@ -106,7 +106,7 @@ export function ConstraintBudgetEditor({
                   value={text[field]}
                   onChange={(event) => setText((current) => ({ ...current, [field]: event.target.value }))}
                 />
-                <span className="text-[10px] text-fg-muted">{isFractionConstraint(field) ? "%" : "bps"}</span>
+                <span className="text-xs text-fg-muted">{isFractionConstraint(field) ? "%" : "bps"}</span>
                 {offer && (
                   <button
                     type="button"
@@ -114,12 +114,12 @@ export function ConstraintBudgetEditor({
                     disabled={running}
                     onClick={() => suggest(field, offer.value)}
                   >
-                    Use {formatConstraintValue(field, offer.value)}
+                    Use {formatConstraintValue(field, offer.value)} &amp; recalculate
                   </button>
                 )}
               </div>
               {suggestion && !suggestion.inRange && (
-                <p className="text-[10px] text-signal-warn" data-testid={`constraint-out-of-range-${field}`}>
+                <p className="text-xs text-signal-warn" data-testid={`constraint-out-of-range-${field}`}>
                   Admitting {profileName} would set {constraintFieldLabel(field).toLowerCase()} to{" "}
                   {formatConstraintValue(field, suggestion.value)}, which is outside the range that can be signed.
                 </p>

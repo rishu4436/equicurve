@@ -3,6 +3,7 @@
 import { useConnection } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { LineChart } from "@/components/ui/LineChart";
 import { reconstructPoolPriceHistory } from "@/lib/dbc/priceHistory";
 import {
   loadPriceHistory,
@@ -14,7 +15,7 @@ type Props = {
   poolAddress: string | null;
   quoteLabel: string;
   /** 0–1 on-chain quote progress for the theoretical curve overlay. */
-  progress: number;
+  progress: number | null;
   /** Demo / empty — show curve shape only, no fake history. */
   illustrative?: boolean;
   /** Graduation price ÷ start price for the theoretical shape (preset). */
@@ -59,198 +60,37 @@ export function curveShapeYs(priceMultiple: number, n = 32): number[] {
 }
 
 function ChartSvg({
-  history,
-  spot,
-  quoteLabel,
-  progress,
-  priceMultiple,
-  mode,
+  history, spot, quoteLabel, progress, priceMultiple, mode,
 }: {
-  history: PricePoint[];
-  spot: number | null;
-  quoteLabel: string;
-  progress: number;
-  priceMultiple: number;
-  mode: "live" | "illustrative" | "thin";
+  history: PricePoint[]; spot: number | null; quoteLabel: string; progress: number | null;
+  priceMultiple: number; mode: "live" | "illustrative" | "thin";
 }) {
-  const w = 360;
-  const h = 160;
-  const padL = 48;
-  const padR = 16;
-  const padT = 28;
-  const padB = 28;
-  const innerW = w - padL - padR;
-  const innerH = h - padT - padB;
-
-  // Only chain-derived swap prices form the history line.
-  const swapPts = history.filter((p) => p.source === "swap");
-  const series =
-    swapPts.length > 0
-      ? swapPts
-      : spot != null
-        ? [{ t: Date.now(), price: spot, source: "spot" as const }]
-        : [];
-
-  const prices = series.map((p) => p.price);
-  if (spot != null) prices.push(spot);
-  const minP = prices.length ? Math.min(...prices) : 0;
-  const maxP = prices.length ? Math.max(...prices) : 1;
-  const span = Math.max(maxP - minP, maxP * 0.05, 1e-12);
-  const yMin = Math.max(0, minP - span * 0.12);
-  const yMax = maxP + span * 0.12;
-
-  const tMin = series.length ? series[0].t : Date.now() - 3_600_000;
-  const tMax = series.length ? series[series.length - 1].t : Date.now();
-  const tSpan = Math.max(tMax - tMin, 60_000);
-
-  const xOf = (t: number) => padL + ((t - tMin) / tSpan) * innerW;
-  const yOf = (price: number) =>
-    padT + innerH - ((price - yMin) / (yMax - yMin || 1)) * innerH;
-
-  const histLine =
-    series.length >= 2
-      ? series.map((p, i) => `${i === 0 ? "M" : "L"}${xOf(p.t)},${yOf(p.price)}`).join(" ")
-      : null;
-
-  // Theoretical overlay: x = raise progress (0→100% of threshold), NOT time;
-  // y normalized into chart height, NOT on the price axis scale.
-  const shapeYs = curveShapeYs(priceMultiple);
-  const pClamped = Math.min(1, Math.max(0, progress));
-  const shapeNowX = padL + pClamped * innerW;
-  const shapeNowY = padT + innerH - (((1 + pClamped * (Math.sqrt(Math.max(priceMultiple, 1.0001)) - 1)) ** 2 - 1) / (Math.max(priceMultiple, 1.0001) - 1)) * innerH;
-  const shapePts = shapeYs
-    .map((ny, i) => {
-      const x = padL + (i / (shapeYs.length - 1)) * innerW;
-      const y = padT + innerH - ny * innerH;
-      return `${i === 0 ? "M" : "L"}${x},${y}`;
-    })
-    .join(" ");
-
-  const spotY = spot != null ? yOf(spot) : null;
-  const spotX = padL + innerW;
-
-  const yTicks = [yMin, (yMin + yMax) / 2, yMax];
-
+  const swaps = history.filter(point => point.source === "swap");
+  const shape = curveShapeYs(priceMultiple);
   return (
-    <svg
-      viewBox={`0 0 ${w} ${h}`}
-      className="h-40 w-full"
-      role="img"
-      aria-label={
-        mode === "illustrative"
-          ? "Illustrative bonding curve shape, not price history"
-          : "Historical swap-implied price chart"
-      }
-    >
-      {/* axes */}
-      <path d={`M${padL} ${padT} V${h - padB} H${w - padR}`} stroke="#243044" fill="none" />
-      {yTicks.map((yv, i) => {
-        const y = yOf(yv);
-        return (
-          <g key={i}>
-            <line
-              x1={padL}
-              x2={w - padR}
-              y1={y}
-              y2={y}
-              stroke="#243044"
-              strokeDasharray="2 4"
-              opacity={0.6}
-            />
-            {mode !== "illustrative" && series.length > 0 && (
-              <text x={4} y={y + 3} fill="#6B7A8F" fontSize="8" fontFamily="monospace">
-                {yv >= 1 ? yv.toPrecision(3) : yv.toExponential(1)}
-              </text>
-            )}
-          </g>
-        );
-      })}
-
-      {/* theoretical curve shape */}
-      <path
-        d={shapePts}
-        fill="none"
-        stroke="#A78BFA"
-        strokeWidth="1.5"
-        strokeDasharray="4 3"
-        opacity={0.85}
-      />
-      {mode !== "illustrative" && (
-        <circle cx={shapeNowX} cy={shapeNowY} r="3" fill="none" stroke="#A78BFA" strokeWidth="1.5" />
-      )}
-
-      {/* historical series */}
-      {histLine && (
-        <path
-          d={histLine}
-          fill="none"
-          stroke="#2DD4BF"
-          strokeWidth="2.25"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      )}
-
-      {/* swap markers */}
-      {series
-        .filter((p) => p.source === "swap")
-        .map((p) => (
-          <circle
-            key={p.sig ?? `${p.t}-${p.price}`}
-            cx={xOf(p.t)}
-            cy={yOf(p.price)}
-            r="2.5"
-            fill="#2DD4BF"
-          />
-        ))}
-
-      {/* live spot */}
-      {spot != null && spotY != null && mode !== "illustrative" && (
-        <g>
-          <circle cx={spotX} cy={spotY} r="4.5" fill="#E8C547" />
-          <circle
-            cx={spotX}
-            cy={spotY}
-            r="7"
-            fill="none"
-            stroke="#E8C547"
-            strokeOpacity="0.35"
-          />
-        </g>
-      )}
-
-      <text x={padL} y={14} fill="#6B7A8F" fontSize="9">
-        {mode === "illustrative"
-          ? "Theoretical curve shape (not history)"
-          : series.filter((p) => p.source === "swap").length > 0
-            ? `Swap-derived · ${quoteLabel}/token`
-            : spot != null
-              ? `Live spot only · ${quoteLabel}/token`
-              : "No swaps parsed yet"}
-      </text>
-      <text x={w - padR} y={14} fill="#A78BFA" fontSize="8" textAnchor="end">
-        dashed: price vs % raised (x ≠ time)
-      </text>
-      {series.length >= 1 && mode !== "illustrative" && (
-        <>
-          <text x={padL} y={h - 8} fill="#6B7A8F" fontSize="8">
-            {formatTime(tMin)}
-          </text>
-          <text x={w - padR - 70} y={h - 8} fill="#6B7A8F" fontSize="8" textAnchor="end">
-            {formatTime(tMax)}
-          </text>
-        </>
-      )}
-      <text
-        x={12}
-        y={padT + innerH / 2}
-        fill="#6B7A8F"
-        fontSize="8"
-        transform={`rotate(-90 12 ${padT + innerH / 2})`}
-      >
-        {quoteLabel}
-      </text>
-    </svg>
+    <div className="space-y-5">
+      {mode !== "illustrative" && <div className="ec-chart-frame p-4 sm:p-5">
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-2"><h4 className="text-sm font-medium">Swap price history</h4><span className="ec-chip">Partial on-chain history</span></div>
+        <LineChart label="Confirmed swap execution prices over time"
+          series={[{ name: "Confirmed swaps", color: "#6DE0C5", points: swaps.map(point => ({ x: point.t, y: point.price })) }]}
+          xLabel="Time" yLabel={`${quoteLabel} / token`}
+          formatX={value => new Date(value).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+          formatDetailX={formatTime} formatDetailY={value => formatPrice(value, quoteLabel)}
+          formatY={value => value >= 1 ? value.toPrecision(3) : value.toExponential(1)} />
+        {swaps.length > 0 && <p className="mt-3 text-xs text-fg-muted">{formatTime(swaps[0].t)} — {formatTime(swaps[swaps.length - 1].t)}</p>}
+        {swaps.length === 0 && <p className="mt-3 text-xs leading-relaxed text-fg-muted">{spot != null ? "A spot observation is available above. No confirmed swap history is available to plot yet." : "Refresh to look for parseable swaps. Missing history is never filled with simulated prices."}</p>}
+      </div>}
+      <details className="rounded-xl border border-line p-4 sm:p-5" open={mode === "illustrative" ? true : undefined}>
+        <summary className="text-sm font-medium text-fg-secondary">Theoretical curve shape <span className="ml-2 text-xs font-normal text-fg-muted">Illustrative · separate scale</span></summary>
+        <div className="mt-5">
+          <LineChart label="Theoretical relative price versus share of graduation threshold"
+            series={[{ name: "Theoretical shape", color: "#89BCEB", dashed: true, points: shape.map((value, i) => ({ x: i / (shape.length - 1) * 100, y: value })) }]}
+            floor={0} ceiling={1} xLabel="Threshold raised (%)" yLabel="Normalized price shape"
+            formatX={value => `${Math.round(value)}%`} formatY={value => value.toFixed(2)} height={190} />
+          <p className="mt-3 text-xs leading-relaxed text-fg-muted">{priceMultiple}× graduation / start price range. The vertical axis is normalized from 0 to 1; it is not a token price or price forecast.{mode !== "illustrative" && ` Current on-chain threshold progress: ${progress == null ? "unknown" : `${(Math.min(1, Math.max(0, progress)) * 100).toFixed(1)}%`}.`}</p>
+        </div>
+      </details>
+    </div>
   );
 }
 
@@ -322,21 +162,21 @@ export function PriceHistoryChart({
     null;
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h3 className="text-sm font-semibold text-fg-primary">Price</h3>
-          <p className="text-[10px] text-fg-muted">
+          <p className="text-xs text-fg-muted">
             {illustrative
               ? "Illustrative offering — curve shape only; no invented price history."
-              : "Three separate series, labelled below. Swap points are cached in this browser between visits."}
+              : "Confirmed swaps over time. Spot observations and theoretical shapes are shown separately."}
           </p>
         </div>
         <div className="flex items-center gap-3">
           {displaySpot != null && !illustrative && (
             <span className="font-mono text-sm text-gold">
               {formatPrice(displaySpot, quoteLabel)}
-              <span className="ml-1 text-[10px] text-fg-muted">spot</span>
+              <span className="ml-1 text-xs text-fg-muted">{spotAt ? "live spot" : "cached spot"}</span>
             </span>
           )}
           {poolAddress && !illustrative && (
@@ -361,7 +201,7 @@ export function PriceHistoryChart({
         mode={mode}
       />
 
-      <ul className="grid gap-1 text-[10px] text-fg-muted sm:grid-cols-3" data-testid="price-legend">
+      <ul className="grid gap-1 text-xs text-fg-muted sm:grid-cols-3" data-testid="price-legend">
         <li className="flex items-start gap-1.5">
           <span className="mt-1 inline-block h-0.5 w-3 shrink-0 bg-accent" />
           <span>
@@ -372,8 +212,8 @@ export function PriceHistoryChart({
         <li className="flex items-start gap-1.5">
           <span className="mt-0.5 inline-block h-2 w-2 shrink-0 rounded-full bg-gold" />
           <span>
-            <strong className="text-fg-secondary">Live spot</strong> · marginal price from the pool&apos;s √price
-            {spotAt ? `, read ${new Date(spotAt).toLocaleTimeString()}` : ""}. No fee, no size.
+            <strong className="text-fg-secondary">{displaySpot == null ? "Spot observation" : spotAt ? "Live spot" : "Cached spot"}</strong> · marginal price from the pool&apos;s √price
+            {spotAt ? `, read ${new Date(spotAt).toLocaleTimeString()}` : displaySpot != null ? ", cached in this browser; observation time unavailable" : ""}. No fee, no size.
           </span>
         </li>
         <li className="flex items-start gap-1.5">
@@ -383,13 +223,13 @@ export function PriceHistoryChart({
           />
           <span>
             <strong className="text-fg-secondary">Theoretical curve</strong> · price vs share of the threshold raised
-            ({priceMultiple}× range, ring = now). Not time, not to price scale.
+            ({priceMultiple}× range). Expand the separate normalized chart above.
           </span>
         </li>
       </ul>
 
       {!illustrative && poolAddress && (
-        <p className="text-[10px] text-fg-muted">
+        <p className="text-xs text-fg-muted">
           {swapCount > 0
             ? `${swapCount} swap point${swapCount === 1 ? "" : "s"} from ${meta.scanned || "…"} recent pool signatures (parsed ${meta.parsedSwaps}).`
             : meta.scanned > 0
@@ -400,7 +240,7 @@ export function PriceHistoryChart({
         </p>
       )}
       {status && (
-        <p className="text-[10px] text-signal-warn">{status}</p>
+        <p className="text-xs text-signal-warn">{status}</p>
       )}
     </div>
   );

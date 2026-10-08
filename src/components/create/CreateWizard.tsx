@@ -515,39 +515,38 @@ export function CreateWizard() {
       requireForAction={eligibility.needGate}
       onAccepted={eligibility.onAccepted}
     >
-      <div className="space-y-6">
-        <div className="sticky top-[6.75rem] z-30 -mx-4 border-b border-line bg-base/95 px-4 py-3 backdrop-blur md:top-[4.5rem]">
-          <ol className="mx-auto flex max-w-6xl flex-wrap items-center gap-2">
+      <div className="ec-wizard grid min-w-0 grid-cols-1 gap-6 xl:grid-cols-[200px_minmax(0,1fr)] xl:gap-10">
+        <nav aria-label="Create market steps" className="sticky top-[72px] z-30 -mx-5 min-w-0 self-start border-b border-line bg-base/95 px-5 py-3 backdrop-blur sm:-mx-8 sm:px-8 xl:top-24 xl:mx-0 xl:rounded-card xl:border xl:bg-elevated/50 xl:p-4">
+          <p className="mb-5 hidden px-3 text-xs font-medium uppercase tracking-widest text-fg-muted xl:block">Market studio</p>
+          <ol className="flex items-center gap-1 overflow-x-auto xl:flex-col xl:items-stretch xl:gap-2">
             {WIZARD_STEPS.map((s, i) => {
               const active = s.id === step;
               const done = i < idx;
               return (
-                <li key={s.id} className="flex items-center gap-2">
+                <li key={s.id} className="shrink-0">
                   <button
                     type="button"
                     disabled={i > idx}
+                    aria-current={active ? "step" : undefined}
                     onClick={() => i <= idx && go(s.id)}
                     className={clsx(
-                      "rounded-pill px-3 py-1 text-xs font-medium transition",
-                      active && "bg-accent/20 text-accent",
+                      "flex min-h-11 w-full items-center gap-3 whitespace-nowrap rounded-input px-3 py-3 text-sm font-medium transition-colors",
+                      active && "bg-accent/10 text-accent",
                       done && !active && "text-fg-primary hover:bg-subtle",
                       !done && !active && "text-fg-muted",
                     )}
                   >
-                    <span className="mr-1 font-mono">{i + 1}</span>
+                    <span className={clsx("flex h-6 w-6 shrink-0 items-center justify-center rounded-md border text-xs", active ? "border-accent/30" : "border-line")}>{done ? "✓" : i + 1}</span>
                     {s.label}
                   </button>
-                  {i < WIZARD_STEPS.length - 1 && (
-                    <span className="hidden text-line sm:inline">→</span>
-                  )}
                 </li>
               );
             })}
           </ol>
-        </div>
+        </nav>
 
-        <div className="grid gap-8 lg:grid-cols-[1.15fr_0.85fr]">
-          <div className="space-y-6">
+        <div className={clsx("grid min-w-0 gap-8", step !== "design" && "lg:grid-cols-[minmax(0,1.35fr)_minmax(260px,.8fr)] xl:grid-cols-[minmax(0,1.3fr)_minmax(260px,.8fr)]")}>
+          <div className="min-w-0 space-y-6">
             {showErrors && Object.keys(stepErrors(step, state)).length > 0 && (
               <ul className="mb-4 space-y-1 rounded-input border border-signal-danger/30 bg-signal-danger/10 px-3 py-2 text-xs text-signal-danger">
                 {Object.entries(stepErrors(step, state)).map(([k, v]) => (
@@ -590,11 +589,11 @@ export function CreateWizard() {
               />
             )}
           </div>
-          <OfferingPreviewCard state={state} />
+          {step !== "design" && <OfferingPreviewCard state={state} />}
         </div>
 
         {step !== "launch" && (
-          <div className="sticky bottom-0 z-20 -mx-4 flex items-center justify-between border-t border-line bg-base/95 px-4 py-3 backdrop-blur">
+          <div className="sticky bottom-0 z-20 -mx-5 flex items-center justify-between gap-3 border-t border-line bg-base/95 px-5 py-4 backdrop-blur sm:mx-0 xl:col-start-2">
             <button
               type="button"
               onClick={onBack}
@@ -603,8 +602,9 @@ export function CreateWizard() {
             >
               Back
             </button>
-            <span className="text-xs text-fg-muted">
+            <span className="text-center text-xs text-fg-muted">
               Step {idx + 1} of {WIZARD_STEPS.length}
+              {!canContinue(step, state) && <span className="mt-1 block max-w-48">{step === "design" ? "Choose an eligible design to continue" : step === "review" ? "Complete the acknowledgements" : "Complete the required fields"}</span>}
             </span>
             <button
               type="button"
@@ -641,7 +641,7 @@ function StepBasics({
   return (
     <section className="space-y-4">
       <header>
-        <h1 className="text-2xl font-semibold text-fg-primary">Basics</h1>
+        <h1 className="ec-page-title">Give your market an identity.</h1>
         <p className="mt-1 text-sm text-fg-secondary">
           Name, ticker, thesis, and sector for your equity / RWA offering.
         </p>
@@ -711,7 +711,9 @@ function StepBasics({
         (as is the mint address). After launch you can still edit the description, image and website with a
         wallet-signed update on the offering page.
       </p>
-      <label className="block space-y-1.5">
+      <details className="rounded-xl border border-line p-4">
+      <summary className="text-sm text-fg-secondary">Advanced metadata settings</summary>
+      <label className="mt-4 block space-y-1.5">
         <span className="ec-label">Metadata URI (optional override)</span>
         <input
           className="ec-input font-mono text-xs"
@@ -722,9 +724,10 @@ function StepBasics({
         <p className="text-xs text-fg-muted">
           Blank → EquiCurve hosts JSON at{" "}
           <code className="text-accent-soft">/api/metadata/[id]</code>. Custom
-          URI overrides (no fake equicurve.dev placeholder).
+          URI overrides this hosted metadata.
         </p>
       </label>
+      </details>
     </section>
   );
 }
@@ -1030,22 +1033,14 @@ function StepFees({
             className="w-full accent-accent"
           />
         </label>
-        <label className="block space-y-1.5">
-          <span className="ec-label">
-            Platform / partner fee share — {feePlatform}% ={" "}
-            {tradingFeeSplit(state.feeIssuer).partnerPct}% of each fee (Meteora keeps 20%)
-          </span>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            value={feePlatform}
-            onChange={(e) =>
-              patch({ feeIssuer: 100 - Number(e.target.value) })
-            }
-            className="w-full accent-accent"
-          />
-        </label>
+        <div className="grid items-end gap-4 sm:grid-cols-[110px_1fr]">
+          <label className="space-y-2"><span className="ec-label">Creator share %</span><input type="number" min={0} max={100} value={state.feeIssuer} onChange={e => patch({ feeIssuer: Math.min(100, Math.max(0, Number(e.target.value))) })} className="ec-input tabular-nums" /></label>
+          <div className="rounded-xl border border-line bg-base/40 p-4 text-xs text-fg-secondary">
+            <p>Partner receives the remaining {feePlatform}% of the non-protocol share.</p>
+            <div className="mt-3 flex h-2 overflow-hidden rounded-full" role="img" aria-label={`Each fee: creator ${tradingFeeSplit(state.feeIssuer).creatorPct}%, partner ${tradingFeeSplit(state.feeIssuer).partnerPct}%, protocol 20%`}><span className="bg-accent" style={{ width: `${tradingFeeSplit(state.feeIssuer).creatorPct}%` }} /><span className="bg-signal-raise" style={{ width: `${tradingFeeSplit(state.feeIssuer).partnerPct}%` }} /><span className="bg-fg-muted" style={{ width: "20%" }} /></div>
+            <p className="mt-3 leading-relaxed"><span className="text-accent">Creator {tradingFeeSplit(state.feeIssuer).creatorPct}%</span> · <span className="text-signal-raise">Partner {tradingFeeSplit(state.feeIssuer).partnerPct}%</span> · Protocol 20%</p>
+          </div>
+        </div>
         <p className="text-xs text-fg-muted">
           Partner share accrues to feeClaimer. Default: deployer wallet.
           Optional advanced override below.
@@ -1074,8 +1069,7 @@ function StepFees({
             checked={state.antiSniper}
             onChange={(e) => patch({ antiSniper: e.target.checked })}
           />
-          Anti-sniper: enable first-swap min fee (
-          <code className="text-accent-soft">enableFirstSwapWithMinFee</code>)
+          Enable minimum fee on the first swap (anti-sniper setting)
         </label>
         <label className="block space-y-1.5">
           <span className="ec-label">
@@ -1108,7 +1102,7 @@ function StepFees({
         </label>
         <LpLockAnswer lockPct={state.lpLockPct} />
         <fieldset className="space-y-2">
-          <legend className="ec-label">Mint authority (TokenAuthorityOption)</legend>
+          <legend className="ec-label">Mint authority</legend>
           <label className="flex items-center gap-2 text-sm">
             <input
               type="radio"
@@ -1192,7 +1186,7 @@ function StepReview({
             </ul>
           )}
           {state.designed && (
-            <p className="font-mono text-[10px] text-fg-muted">
+            <p className="font-mono text-xs text-fg-muted">
               {state.designed.policyId} · config {state.designed.configHash} · fingerprint {state.designed.configFingerprint} ·
               review {review.configFingerprint} · model {state.designed.modelVersion} · seed {state.designed.seed}
             </p>
@@ -1235,8 +1229,8 @@ function StepReview({
                     <dt className="text-xs text-fg-muted">{r.label}</dt>
                     <dd className="min-w-0 text-xs">
                       <span className="whitespace-pre-wrap break-all font-mono text-fg-primary">{r.value}</span>
-                      {r.field && <span className="ml-2 font-mono text-[10px] text-fg-muted">{r.field}</span>}
-                      {r.note && <span className="block text-[10px] text-fg-muted">{r.note}</span>}
+                      {r.field && <span className="ml-2 font-mono text-xs text-fg-muted">{r.field}</span>}
+                      {r.note && <span className="block text-xs text-fg-muted">{r.note}</span>}
                     </dd>
                   </div>
                 ))}
@@ -1338,7 +1332,7 @@ function StepLaunch({
       {log.length > 0 && (
         <details className="ec-card p-4" open={!receipt}>
           <summary className="cursor-pointer text-xs text-fg-muted">Launch log</summary>
-          <pre className="mt-2 max-h-64 overflow-auto font-mono text-[11px] text-fg-secondary">{log.join("\n")}</pre>
+          <pre className="mt-2 max-h-64 overflow-auto font-mono text-xs text-fg-secondary">{log.join("\n")}</pre>
         </details>
       )}
     </section>

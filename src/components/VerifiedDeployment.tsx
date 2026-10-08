@@ -74,7 +74,7 @@ export function VerifiedDeployment({ pool }: { pool: string }) {
           <li>✓ Migration threshold matches</li>
           <li>✓ On-chain readback passed</li>
         </ul>
-        <p className="font-mono text-[10px] text-fg-muted">Fingerprint {row.fingerprint}</p>
+        <p className="font-mono text-xs text-fg-muted">Fingerprint {row.fingerprint}</p>
         {row.constraintsPassed === false && (
           <p className="text-xs text-fg-secondary">
             This design did not meet every issuer constraint. The checks above are the on-chain match.

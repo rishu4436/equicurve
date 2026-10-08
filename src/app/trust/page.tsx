@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ReadingLayout } from "@/components/ui/ReadingLayout";
 import {
   DAMM_V2_PROGRAM,
   DBC_PROGRAM_ID,
@@ -17,9 +18,10 @@ export default function TrustPage() {
   const cluster = getCluster();
 
   return (
-    <div className="mx-auto max-w-3xl space-y-8">
+    <ReadingLayout>
       <header>
-        <h1 className="text-3xl font-semibold text-fg-primary">Trust Center</h1>
+        <p className="ec-eyebrow mb-3">Transparency, by design</p>
+        <h1 className="ec-page-title">Trust Center</h1>
         <p className="mt-2 text-sm text-fg-secondary">
           What EquiCurve does on-chain, what it relies on, and what it does not do. Program IDs, LP lock policy, mint
           authority rules, and risk posture for issuers and buyers. Always verify addresses on Solana
@@ -336,6 +338,6 @@ export default function TrustPage() {
           tab.
         </p>
       </section>
-    </div>
+    </ReadingLayout>
   );
 }

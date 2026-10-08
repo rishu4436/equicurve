@@ -40,20 +40,20 @@ export function SwapReview({
   const willRequote = now - quotedAt > QUOTE_MAX_AGE_MS;
 
   return (
-    <div className="mt-3 rounded-input border border-accent/30 bg-accent/5 p-3 text-xs" data-testid="swap-review">
-      <div className="mb-2 flex items-center justify-between">
+    <div className="mt-5 rounded-card border border-accent/30 bg-accent/5 p-5 text-sm" data-testid="swap-review">
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-2 border-b border-accent/15 pb-4">
         <p className="font-semibold text-fg-primary">{title}</p>
-        <span className={clsx("font-mono text-[10px]", willRequote ? "text-signal-warn" : "text-fg-muted")}>
+        <span className={clsx("text-xs tabular-nums", willRequote ? "text-signal-warn" : "text-fg-muted")}>
           quoted {age}s ago{willRequote ? " · will re-quote before signing" : ""}
         </span>
       </div>
-      <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+      <dl className="grid grid-cols-[minmax(0,.9fr)_minmax(0,1.1fr)] gap-x-3 gap-y-3">
         {rows.map((r) => (
           <div key={r.label} className="contents">
             <dt className="text-fg-muted">{r.label}</dt>
-            <dd className={clsx("text-right font-mono", r.strong ? "text-sm text-accent-soft" : "text-fg-primary")}>
+            <dd className={clsx("break-words text-right tabular-nums", r.strong ? "font-semibold text-accent-soft" : "text-fg-primary")}>
               {r.value}
-              {r.hint && <span className="block text-[10px] font-sans text-fg-muted">{r.hint}</span>}
+              {r.hint && <span className="block text-xs font-sans text-fg-muted">{r.hint}</span>}
             </dd>
           </div>
         ))}
@@ -69,7 +69,7 @@ export function SwapReview({
           {n.text}
         </p>
       ))}
-      <p className="mt-2 text-[10px] text-fg-muted">
+      <p className="mt-2 text-xs text-fg-muted">
         Estimated output is not a guarantee; the minimum output is enforced on-chain and the swap reverts below it.
         Quotes older than {QUOTE_MAX_AGE_MS / 1000}s, or made against a pool that has since changed, are refreshed and
         must be confirmed again.

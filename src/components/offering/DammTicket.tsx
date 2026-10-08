@@ -292,21 +292,18 @@ export function DammTicket({
   }, [snap, error]);
 
   return (
-    <div className="ec-card space-y-4 border-signal-grad/30 p-5 text-sm">
+    <div className="ec-card space-y-6 border-signal-grad/30 p-6 text-sm">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <p className="text-xs font-medium uppercase tracking-wider text-signal-grad">
-            Post-grad ticket
+            Graduated market
           </p>
           <h2 className="mt-0.5 text-lg font-semibold text-signal-grad">
             DAMM v2 pool
           </h2>
           <p className="mt-1 text-xs text-fg-secondary">
-            Bonding-curve trading is inactive after migration. This ticket quotes
-            and builds real DAMM v2 SDK txs (
-            <code className="text-accent-soft">getQuote2</code> /{" "}
-            <code className="text-accent-soft">swap2</code>). No fabricated TVL
-            or volume.
+            Trading continues in the verified DAMM v2 pool after migration.
+            Review your quote and minimum output before signing.
           </p>
         </div>
         <span
@@ -451,13 +448,14 @@ export function DammTicket({
           </p>
         ) : (
           <>
-            <div className="flex gap-2">
+            <div className="ec-tabs" role="group" aria-label="DAMM trade direction">
               <button
                 type="button"
                 className={clsx(
                   "ec-btn-secondary flex-1 text-xs",
                   direction === "quote_to_base" && "border-accent text-accent",
                 )}
+                aria-pressed={direction === "quote_to_base"}
                 onClick={() => {
                   setDirection("quote_to_base");
                   setQuote(null);
@@ -472,6 +470,7 @@ export function DammTicket({
                   "ec-btn-secondary flex-1 text-xs",
                   direction === "base_to_quote" && "border-accent text-accent",
                 )}
+                aria-pressed={direction === "base_to_quote"}
                 onClick={() => {
                   setDirection("base_to_quote");
                   setQuote(null);
@@ -485,7 +484,7 @@ export function DammTicket({
               Amount (
               {direction === "quote_to_base" ? quoteLabel : "base tokens"})
               <input
-                className="ec-input mt-1 w-full"
+                className="ec-input mt-2 w-full py-5 text-2xl tabular-nums"
                 value={amount}
                 onChange={(e) => {
                   setAmount(e.target.value);
@@ -585,7 +584,7 @@ export function DammTicket({
             })}
           </ul>
         )}
-        <p className="text-[11px] text-fg-muted">
+        <p className="text-xs text-fg-muted">
           Deferred: in-app add/remove liquidity builders. Use Meteora or the SDK
           directly for LP deposits beyond migration-created positions.
         </p>

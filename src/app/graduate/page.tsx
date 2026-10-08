@@ -2,38 +2,43 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import Link from "next/link";
 
 export default function GraduateIndexPage() {
   const [pool, setPool] = useState("");
   const router = useRouter();
 
   return (
-    <div className="mx-auto max-w-lg space-y-6">
+    <div className="mx-auto max-w-xl space-y-8 py-6 sm:py-12">
       <div>
-        <h1 className="text-3xl font-semibold text-white">Graduate</h1>
-        <p className="mt-1 text-sm text-slate-400">
+        <p className="ec-eyebrow mb-3">The next chapter</p>
+        <h1 className="ec-page-title">From curve to market.</h1>
+        <p className="mt-3 text-sm text-fg-secondary">
           Open the DAMM v2 graduation panel for a completed DBC pool.
         </p>
       </div>
       <form
-        className="space-y-3"
+        className="ec-card space-y-4 p-6 sm:p-8"
         onSubmit={(e) => {
           e.preventDefault();
           if (pool.trim()) router.push(`/graduate/${pool.trim()}`);
         }}
       >
+        <label htmlFor="graduate-pool" className="ec-label block">Pool address</label>
         <input
+          id="graduate-pool"
           value={pool}
           onChange={(e) => setPool(e.target.value)}
-          placeholder="Pool pubkey"
-          className="w-full rounded-xl border border-white/10 bg-ink-900 px-3 py-2.5 font-mono text-sm outline-none ring-accent/40 focus:ring-2"
+          placeholder="Paste a Solana pool address"
+          className="ec-input font-mono"
         />
         <button
           type="submit"
-          className="w-full rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-ink-950"
+          className="ec-btn-primary w-full"
         >
           Open graduation panel
         </button>
+        <p className="text-center text-xs text-fg-muted"><Link href="/docs#graduate" className="text-accent hover:underline">Understand graduation →</Link></p>
       </form>
     </div>
   );

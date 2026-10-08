@@ -144,14 +144,14 @@ export function FeeClaimsCard({ pool, quote = "SOL" }: Props) {
       <div className="flex items-start justify-between gap-2">
         <div>
           <h2 className="font-semibold text-fg-primary">Trading fee claims</h2>
-          <p className="mt-0.5 text-[11px] text-fg-muted">
+          <p className="mt-0.5 text-xs text-fg-muted">
             Creator vs partner (feeClaimer) are separate SDK paths. Quote
             decimals: {quote === "USDC" ? "6 (USDC)" : "9 (SOL)"}.
           </p>
         </div>
         <button
           type="button"
-          className="ec-btn-secondary text-[11px]"
+          className="ec-btn-secondary text-xs"
           onClick={() => void refresh()}
         >
           Refresh
@@ -161,7 +161,7 @@ export function FeeClaimsCard({ pool, quote = "SOL" }: Props) {
       {error && <p className="text-xs text-signal-warn">{error}</p>}
 
       {roles && (
-        <p className="text-[11px] text-fg-secondary">
+        <p className="text-xs text-fg-secondary">
           Creator {shortPk(roles.creator)}
           {" · "}
           Partner feeClaimer {shortPk(roles.feeClaimer)}
@@ -197,7 +197,7 @@ export function FeeClaimsCard({ pool, quote = "SOL" }: Props) {
           {busyCreator ? "Claiming…" : "Claim creator fees"}
         </button>
         {!isCreator && wallet.publicKey && roles && (
-          <p className="text-[11px] text-fg-muted">
+          <p className="text-xs text-fg-muted">
             Creator claim disabled — connect as {shortPk(roles.creator)}.
           </p>
         )}
@@ -210,20 +210,20 @@ export function FeeClaimsCard({ pool, quote = "SOL" }: Props) {
           {busyPartner ? "Claiming…" : "Claim partner fees"}
         </button>
         {!isPartner && wallet.publicKey && roles && (
-          <p className="text-[11px] text-fg-muted">
+          <p className="text-xs text-fg-muted">
             Partner claim disabled — connect as feeClaimer{" "}
             {shortPk(roles.feeClaimer)}. Deployer does not get partner share
             unless they are also feeClaimer.
           </p>
         )}
         {!wallet.publicKey && (
-          <p className="text-[11px] text-fg-muted">
+          <p className="text-xs text-fg-muted">
             Connect the creator or feeClaimer wallet to claim.
           </p>
         )}
       </div>
 
-      <Link href="/issuer" className="text-[11px] text-accent hover:underline">
+      <Link href="/issuer" className="text-xs text-accent hover:underline">
         Open issuer dashboard →
       </Link>
     </div>
