@@ -11,10 +11,10 @@ export const dynamic = "force-dynamic";
 const READ_LIMIT = 20;
 const READ_WINDOW_MS = 60_000;
 
-type Ctx = { params: Promise<{ pool: string }> };
+type Ctx = { params: Promise<{ id: string }> };
 
 export async function GET(req: Request, ctx: Ctx) {
-  const { pool: rawPool } = await ctx.params;
+  const { id: rawPool } = await ctx.params;
   let pool: PublicKey;
   try {
     pool = new PublicKey(rawPool);

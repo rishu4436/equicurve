@@ -23,7 +23,7 @@ export type HoldersRouteResponse = {
   error: string | null;
 };
 
-type Ctx = { params: Promise<{ mint: string }> };
+type Ctx = { params: Promise<{ id: string }> };
 
 function degraded(error: string): HoldersRouteResponse {
   return {
@@ -39,7 +39,7 @@ function degraded(error: string): HoldersRouteResponse {
 }
 
 export async function GET(req: Request, ctx: Ctx) {
-  const { mint: rawMint } = await ctx.params;
+  const { id: rawMint } = await ctx.params;
   let mint: PublicKey;
   try {
     mint = new PublicKey(rawMint);

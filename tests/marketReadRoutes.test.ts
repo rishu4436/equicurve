@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { PublicKey } from "@solana/web3.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -29,8 +29,8 @@ vi.mock("@/lib/dbc/priceHistory", () => ({
 vi.mock("@/lib/server/http", () => ({ clientKey: mocks.clientKey }));
 vi.mock("@/lib/server/rateLimit", () => ({ limitRequest: mocks.limitRequest }));
 
-import { GET as holdersGet } from "@/app/api/markets/[mint]/holders/route";
-import { GET as historyGet } from "@/app/api/markets/[pool]/price-history/route";
+import { GET as holdersGet } from "@/app/api/markets/[id]/holders/route";
+import { GET as historyGet } from "@/app/api/markets/[id]/price-history/route";
 
 const MINT = "HWooSsdCWPq9sv87SGGqppGmpnf8VFNMa1RmZFtmo6j8";
 const POOL = "D2fzZHDfHHNWybyXLBHdvgJR6vmfH2rMj6rKXQF1WmGY";
@@ -61,7 +61,7 @@ describe("private market read routes", () => {
   it("uses the server/private RPC path and returns normalized holder data", async () => {
     const response = await holdersGet(
       new Request(`https://equicurve.test/api/markets/${MINT}/holders?creator=${CREATOR}`),
-      params({ mint: MINT }),
+      params({ id: MINT }),
     );
     const body = await response.json();
     expect(response.status).toBe(200);
@@ -86,7 +86,7 @@ describe("private market read routes", () => {
   it("rejects an invalid mint before any RPC read", async () => {
     const response = await holdersGet(
       new Request("https://equicurve.test/api/markets/not-a-mint/holders"),
-      params({ mint: "not-a-mint" }),
+      params({ id: "not-a-mint" }),
     );
     expect(response.status).toBe(400);
     expect(await response.json()).toMatchObject({ ok: false, code: "invalid_mint" });
@@ -97,7 +97,7 @@ describe("private market read routes", () => {
     mocks.connection.getTokenLargestAccounts.mockRejectedValue(new Error("429 Too Many Requests"));
     const response = await holdersGet(
       new Request(`https://equicurve.test/api/markets/${MINT}/holders`),
-      params({ mint: MINT }),
+      params({ id: MINT }),
     );
     const body = await response.json();
     expect(response.status).toBe(200);
@@ -113,7 +113,7 @@ describe("private market read routes", () => {
   it("uses the canonical reconstruction path through server reads", async () => {
     const response = await historyGet(
       new Request(`https://equicurve.test/api/markets/${POOL}/price-history`),
-      params({ pool: POOL }),
+      params({ id: POOL }),
     );
     const body = await response.json();
     expect(response.status).toBe(200);
@@ -136,7 +136,7 @@ describe("private market read routes", () => {
     mocks.withReadConnection.mockImplementationOnce(async (_primary, read) => read(fallback));
     const response = await historyGet(
       new Request(`https://equicurve.test/api/markets/${POOL}/price-history`),
-      params({ pool: POOL }),
+      params({ id: POOL }),
     );
     expect(response.status).toBe(200);
     expect(mocks.reconstructPoolPriceHistory).toHaveBeenCalledWith(
@@ -149,7 +149,7 @@ describe("private market read routes", () => {
   it("rejects an invalid pool before invoking reconstruction", async () => {
     const response = await historyGet(
       new Request("https://equicurve.test/api/markets/not-a-pool/price-history"),
-      params({ pool: "not-a-pool" }),
+      params({ id: "not-a-pool" }),
     );
     expect(response.status).toBe(400);
     expect(await response.json()).toMatchObject({ ok: false, code: "invalid_pool" });
@@ -160,7 +160,7 @@ describe("private market read routes", () => {
     mocks.reconstructPoolPriceHistory.mockRejectedValue(new Error("429 Too Many Requests"));
     const response = await historyGet(
       new Request(`https://equicurve.test/api/markets/${POOL}/price-history`),
-      params({ pool: POOL }),
+      params({ id: POOL }),
     );
     expect(response.status).toBe(503);
     expect(await response.json()).toMatchObject({
@@ -173,6 +173,17 @@ describe("private market read routes", () => {
 });
 
 describe("market read client boundaries", () => {
+  it("keeps one shared dynamic route directory for market reads", () => {
+    const root = resolve(process.cwd(), "src/app/api/markets");
+    const dynamicDirs = readdirSync(root, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && entry.name.startsWith("["))
+      .map((entry) => entry.name)
+      .sort();
+    expect(dynamicDirs).toEqual(["[id]"]);
+    expect(existsSync(resolve(root, "[id]/holders/route.ts"))).toBe(true);
+    expect(existsSync(resolve(root, "[id]/price-history/route.ts"))).toBe(true);
+  });
+
   it("keeps expensive reads out of the browser components", () => {
     const offering = readFileSync(resolve(process.cwd(), "src/components/offering/OfferingDetailClient.tsx"), "utf8");
     const chart = readFileSync(resolve(process.cwd(), "src/components/offering/PriceHistoryChart.tsx"), "utf8");
