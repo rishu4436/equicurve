@@ -2,7 +2,7 @@ import { PublicKey, type Connection } from "@solana/web3.js";
 import BN from "bn.js";
 import { sqrtPriceX64ToDecimalString } from "@/lib/amounts";
 import { getDbcClient } from "./client";
-import { withRpcRetry } from "@/lib/rpc";
+import { isTransientRpcError, withRpcRetry } from "@/lib/rpc";
 import { fetchDbcPool } from "./poolAccount";
 
 function bnishToBn(v: unknown): BN | null {
@@ -42,7 +42,8 @@ async function readMintDecimals(connection: Connection, mint: PublicKey): Promis
     const info = await withRpcRetry(() => connection.getParsedAccountInfo(mint, "confirmed"));
     const d = (info.value?.data as { parsed?: { info?: { decimals?: unknown } } } | undefined)?.parsed?.info?.decimals;
     return typeof d === "number" && Number.isInteger(d) ? d : null;
-  } catch {
+  } catch (e) {
+    if (isTransientRpcError(e)) throw e;
     return null;
   }
 }

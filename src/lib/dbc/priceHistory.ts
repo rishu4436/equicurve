@@ -199,7 +199,8 @@ export async function reconstructPoolPriceHistory(
       baseDecimals = spotRes.baseDecimals;
       quoteDecimals = spotRes.quoteDecimals;
     }
-  } catch {
+  } catch (e) {
+    if (isTransientRpcError(e)) throw e;
     /* spot optional */
   }
 
