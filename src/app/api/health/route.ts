@@ -1,22 +1,36 @@
 import { NextResponse } from "next/server";
-import { pingRpc } from "@/lib/connection";
+import { EXPECTED_CLUSTER_GENESIS_HASH, getConnection, getServerConnection } from "@/lib/connection";
+import { checkRpcIdentity, summarizeRpcHealth } from "@/lib/rpcHealth";
 import { getCluster, getRpcHost, getServerRpcUrl } from "@/lib/constants";
 import { getRegistryMeta } from "@/lib/registry/store";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const rpc = await pingRpc();
+  const cluster = getCluster();
+  const expectedGenesisHash = EXPECTED_CLUSTER_GENESIS_HASH[cluster];
+  const [publicRpc, serverRpc] = await Promise.all([
+    checkRpcIdentity(getConnection(), expectedGenesisHash),
+    checkRpcIdentity(getServerConnection(), expectedGenesisHash),
+  ]);
+  const summary = summarizeRpcHealth(publicRpc, serverRpc);
   return NextResponse.json({
-    ok: rpc.ok,
+    ok: summary.ok,
     service: "equicurve",
-    cluster: getCluster(),
+    cluster,
     rpcHost: getRpcHost(),
     serverRpcHost: getRpcHost(getServerRpcUrl()),
     dedicatedServerRpc: Boolean(process.env.RPC_URL?.trim()),
-    rpcStatus: rpc.ok ? "ok" : "unavailable",
-    slot: rpc.slot ?? null,
-    error: rpc.error ? "RPC unavailable" : null,
+    rpcStatus: summary.rpcStatus,
+    rpcClusterStatus: summary.rpcClusterStatus,
+    genesisHash: publicRpc.genesisHash,
+    expectedGenesisHash,
+    slot: publicRpc.slot,
+    error: summary.error,
+    publicRpcClusterStatus: publicRpc.rpcClusterStatus,
+    serverRpcStatus: serverRpc.rpcStatus,
+    serverRpcClusterStatus: serverRpc.rpcClusterStatus,
+    serverGenesisHash: serverRpc.genesisHash,
     registry: getRegistryMeta(),
   });
 }

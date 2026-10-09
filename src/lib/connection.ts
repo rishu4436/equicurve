@@ -3,10 +3,14 @@ import { getCluster, getDevnetRpcReadUrls, getRpcUrl, getServerDevnetRpcReadUrls
 import { EquiCurveError } from "./errors";
 import { withRpcRetry, withVerifiedRpcFallback, type RetryOptions } from "./rpc";
 
-export const CLUSTER_GENESIS_HASH = {
-  devnet: "EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+/**
+ * These are full RPC `getGenesisHash` values. They are not CAIP-2/x402
+ * network identifiers or shortened UI cluster labels.
+ */
+export const EXPECTED_CLUSTER_GENESIS_HASH = {
+  devnet: "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG",
   testnet: "4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY",
-  "mainnet-beta": "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp",
+  "mainnet-beta": "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d",
 } as const;
 
 let cached: Connection | null = null;
@@ -81,7 +85,7 @@ export async function withReadConnection<T>(
   }
   return withVerifiedRpcFallback(
     sources,
-    CLUSTER_GENESIS_HASH[getCluster()],
+    EXPECTED_CLUSTER_GENESIS_HASH[getCluster()],
     read,
     retry,
   );
