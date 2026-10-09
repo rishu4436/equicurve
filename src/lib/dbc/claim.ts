@@ -2,7 +2,7 @@ import { PublicKey, type Connection, type Transaction } from "@solana/web3.js";
 import BN from "bn.js";
 import { EquiCurveError } from "@/lib/errors";
 import { getDbcClient } from "./client";
-import { withRpcRetry } from "@/lib/rpc";
+import { withReadConnection } from "@/lib/connection";
 import { setFreshBlockhash } from "@/lib/send";
 import { requireDbcPool } from "./poolAccount";
 
@@ -96,12 +96,13 @@ export async function fetchPoolFeeBreakdown(
   connection: Connection,
   pool: PublicKey,
 ): Promise<FeeBreakdown> {
-  const client = getDbcClient(connection);
-  const breakdown = await withRpcRetry(() => client.state.getPoolFeeBreakdown(pool));
-  return toFeeBreakdown(
-    sideFromSdk(breakdown.creator),
-    sideFromSdk(breakdown.partner),
-  );
+  return withReadConnection(connection, async (readConnection) => {
+    const breakdown = await getDbcClient(readConnection).state.getPoolFeeBreakdown(pool);
+    return toFeeBreakdown(
+      sideFromSdk(breakdown.creator),
+      sideFromSdk(breakdown.partner),
+    );
+  });
 }
 
 /** Resolve on-chain creator + partner feeClaimer for a DBC pool. */
@@ -109,37 +110,37 @@ export async function resolvePoolFeeRoles(
   connection: Connection,
   pool: PublicKey,
 ): Promise<PoolFeeRoles> {
-  const client = getDbcClient(connection);
-  const virtualPool = (await requireDbcPool(connection, pool)).state;
-  const configAccount = await withRpcRetry(() =>
-    client.state.getPoolConfig(virtualPool.config),
-  );
-  if (!configAccount) {
-    throw new EquiCurveError(
-      `Pool config ${virtualPool.config.toBase58()} not found.`,
-      "SDK",
-    );
-  }
-  const rawClaimer = (
-    configAccount as { feeClaimer?: PublicKey | string }
-  ).feeClaimer;
-  if (!rawClaimer) {
-    throw new EquiCurveError(
-      "Pool config has no feeClaimer — cannot resolve partner claim role.",
-      "SDK",
-    );
-  }
-  const feeClaimer =
-    typeof rawClaimer === "string"
-      ? new PublicKey(rawClaimer)
-      : new PublicKey(rawClaimer);
+  return withReadConnection(connection, async (readConnection) => {
+    const client = getDbcClient(readConnection);
+    const virtualPool = (await requireDbcPool(readConnection, pool)).state;
+    const configAccount = await client.state.getPoolConfig(virtualPool.config);
+    if (!configAccount) {
+      throw new EquiCurveError(
+        `Pool config ${virtualPool.config.toBase58()} not found.`,
+        "SDK",
+      );
+    }
+    const rawClaimer = (
+      configAccount as { feeClaimer?: PublicKey | string }
+    ).feeClaimer;
+    if (!rawClaimer) {
+      throw new EquiCurveError(
+        "Pool config has no feeClaimer — cannot resolve partner claim role.",
+        "SDK",
+      );
+    }
+    const feeClaimer =
+      typeof rawClaimer === "string"
+        ? new PublicKey(rawClaimer)
+        : new PublicKey(rawClaimer);
 
-  return {
-    pool: pool.toBase58(),
-    config: virtualPool.config.toBase58(),
-    creator: virtualPool.creator.toBase58(),
-    feeClaimer: feeClaimer.toBase58(),
-  };
+    return {
+      pool: pool.toBase58(),
+      config: virtualPool.config.toBase58(),
+      creator: virtualPool.creator.toBase58(),
+      feeClaimer: feeClaimer.toBase58(),
+    };
+  });
 }
 
 export async function prepareClaimCreatorFees(args: {

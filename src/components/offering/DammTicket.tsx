@@ -17,20 +17,28 @@ import {
   fetchUserDammPositions,
   meteoraDammPoolUrl,
   fetchDammPoolStateKey,
+  pickMints,
   resolveDammPoolAddress,
   type DammPoolSnapshot,
   type DammPositionView,
   type DammQuoteResult,
   type DammSwapDirection,
 } from "@/lib/damm";
-import { tryFormatAtoms } from "@/lib/amounts";
+import { parseUiAmount, tryFormatAtoms } from "@/lib/amounts";
 import { toUserMessage } from "@/lib/errors";
 import { pushActivity, updateLaunch } from "@/lib/local/launches";
 import { signAndSendTransaction } from "@/lib/send";
 import { freshnessMessage, quoteFreshness } from "@/lib/trade/quoteFreshness";
 import { SwapReview, type SwapReviewRow } from "@/components/trade/SwapReview";
-import { formatTokenPrice } from "@/lib/marketDisplay";
+import { formatPermanentLock, formatQuoteReserveLabel, formatTokenPrice } from "@/lib/marketDisplay";
 import { transactionNotice } from "@/lib/transactionUi";
+import { withReadConnection } from "@/lib/connection";
+import {
+  readTradeFunding,
+  tradeAmountError,
+  tradeFundingError,
+  type TradeFundingEvidence,
+} from "@/lib/trade/validation";
 
 type Props = {
   dbcPool: string;
@@ -76,21 +84,38 @@ export function DammTicket({
   const [busy, setBusy] = useState(false);
   const [pendingTx, setPendingTx] = useState<Transaction | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [fundingCheck, setFundingCheck] = useState<TradeFundingEvidence | null>(null);
 
   const dammConfig = dammConfigProp ?? null;
   const quoteLabel = quoteLabelForMint(quoteMint);
+  const inputDecimals = snap?.exists ? pickMints(snap, direction).inputDecimals : null;
+  const amountError = tradeAmountError(amount, inputDecimals);
 
   const refresh = useCallback(async () => {
     try {
       setError(null);
-      const resolved = await resolveDammPoolAddress({
-        connection,
+      const result = await withReadConnection(connection, async (readConnection) => {
+        const resolved = await resolveDammPoolAddress({
+        connection: readConnection,
         baseMint,
         quoteMint,
         storedDammPool,
         dammConfig,
       });
-      if (!resolved.address) {
+        if (!resolved.address) return { resolved, next: null, nextPositions: [] as DammPositionView[] };
+        const next = await fetchDammPoolSnapshot({
+          connection: readConnection,
+          pool: new PublicKey(resolved.address),
+          baseMint,
+          quoteMint,
+          source: resolved.source,
+        });
+        const nextPositions = next.exists && wallet.publicKey
+          ? await fetchUserDammPositions({ connection: readConnection, pool: new PublicKey(next.address), user: wallet.publicKey })
+          : [];
+        return { resolved, next, nextPositions };
+      });
+      if (!result.resolved.address || !result.next) {
         setSnap(null);
         setPositions([]);
         setError(
@@ -98,29 +123,13 @@ export function DammTicket({
         );
         return;
       }
-      const next = await fetchDammPoolSnapshot({
-        connection,
-        pool: new PublicKey(resolved.address),
-        baseMint,
-        quoteMint,
-        source: resolved.source,
-      });
+      const next = result.next;
       setSnap(next);
       // Persist only after the pool account was actually fetched + mint-checked.
       if (next.exists && next.address !== storedDammPool) {
         updateLaunch(dbcPool, { dammPool: next.address });
       }
-      if (next.exists && wallet.publicKey) {
-        setPositions(
-          await fetchUserDammPositions({
-            connection,
-            pool: new PublicKey(next.address),
-            user: wallet.publicKey,
-          }),
-        );
-      } else {
-        setPositions([]);
-      }
+      setPositions(result.nextPositions);
     } catch (e) {
       setError(toUserMessage(e));
       setSnap(null);
@@ -147,14 +156,25 @@ export function DammTicket({
   }
 
   async function buildReview(): Promise<{ tx: Transaction; quote: DammQuoteResult }> {
-    return buildDammSwapTx({
-      connection,
+    return withReadConnection(connection, (readConnection) => buildDammSwapTx({
+      connection: readConnection,
       payer: wallet.publicKey!,
       pool: new PublicKey(snap!.address),
       snap: snap!,
       direction,
       amountUi: amount,
+    }));
+  }
+
+  async function validateFunding(requestedAtoms: bigint, inputMint: PublicKey) {
+    const evidence = await readTradeFunding({ connection, owner: wallet.publicKey!, inputMint });
+    const message = tradeFundingError({
+      direction: direction === "quote_to_base" ? "buy" : "sell",
+      requestedAtoms,
+      evidence,
     });
+    if (message) throw new Error(message);
+    setFundingCheck(evidence);
   }
 
   /** Step 1: quote + build the exact tx and show the pre-sign summary. */
@@ -168,10 +188,17 @@ export function DammTicket({
       toast.error("DAMM pool not available on-chain yet.");
       return;
     }
+    if (amountError) {
+      toast.error(amountError);
+      return;
+    }
     setBusy(true);
     setNotice(null);
     try {
+      const mints = pickMints(snap, direction);
+      await validateFunding(parseUiAmount(amount, mints.inputDecimals), mints.inputMint);
       const r = await buildReview();
+      await validateFunding(BigInt(r.quote.amountIn), new PublicKey(r.quote.inputMint));
       setQuote(r.quote);
       setPendingTx(r.tx);
     } catch (e) {
@@ -189,10 +216,21 @@ export function DammTicket({
     if (!wallet.publicKey || !snap?.exists || !snap.address) return;
     setBusy(true);
     try {
-      const key = await fetchDammPoolStateKey(connection, new PublicKey(snap.address));
+      const fundingMessage = tradeFundingError({
+        direction: direction === "quote_to_base" ? "buy" : "sell",
+        requestedAtoms: BigInt(quote.amountIn),
+        evidence: fundingCheck,
+      });
+      if (fundingMessage) {
+        await validateFunding(BigInt(quote.amountIn), new PublicKey(quote.inputMint));
+      }
+      const key = await withReadConnection(connection, (readConnection) =>
+        fetchDammPoolStateKey(readConnection, new PublicKey(snap.address)),
+      );
       const f = quoteFreshness(quote, key, Date.now());
       if (!f.fresh) {
         const r = await buildReview();
+        await validateFunding(BigInt(r.quote.amountIn), new PublicKey(r.quote.inputMint));
         setQuote(r.quote);
         setPendingTx(r.tx);
         setNotice(freshnessMessage(f));
@@ -213,6 +251,7 @@ export function DammTicket({
       toast.success(txNotice.message, { action: { label: "Explorer", onClick: () => window.open(txNotice.explorerUrl, "_blank", "noopener,noreferrer") } });
       setQuote(null);
       setPendingTx(null);
+      setFundingCheck(null);
       setNotice(null);
       await refresh();
       onMarketChanged?.();
@@ -260,14 +299,16 @@ export function DammTicket({
     }
     setBusy(true);
     try {
-      const tx = await buildClaimPositionFeeTx({
-        connection,
-        owner: wallet.publicKey,
+      const owner = wallet.publicKey;
+      if (!owner) throw new Error("Wallet disconnected before fee-claim preparation.");
+      const tx = await withReadConnection(connection, (readConnection) => buildClaimPositionFeeTx({
+        connection: readConnection,
+        owner,
         pool: new PublicKey(snap.address),
         snap,
         position: new PublicKey(pos.position),
         positionNftAccount: new PublicKey(pos.positionNftAccount),
-      });
+      }));
       const sig = await signAndSendTransaction({ connection, wallet, tx });
       pushActivity({
         id: `${sig}-damm-claim`,
@@ -335,11 +376,11 @@ export function DammTicket({
         {snap?.exists && (
           <>
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-input border border-line bg-subtle p-3"><dt className="text-fg-muted">SOL / quote reserve</dt><dd className="mt-1 font-mono text-fg-primary">{snap.quoteMint === snap.tokenAMint ? (snap.tokenAReserve == null ? "Unavailable" : `${formatRaw(snap.tokenAReserve, snap.tokenADecimals)} ${quoteLabel}`) : (snap.tokenBReserve == null ? "Unavailable" : `${formatRaw(snap.tokenBReserve, snap.tokenBDecimals)} ${quoteLabel}`)}</dd></div>
+              <div className="rounded-input border border-line bg-subtle p-3"><dt className="text-fg-muted">{formatQuoteReserveLabel(quoteLabel)}</dt><dd className="mt-1 font-mono text-fg-primary">{snap.quoteMint === snap.tokenAMint ? (snap.tokenAReserve == null ? "Unavailable" : `${formatRaw(snap.tokenAReserve, snap.tokenADecimals)} ${quoteLabel}`) : (snap.tokenBReserve == null ? "Unavailable" : `${formatRaw(snap.tokenBReserve, snap.tokenBDecimals)} ${quoteLabel}`)}</dd></div>
               <div className="rounded-input border border-line bg-subtle p-3"><dt className="text-fg-muted">Base-token reserve</dt><dd className="mt-1 font-mono text-fg-primary">{snap.baseMint === snap.tokenAMint ? (snap.tokenAReserve == null ? "Unavailable" : formatRaw(snap.tokenAReserve, snap.tokenADecimals)) : (snap.tokenBReserve == null ? "Unavailable" : formatRaw(snap.tokenBReserve, snap.tokenBDecimals))}</dd></div>
             </div>
             <div className="flex justify-between gap-3"><dt className="text-fg-muted">Current DAMM spot</dt><dd className="text-right font-mono text-fg-primary">{snap.spotQuotePerBase == null ? "Unavailable" : formatTokenPrice(Number(snap.spotQuotePerBase), quoteLabel).primary}</dd></div>
-            <div className="flex justify-between gap-3"><dt className="text-fg-muted">Liquidity lock</dt><dd className="text-fg-primary">{lockPct == null ? "Verified percentage unavailable" : lockPct === 100 ? "100% permanently locked" : `${lockPct}% configured lock`}</dd></div>
+            <div className="flex justify-between gap-3"><dt className="text-fg-muted">Liquidity lock</dt><dd className="text-fg-primary">{formatPermanentLock(lockPct)}</dd></div>
           </>
         )}
         <div className="flex justify-between gap-3">
@@ -477,6 +518,7 @@ export function DammTicket({
                   setDirection("quote_to_base");
                   setQuote(null);
                   setPendingTx(null);
+                  setFundingCheck(null);
                 }}
               >
                 Buy base with {quoteLabel}
@@ -492,6 +534,7 @@ export function DammTicket({
                   setDirection("base_to_quote");
                   setQuote(null);
                   setPendingTx(null);
+                  setFundingCheck(null);
                 }}
               >
                 Sell base for {quoteLabel}
@@ -507,10 +550,12 @@ export function DammTicket({
                   setAmount(e.target.value);
                   setQuote(null);
                   setPendingTx(null);
+                  setFundingCheck(null);
                 }}
                 inputMode="decimal"
               />
             </label>
+            {amountError && <p className="text-xs text-signal-warn">{amountError}</p>}
             {quote ? (
               <SwapReview
                 title="Review DAMM v2 swap"
@@ -521,6 +566,7 @@ export function DammTicket({
                 onCancel={() => {
                   setQuote(null);
                   setPendingTx(null);
+                  setFundingCheck(null);
                   setNotice(null);
                 }}
                 onConfirm={() => void handleConfirm()}
@@ -529,7 +575,7 @@ export function DammTicket({
             ) : (
               <button
                 type="button"
-                disabled={busy || !wallet.publicKey}
+                disabled={busy || !wallet.publicKey || Boolean(amountError)}
                 onClick={() => void handleReview()}
                 className="ec-btn-primary w-full"
               >

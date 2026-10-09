@@ -45,8 +45,8 @@ import {
   type StoredLaunch,
 } from "@/lib/local/launches";
 import { formatTokenSupply, tokenAccountDistribution } from "@/lib/holders";
-import { withRpcRetry } from "@/lib/rpc";
-import { formatMarketTimestamp, formatProgressRatio, marketLifecycle } from "@/lib/marketDisplay";
+import { withReadConnection } from "@/lib/connection";
+import { formatMarketTimestamp, formatPermanentLock, formatProgressRatio, marketLifecycle } from "@/lib/marketDisplay";
 
 const TABS = [
   "Overview",
@@ -131,9 +131,8 @@ export function OfferingDetailClient({ id, demo }: Props) {
     }
     try {
       setSnapError(null);
-      const s = await fetchPoolSnapshot(
-        connection,
-        new PublicKey(poolAddress),
+      const s = await withReadConnection(connection, (readConnection) =>
+        fetchPoolSnapshot(readConnection, new PublicKey(poolAddress)),
       );
       setSnapshot(s);
       setSnapReadFailed(false);
@@ -162,9 +161,8 @@ export function OfferingDetailClient({ id, demo }: Props) {
       }
       try {
         setRpcActivityError(null);
-        const sigs = await connection.getSignaturesForAddress(
-          new PublicKey(poolAddress),
-          { limit: 15 },
+        const sigs = await withReadConnection(connection, (readConnection) =>
+          readConnection.getSignaturesForAddress(new PublicKey(poolAddress), { limit: 15 }),
         );
         if (!cancelled) {
           setRpcActivity(
@@ -212,7 +210,9 @@ export function OfferingDetailClient({ id, demo }: Props) {
       setHolders((current) => ({ ...current, loading: true, error: null }));
       try {
         const mint = new PublicKey(mintStr);
-        const supply = await withRpcRetry(() => connection.getTokenSupply(mint));
+        const supply = await withReadConnection(connection, (readConnection) =>
+          readConnection.getTokenSupply(mint),
+        );
         let creatorAta: string | null = null;
         let creatorBalanceAtoms: string | null = null;
         if (creatorStr) {
@@ -222,7 +222,9 @@ export function OfferingDetailClient({ id, demo }: Props) {
           );
           creatorAta = ata.toBase58();
           try {
-            const bal = await withRpcRetry(() => connection.getTokenAccountBalance(ata));
+            const bal = await withReadConnection(connection, (readConnection) =>
+              readConnection.getTokenAccountBalance(ata),
+            );
             creatorBalanceAtoms = bal.value.amount;
           } catch {
             creatorBalanceAtoms = "0";
@@ -231,7 +233,9 @@ export function OfferingDetailClient({ id, demo }: Props) {
         let largest: { address: string; amountAtoms: string }[] = [];
         let partial = false;
         try {
-          const big = await withRpcRetry(() => connection.getTokenLargestAccounts(mint));
+          const big = await withReadConnection(connection, (readConnection) =>
+            readConnection.getTokenLargestAccounts(mint),
+          );
           largest = big.value.slice(0, 8).map((v) => ({
             address: v.address.toBase58(),
             amountAtoms: v.amount,
@@ -379,7 +383,7 @@ export function OfferingDetailClient({ id, demo }: Props) {
                   </span>
                 )}
                 <span className="rounded-pill border border-line bg-subtle px-2 py-0.5 text-xs text-fg-secondary">
-                   {lockPct === 100 ? "100% permanently locked" : `${lockPct}% configured lock`}
+                   {formatPermanentLock(lockPct)}
                 </span>
                 <span className="ec-chip">Quote: {quote}</span>
                 <span className="ec-chip">Active venue: {lifecycle.activeVenue}</span>
@@ -572,7 +576,7 @@ export function OfferingDetailClient({ id, demo }: Props) {
                       </div>
                       <div>
                         <dt className="text-fg-muted">LP lock</dt>
-                        <dd className="text-fg-primary">≥{lockPct}%</dd>
+                        <dd className="text-fg-primary">{formatPermanentLock(lockPct)}</dd>
                       </div>
                       <div>
                         <dt className="text-fg-muted">Quote</dt>
@@ -620,7 +624,7 @@ export function OfferingDetailClient({ id, demo }: Props) {
                       </li>
                       <li>
                         No separate migration fee in EquiCurve configs; the DAMM v2 pool charges its own trading fee
-                        after migration. {lockPct}% of the graduated LP is permanently locked.
+                        after migration. {formatPermanentLock(lockPct)}.
                       </li>
                     </ul>
                     <p className="pt-2 font-medium text-fg-primary">
@@ -914,7 +918,7 @@ export function OfferingDetailClient({ id, demo }: Props) {
             <div className="ec-card p-4 text-xs text-fg-muted">
               <p className="mb-1 font-medium text-fg-secondary">Trust mini-strip</p>
               <p>
-                {lockPct === 100 ? "100% permanently locked" : `${lockPct}% configured lock`} · Issuer disclosures are self-attested (not verified) · Program IDs →{" "}
+                {formatPermanentLock(lockPct)} · Issuer disclosures are self-attested (not verified) · Program IDs →{" "}
                 <Link href="/trust" className="text-accent hover:underline">
                   Trust Center
                 </Link>

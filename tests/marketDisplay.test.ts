@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatMarketTimestamp, formatPriceAxis, formatProgressRatio, formatTokenPrice, marketLifecycle } from "@/lib/marketDisplay";
+import { formatMarketTimestamp, formatPermanentLock, formatPriceAxis, formatProgressRatio, formatQuoteReserveLabel, formatTokenPrice, marketLifecycle } from "@/lib/marketDisplay";
 
 describe("market terminal display", () => {
   it("centralizes progress clamp and rounding", () => {
@@ -25,5 +25,15 @@ describe("market terminal display", () => {
   it("formats market timestamps deterministically in UTC for hydration", () => {
     expect(formatMarketTimestamp("2026-01-02T03:04:00.000Z")).toContain("Jan 02, 2026");
     expect(formatMarketTimestamp("2026-01-02T03:04:00.000Z")).toContain("03:04 UTC");
+  });
+
+  it("uses the actual quote asset in the DAMM reserve label", () => {
+    expect(formatQuoteReserveLabel("SOL")).toBe("Quote reserve (SOL)");
+    expect(formatQuoteReserveLabel("USDC")).toBe("Quote reserve (USDC)");
+  });
+
+  it("uses canonical configured LP lock wording", () => {
+    expect(formatPermanentLock(100)).toBe("100% permanently locked");
+    expect(formatPermanentLock(50)).toBe("50% configured permanent lock");
   });
 });

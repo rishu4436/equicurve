@@ -1,7 +1,7 @@
 import type { WalletContextState } from "@solana/wallet-adapter-react";
 import type { Connection, PublicKey, Transaction } from "@solana/web3.js";
 import { EquiCurveError, mapError } from "./errors";
-import { withRpcRetry } from "./rpc";
+import { withReadConnection } from "./connection";
 
 type BlockhashCtx = { blockhash: string; lastValidBlockHeight: number };
 
@@ -18,7 +18,9 @@ export async function setFreshBlockhash(
   tx: Transaction,
   feePayer: PublicKey,
 ): Promise<BlockhashCtx> {
-  const latest = await withRpcRetry(() => connection.getLatestBlockhash("confirmed"));
+  const latest = await withReadConnection(connection, (readConnection) =>
+    readConnection.getLatestBlockhash("confirmed"),
+  );
   tx.recentBlockhash = latest.blockhash;
   tx.feePayer = feePayer;
   const ctx = { blockhash: latest.blockhash, lastValidBlockHeight: latest.lastValidBlockHeight };
@@ -74,7 +76,9 @@ export async function signAndSendTransaction(
   let ctx = blockhashCtx.get(tx);
   if (!ctx || ctx.blockhash !== signed.recentBlockhash) {
     // Unknown window: fall back to an upper bound from the latest blockhash.
-    const latest = await withRpcRetry(() => connection.getLatestBlockhash("confirmed"));
+    const latest = await withReadConnection(connection, (readConnection) =>
+      readConnection.getLatestBlockhash("confirmed"),
+    );
     ctx = {
       blockhash: signed.recentBlockhash ?? latest.blockhash,
       lastValidBlockHeight: latest.lastValidBlockHeight,

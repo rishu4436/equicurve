@@ -2,7 +2,7 @@ import type { Connection, PublicKey } from "@solana/web3.js";
 import { parseUiAmount } from "@/lib/amounts";
 import { WSOL_MINT } from "@/lib/constants";
 import { EquiCurveError } from "@/lib/errors";
-import { withRpcRetry } from "@/lib/rpc";
+import { withReadConnection } from "@/lib/connection";
 
 export const SOL_SWAP_FEE_RENT_BUFFER_ATOMS = 10_000_000n;
 export const BALANCE_MAX_AGE_MS = 15_000;
@@ -39,6 +39,47 @@ export function tradeBalanceError(args: {
     : "Insufficient wallet quote balance for this buy plus the estimated fee/rent buffer.";
 }
 
+export type TradeFundingEvidence = {
+  inputAtoms: bigint;
+  inputReadAt: number;
+  nativeSolAtoms: bigint;
+  nativeSolReadAt: number;
+  inputIsNativeSol: boolean;
+};
+
+export function tradeFundingError(args: {
+  direction: "buy" | "sell";
+  requestedAtoms: bigint;
+  evidence: TradeFundingEvidence | null;
+  now?: number;
+}): string | null {
+  const evidence = args.evidence;
+  if (!evidence) return "Wallet balances are unavailable. Refresh the quote before signing.";
+  const inputError = tradeBalanceError({
+    direction: args.direction,
+    requestedAtoms: args.requestedAtoms,
+    availableAtoms: evidence.inputAtoms,
+    feeRentBufferAtoms: evidence.inputIsNativeSol ? SOL_SWAP_FEE_RENT_BUFFER_ATOMS : 0n,
+    readAt: evidence.inputReadAt,
+    now: args.now,
+  });
+  if (inputError) return inputError;
+  if (!evidence.inputIsNativeSol) {
+    const nativeError = tradeBalanceError({
+      direction: "buy",
+      requestedAtoms: 0n,
+      availableAtoms: evidence.nativeSolAtoms,
+      feeRentBufferAtoms: SOL_SWAP_FEE_RENT_BUFFER_ATOMS,
+      readAt: evidence.nativeSolReadAt,
+      now: args.now,
+    });
+    if (nativeError) {
+      return "Insufficient native SOL reserve for transaction fees and possible token-account rent. The reserve is conservative, not an exact fee prediction.";
+    }
+  }
+  return null;
+}
+
 export async function readSwapInputBalance(args: {
   connection: Connection;
   owner: PublicKey;
@@ -46,10 +87,13 @@ export async function readSwapInputBalance(args: {
 }): Promise<{ atoms: bigint; readAt: number }> {
   try {
     if (args.mint.equals(WSOL_MINT)) {
-      return { atoms: BigInt(await withRpcRetry(() => args.connection.getBalance(args.owner, "confirmed"))), readAt: Date.now() };
+      return withReadConnection(args.connection, async (connection) => ({
+        atoms: BigInt(await connection.getBalance(args.owner, "confirmed")),
+        readAt: Date.now(),
+      }));
     }
-    const reads = [await withRpcRetry(() =>
-      args.connection.getParsedTokenAccountsByOwner(args.owner, { mint: args.mint }, "confirmed"),
+    const reads = [await withReadConnection(args.connection, (connection) =>
+      connection.getParsedTokenAccountsByOwner(args.owner, { mint: args.mint }, "confirmed"),
     )];
     const seen = new Set<string>();
     let atoms = 0n;
@@ -67,4 +111,33 @@ export async function readSwapInputBalance(args: {
   } catch (error) {
     throw new EquiCurveError("Could not read the connected wallet balance. Try again when RPC is available.", "RPC_UNAVAILABLE", error);
   }
+}
+
+export async function readTradeFunding(args: {
+  connection: Connection;
+  owner: PublicKey;
+  inputMint: PublicKey;
+}): Promise<TradeFundingEvidence> {
+  const input = await readSwapInputBalance({
+    connection: args.connection,
+    owner: args.owner,
+    mint: args.inputMint,
+  });
+  if (args.inputMint.equals(WSOL_MINT)) {
+    return {
+      inputAtoms: input.atoms,
+      inputReadAt: input.readAt,
+      nativeSolAtoms: input.atoms,
+      nativeSolReadAt: input.readAt,
+      inputIsNativeSol: true,
+    };
+  }
+  const native = await readSwapInputBalance({ ...args, mint: WSOL_MINT });
+  return {
+    inputAtoms: input.atoms,
+    inputReadAt: input.readAt,
+    nativeSolAtoms: native.atoms,
+    nativeSolReadAt: native.readAt,
+    inputIsNativeSol: false,
+  };
 }

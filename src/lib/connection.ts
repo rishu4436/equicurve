@@ -1,7 +1,13 @@
 import { Connection, type Commitment } from "@solana/web3.js";
-import { getDevnetRpcReadUrls, getRpcUrl, getServerDevnetRpcReadUrls, getServerRpcUrl } from "./constants";
+import { getCluster, getDevnetRpcReadUrls, getRpcUrl, getServerDevnetRpcReadUrls, getServerRpcUrl, isLocalRpc } from "./constants";
 import { EquiCurveError } from "./errors";
-import { withRpcRetry } from "./rpc";
+import { withRpcRetry, withVerifiedRpcFallback, type RetryOptions } from "./rpc";
+
+export const CLUSTER_GENESIS_HASH = {
+  devnet: "EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+  testnet: "4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY",
+  "mainnet-beta": "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp",
+} as const;
 
 let cached: Connection | null = null;
 let serverCached: Connection | null = null;
@@ -52,6 +58,33 @@ export function getReadConnections(commitment: Commitment = "confirmed"): Connec
 
 export function getServerReadConnections(commitment: Commitment = "confirmed"): Connection[] {
   return connectionsFor(getServerDevnetRpcReadUrls(), commitment);
+}
+
+/**
+ * Run a read or pre-sign state/build operation against ordered, verified
+ * same-cluster endpoints. This helper must never wrap transaction submission.
+ */
+export async function withReadConnection<T>(
+  primary: Connection,
+  read: (connection: Connection) => Promise<T>,
+  opts: RetryOptions & { server?: boolean } = {},
+): Promise<T> {
+  const configured = opts.server ? getServerReadConnections() : getReadConnections();
+  const sources = [
+    primary,
+    ...configured.filter((connection) => connection.rpcEndpoint !== primary.rpcEndpoint),
+  ];
+  const { server: _server, ...retry } = opts;
+  if (isLocalRpc(primary.rpcEndpoint)) {
+    const localGenesis = await withRpcRetry(() => primary.getGenesisHash(), retry);
+    return withVerifiedRpcFallback([primary], localGenesis, read, retry);
+  }
+  return withVerifiedRpcFallback(
+    sources,
+    CLUSTER_GENESIS_HASH[getCluster()],
+    read,
+    retry,
+  );
 }
 
 export async function pingRpc(connection: Connection = getServerConnection()): Promise<{

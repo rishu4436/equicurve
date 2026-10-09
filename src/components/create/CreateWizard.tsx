@@ -31,6 +31,7 @@ import { validateSeedBuy } from "@/lib/validation";
 import { pushActivity, upsertLaunch } from "@/lib/local/launches";
 import { registerLaunchRemote } from "@/lib/registry/client";
 import { setFreshBlockhash, signAndSendTransaction } from "@/lib/send";
+import { withReadConnection } from "@/lib/connection";
 import { EligibilityGate, useEligibilityGate } from "@/components/gate/EligibilityGate";
 import { clsx } from "clsx";
 import { OfferingPreviewCard } from "./OfferingPreviewCard";
@@ -325,10 +326,12 @@ export function CreateWizard() {
         ...l,
         `Metadata: ${meta.source}${meta.note ? ` — ${meta.note}` : ""}`,
       ]);
+      const payer = wallet.publicKey;
+      if (!payer) throw new Error("Wallet disconnected before launch preparation.");
       const { prepared, transactions, signersPerTx } =
-        await prepareLaunchTransaction({
-          connection,
-          payer: wallet.publicKey,
+        await withReadConnection(connection, (readConnection) => prepareLaunchTransaction({
+          connection: readConnection,
+          payer,
           keypairs: launchKeypairs,
           input: {
             name: state.name,
@@ -344,9 +347,9 @@ export function CreateWizard() {
             quoteLabel: state.quote,
             feeClaimer: state.feeClaimer.trim() || undefined,
             transferProfile: state.transferProfile,
-            marketCaps: state.marketCaps,
+            marketCaps: state.marketCaps ?? undefined,
           },
-        });
+        }));
       if (prepared.poolPubkey !== planned.pool || prepared.baseMintPubkey !== planned.mint) {
         throw new Error("Internal error: planned pool/mint does not match the built transaction.");
       }
@@ -409,7 +412,9 @@ export function CreateWizard() {
       // A confirmed signature is not a verified deployment until readback matches.
       let snap;
       try {
-        snap = await fetchPoolSnapshot(connection, new PublicKey(prepared.poolPubkey));
+        snap = await withReadConnection(connection, (readConnection) =>
+          fetchPoolSnapshot(readConnection, new PublicKey(prepared.poolPubkey)),
+        );
       } catch (e) {
         let r = receiptRef;
         for (const k of ["pool", "mint", "config"]) {

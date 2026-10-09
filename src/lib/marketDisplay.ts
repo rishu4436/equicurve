@@ -44,6 +44,17 @@ export function formatMarketTimestamp(value: string | number | Date, includeDate
   return `${text} UTC`;
 }
 
+export function formatPermanentLock(lockPct: number | null | undefined): string {
+  if (lockPct == null || !Number.isFinite(lockPct)) return "Configured lock unavailable";
+  return lockPct === 100
+    ? "100% permanently locked"
+    : `${lockPct}% configured permanent lock`;
+}
+
+export function formatQuoteReserveLabel(quoteLabel: string): string {
+  return `Quote reserve (${quoteLabel})`;
+}
+
 export type MarketLifecycle = { label: string; activeVenue: "DBC" | "DAMM v2" | "Pending"; tradeEnabled: boolean };
 
 export function marketLifecycle(phase: CurvePhase, destination: DestinationCheck): MarketLifecycle {

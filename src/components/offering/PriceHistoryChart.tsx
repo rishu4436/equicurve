@@ -11,6 +11,7 @@ import {
   type PricePoint,
 } from "@/lib/local/priceHistory";
 import { formatMarketTimestamp, formatPriceAxis, formatTokenPrice } from "@/lib/marketDisplay";
+import { withReadConnection } from "@/lib/connection";
 
 type Props = {
   poolAddress: string | null;
@@ -126,10 +127,12 @@ export function PriceHistoryChart({
       const cached = loadPriceHistory(poolAddress);
       setPoints(cached);
 
-      const result = await reconstructPoolPriceHistory(
-        connection,
-        new PublicKey(poolAddress),
-        { limit: 100 },
+      const result = await withReadConnection(connection, (readConnection) =>
+        reconstructPoolPriceHistory(
+          readConnection,
+          new PublicKey(poolAddress),
+          { limit: 100 },
+        ),
       );
       setSpot(result.spot);
       setSpotAt(result.spot != null ? Date.now() : null);

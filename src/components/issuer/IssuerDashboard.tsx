@@ -29,6 +29,7 @@ import {
 import { transactionNotice } from "@/lib/transactionUi";
 import { signAndSendTransaction } from "@/lib/send";
 import { formatQuoteAtoms } from "@/lib/amounts";
+import { formatPermanentLock } from "@/lib/marketDisplay";
 
 /** Exact atoms → display (string math; no float precision loss). */
 function formatQuoteAmount(raw: string, quote: "SOL" | "USDC" = "SOL"): string {
@@ -401,7 +402,7 @@ export function IssuerDashboard() {
                     <div>
                       <dt className="text-fg-muted">LP lock policy</dt>
                       <dd className="text-fg-primary">
-                        ≥{current?.lockPct ?? 10}%
+                        {formatPermanentLock(current?.lockPct)}
                       </dd>
                     </div>
                   </dl>

@@ -111,6 +111,53 @@ export async function withRpcFallback<S, T>(
   throw lastError;
 }
 
+export type RpcIdentitySource = {
+  rpcEndpoint: string;
+  getGenesisHash(): Promise<string>;
+};
+
+const verifiedClusterEndpoints = new Map<string, Promise<void>>();
+
+export async function verifyRpcCluster(
+  source: RpcIdentitySource,
+  expectedGenesisHash: string,
+): Promise<void> {
+  const key = `${source.rpcEndpoint}|${expectedGenesisHash}`;
+  const cached = verifiedClusterEndpoints.get(key);
+  if (cached) return cached;
+  const check = withRpcRetry(() => source.getGenesisHash(), { retries: 1, timeoutMs: 5_000 })
+    .then((actual) => {
+      if (actual !== expectedGenesisHash) {
+        throw new Error(
+          `RPC cluster mismatch for ${source.rpcEndpoint}: expected genesis ${expectedGenesisHash}, received ${actual}.`,
+        );
+      }
+    })
+    .catch((error) => {
+      verifiedClusterEndpoints.delete(key);
+      throw error;
+    });
+  verifiedClusterEndpoints.set(key, check);
+  return check;
+}
+
+/** Bounded fallback for reads after every endpoint proves the expected cluster identity. */
+export function withVerifiedRpcFallback<S extends RpcIdentitySource, T>(
+  sources: readonly S[],
+  expectedGenesisHash: string,
+  read: (source: S) => Promise<T>,
+  opts: RetryOptions = {},
+): Promise<T> {
+  return withRpcFallback(
+    sources,
+    async (source) => {
+      await verifyRpcCluster(source, expectedGenesisHash);
+      return read(source);
+    },
+    opts,
+  );
+}
+
 const inFlightReads = new Map<string, Promise<unknown>>();
 
 /** Coalesce identical concurrent read-only requests without caching settled chain data. */

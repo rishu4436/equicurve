@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { EquiCurveError, mapError, parseCustomErrorCode } from "@/lib/errors";
-import { dedupeRpcRead, isTransientRpcError, withRpcFallback, withRpcRetry, withTimeout, RpcTimeoutError } from "@/lib/rpc";
+import { dedupeRpcRead, isTransientRpcError, withRpcFallback, withRpcRetry, withTimeout, withVerifiedRpcFallback, RpcTimeoutError } from "@/lib/rpc";
 
 const DBC = "dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN";
 const DAMM = "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG";
@@ -92,6 +92,48 @@ describe("withRpcRetry", () => {
     }, { retries: 0 });
     expect(result).toBe("ok");
     expect(calls).toEqual(["primary", "backup"]);
+  });
+
+  it("reaches a verified same-cluster fallback after a transient primary read failure", async () => {
+    const reads: string[] = [];
+    const sources = [
+      { rpcEndpoint: "https://primary.example", getGenesisHash: async () => "devnet-genesis" },
+      { rpcEndpoint: "https://fallback.example", getGenesisHash: async () => "devnet-genesis" },
+    ];
+    const result = await withVerifiedRpcFallback(sources, "devnet-genesis", async (source) => {
+      reads.push(source.rpcEndpoint);
+      if (source === sources[0]) throw new Error("503 Service Unavailable");
+      return "fallback result";
+    }, { retries: 0 });
+    expect(result).toBe("fallback result");
+    expect(reads).toEqual(["https://primary.example", "https://fallback.example"]);
+  });
+
+  it("rejects a network-mismatched fallback before executing its read", async () => {
+    const fallbackRead = vi.fn();
+    const sources = [
+      { rpcEndpoint: "https://primary-mismatch-test.example", getGenesisHash: async () => "devnet-genesis" },
+      { rpcEndpoint: "https://wrong-cluster.example", getGenesisHash: async () => "mainnet-genesis" },
+    ];
+    await expect(withVerifiedRpcFallback(sources, "devnet-genesis", async (source) => {
+      if (source === sources[0]) throw new Error("429 Too Many Requests");
+      fallbackRead();
+      return "unsafe";
+    }, { retries: 0 })).rejects.toThrow(/cluster mismatch/);
+    expect(fallbackRead).not.toHaveBeenCalled();
+  });
+
+  it("fails closed without trying fallback after a verified non-transient read error", async () => {
+    const reads: string[] = [];
+    const sources = [
+      { rpcEndpoint: "https://primary-closed.example", getGenesisHash: async () => "same" },
+      { rpcEndpoint: "https://fallback-closed.example", getGenesisHash: async () => "same" },
+    ];
+    await expect(withVerifiedRpcFallback(sources, "same", async (source) => {
+      reads.push(source.rpcEndpoint);
+      throw new Error("invalid account data");
+    }, { retries: 0 })).rejects.toThrow(/invalid account/);
+    expect(reads).toEqual(["https://primary-closed.example"]);
   });
 
   it("does not switch endpoints for a non-transient read error", async () => {

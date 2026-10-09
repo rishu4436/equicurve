@@ -14,7 +14,6 @@ import { ProgressRing } from "@/components/ui/ProgressRing";
 import {
   explorerAddressUrl,
   quoteLabelForMint,
-  WSOL_MINT,
 } from "@/lib/constants";
 import { parseUiAmount, tryFormatAtoms } from "@/lib/amounts";
 import { fetchPoolSnapshot } from "@/lib/dbc/migrate";
@@ -34,13 +33,14 @@ import { hasSelfAttested } from "@/lib/local/eligibility";
 import { signAndSendTransaction } from "@/lib/send";
 import { VerifiedDeployment } from "@/components/VerifiedDeployment";
 import {
-  readSwapInputBalance,
-  SOL_SWAP_FEE_RENT_BUFFER_ATOMS,
+  readTradeFunding,
   tradeAmountError,
-  tradeBalanceError,
+  tradeFundingError,
+  type TradeFundingEvidence,
 } from "@/lib/trade/validation";
 import { formatProgressRatio } from "@/lib/marketDisplay";
 import { transactionNotice } from "@/lib/transactionUi";
+import { withReadConnection } from "@/lib/connection";
 
 type Props = {
   poolAddress: string;
@@ -71,13 +71,15 @@ export function TradePanel({
   const [quoteOut, setQuoteOut] = useState<SwapQuoteView | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const [balanceCheck, setBalanceCheck] = useState<{ atoms: bigint; readAt: number } | null>(null);
+  const [fundingCheck, setFundingCheck] = useState<TradeFundingEvidence | null>(null);
 
   const refresh = useCallback(async () => {
     try {
       setError(null);
       setSnapshot(
-        await fetchPoolSnapshot(connection, new PublicKey(poolAddress)),
+        await withReadConnection(connection, (readConnection) =>
+          fetchPoolSnapshot(readConnection, new PublicKey(poolAddress)),
+        ),
       );
       setReadState("ok");
     } catch (e) {
@@ -98,32 +100,28 @@ export function TradePanel({
   }
 
   async function buildQuote(): Promise<SwapQuoteView> {
-    return quoteAndBuildSwap({
-      connection,
+    return withReadConnection(connection, (readConnection) => quoteAndBuildSwap({
+      connection: readConnection,
       owner: wallet.publicKey!,
       pool: new PublicKey(poolAddress),
       direction,
       amountUi: amount,
-    });
+    }));
   }
 
   async function validateQuoteBalance(quote: SwapQuoteView) {
-    const balance = await readSwapInputBalance({
+    const evidence = await readTradeFunding({
       connection,
       owner: wallet.publicKey!,
-      mint: new PublicKey(direction === "buy" ? quote.quoteMint : quote.baseMint),
+      inputMint: new PublicKey(direction === "buy" ? quote.quoteMint : quote.baseMint),
     });
-    const message = tradeBalanceError({
+    const message = tradeFundingError({
       direction,
       requestedAtoms: BigInt(quote.fillableIn),
-      availableAtoms: balance.atoms,
-      feeRentBufferAtoms: direction === "buy" && quote.quoteMint === WSOL_MINT.toBase58()
-        ? SOL_SWAP_FEE_RENT_BUFFER_ATOMS
-        : 0n,
-      readAt: balance.readAt,
+      evidence,
     });
     if (message) throw new Error(message);
-    setBalanceCheck(balance);
+    setFundingCheck(evidence);
   }
 
   /** Step 1: quote + build, then show the pre-sign summary. */
@@ -141,16 +139,14 @@ export function TradePanel({
       }
       const inputMint = new PublicKey(direction === "buy" ? snapshot.quoteMint : snapshot.baseMint);
       const inputDecimals = direction === "buy" ? snapshot.quoteDecimals : snapshot.baseDecimals;
-      const preBalance = await readSwapInputBalance({ connection, owner: wallet.publicKey, mint: inputMint });
-      const preBalanceMessage = tradeBalanceError({
+      const preFunding = await readTradeFunding({ connection, owner: wallet.publicKey, inputMint });
+      const preBalanceMessage = tradeFundingError({
         direction,
         requestedAtoms: parseUiAmount(amount, inputDecimals),
-        availableAtoms: preBalance.atoms,
-        feeRentBufferAtoms: direction === "buy" && inputMint.equals(WSOL_MINT) ? SOL_SWAP_FEE_RENT_BUFFER_ATOMS : 0n,
-        readAt: preBalance.readAt,
+        evidence: preFunding,
       });
       if (preBalanceMessage) throw new Error(preBalanceMessage);
-      setBalanceCheck(preBalance);
+      setFundingCheck(preFunding);
       const quote = await buildQuote();
       await validateQuoteBalance(quote);
       setQuoteOut(quote);
@@ -175,22 +171,21 @@ export function TradePanel({
     }
     setBusy(true);
     try {
-      const balanceMessage = tradeBalanceError({
+      const balanceMessage = tradeFundingError({
         direction,
         requestedAtoms: BigInt(quoteOut.fillableIn),
-        availableAtoms: balanceCheck?.atoms ?? null,
-        feeRentBufferAtoms: direction === "buy" && quoteOut.quoteMint === WSOL_MINT.toBase58()
-          ? SOL_SWAP_FEE_RENT_BUFFER_ATOMS
-          : 0n,
-        readAt: balanceCheck?.readAt ?? null,
+        evidence: fundingCheck,
       });
       if (balanceMessage) {
         await validateQuoteBalance(quoteOut);
       }
-      const key = await fetchDbcPoolStateKey(connection, new PublicKey(poolAddress));
+      const key = await withReadConnection(connection, (readConnection) =>
+        fetchDbcPoolStateKey(readConnection, new PublicKey(poolAddress)),
+      );
       const f = quoteFreshness(quoteOut, key, Date.now());
       if (!f.fresh) {
         const fresh = await buildQuote();
+        await validateQuoteBalance(fresh);
         setQuoteOut(fresh);
         setNotice(freshnessMessage(f));
         return;
@@ -212,7 +207,7 @@ export function TradePanel({
       const txNotice = transactionNotice(sig, direction === "buy" ? "Buy confirmed" : "Sell confirmed");
       toast.success(txNotice.message, { action: { label: "Explorer", onClick: () => window.open(txNotice.explorerUrl, "_blank", "noopener,noreferrer") } });
       setQuoteOut(null);
-      setBalanceCheck(null);
+      setFundingCheck(null);
       setNotice(null);
       await refresh();
       onSwapComplete?.();
@@ -417,7 +412,7 @@ export function TradePanel({
               onClick={() => {
                 setDirection(d);
                 setQuoteOut(null);
-                setBalanceCheck(null);
+                setFundingCheck(null);
               }}
               className={clsx(
                 "min-h-11 flex-1 rounded-lg px-4 py-2 text-sm capitalize transition-colors",
@@ -441,7 +436,7 @@ export function TradePanel({
             onChange={(e) => {
               setAmount(e.target.value);
               setQuoteOut(null);
-              setBalanceCheck(null);
+              setFundingCheck(null);
             }}
             inputMode="decimal"
             className="ec-input py-5 text-2xl tabular-nums"
