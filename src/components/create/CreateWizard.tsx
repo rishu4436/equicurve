@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { getClusterLabel, getCluster, getOptionalPoolConfigKey, isLocalRpc, WSOL_MINT } from "@/lib/constants";
 import { launchCurveConfig, planLaunchAddresses, prepareLaunchTransaction } from "@/lib/dbc/create";
 import { signLaunchPayload, type LaunchAuthPayload, type SignedLaunchBody } from "@/lib/auth/launchAuth";
+import { signSchedulePayload, type ScheduleAuthPayload } from "@/lib/auth/scheduleAuth";
 import { getUsdcMint } from "@/lib/constants";
 import { resolveMetadataUri } from "@/lib/metadata/client";
 import { Keypair, PublicKey } from "@solana/web3.js";
@@ -30,6 +31,8 @@ import { toUserMessage } from "@/lib/errors";
 import { isLocalTokenImageUrl, normalizeHttpsUrl, normalizeXProfile, validateSeedBuy } from "@/lib/validation";
 import { pushActivity, upsertLaunch } from "@/lib/local/launches";
 import { registerLaunchRemote } from "@/lib/registry/client";
+import { createScheduledLaunch, updateScheduledLaunch, validateScheduledLaunch } from "@/lib/schedule/client";
+import { normalizeScheduledForUtc, scheduleTimeError, type ScheduledLaunchDraft } from "@/lib/schedule/types";
 import { setFreshBlockhash, signAndSendTransaction } from "@/lib/send";
 import { withReadConnection } from "@/lib/connection";
 import { EligibilityGate, useEligibilityGate } from "@/components/gate/EligibilityGate";
@@ -97,12 +100,53 @@ export function CreateWizard() {
     sig: string;
   } | null>(null);
   const [receipt, setReceipt] = useState<LaunchReceipt | null>(null);
+  const [scheduleResult, setScheduleResult] = useState<{ id: string; scheduledForUtc: string } | null>(null);
+  const [loadedScheduleId, setLoadedScheduleId] = useState<string | null>(null);
   const [launchKeypairs, setLaunchKeypairs] = useState<{ config: Keypair; baseMint: Keypair } | null>(null);
   const eligibility = useEligibilityGate();
 
   useEffect(() => {
     setLaunchKeypairs({ config: Keypair.generate(), baseMint: Keypair.generate() });
   }, []);
+
+  useEffect(() => {
+    const scheduledId = search.get("scheduledId");
+    if (!scheduledId || loadedScheduleId === scheduledId) return;
+    setLoadedScheduleId(scheduledId);
+    void fetch(`/api/scheduled-launches/${encodeURIComponent(scheduledId)}`, { cache: "no-store" })
+      .then((response) => response.json())
+      .then((body: { ok?: boolean; schedule?: ScheduledLaunchDraft & { id: string; effectiveStatus?: string }; error?: string }) => {
+        if (!body.ok || !body.schedule) throw new Error(body.error ?? "Scheduled launch not found");
+        const scheduled = body.schedule;
+        setState((current) => ({
+          ...current,
+          name: scheduled.name,
+          ticker: scheduled.ticker,
+          thesis: scheduled.thesis,
+          sector: scheduled.sector,
+          website: scheduled.website ?? "",
+          xProfile: scheduled.xProfile ?? "",
+          image: scheduled.image ?? "",
+          presetId: scheduled.presetId,
+          raiseTarget: scheduled.raiseTarget,
+          quote: scheduled.quote,
+          totalSupply: scheduled.totalSupply,
+          seedBuy: scheduled.seedBuy,
+          feeIssuer: scheduled.feeIssuerPct,
+          lpLockPct: scheduled.lpLockPct,
+          antiSniper: scheduled.antiSniper,
+          mintRenounce: scheduled.mintRenounce,
+          feeClaimer: scheduled.feeClaimer ?? "",
+          transferProfile: scheduled.transferProfile,
+          marketCaps: scheduled.marketCaps,
+          designed: scheduled.designed,
+          launchMode: "now",
+        }));
+        setStep("launch");
+        toast.success("Scheduled design loaded. Review it before launch.");
+      })
+      .catch((error) => toast.error(error instanceof Error ? error.message : "Scheduled launch could not be loaded"));
+  }, [loadedScheduleId, search]);
 
   const idx = stepIndex(step);
   const feePlatform = 100 - state.feeIssuer;
@@ -182,6 +226,125 @@ export function CreateWizard() {
     go(WIZARD_STEPS[idx + 1].id);
   }
 
+  function buildSchedulePayload(): ScheduleAuthPayload["schedule"] | null {
+    if (!state.marketCaps || !state.designed) {
+      toast.error("Design a market before scheduling.");
+      return null;
+    }
+    const localDate = new Date(state.scheduledForLocal);
+    const scheduledForUtc = Number.isFinite(localDate.getTime())
+      ? normalizeScheduledForUtc(localDate.toISOString())
+      : null;
+    if (!scheduledForUtc) {
+      toast.error("Choose a valid launch date and time.");
+      return null;
+    }
+    const timeError = scheduleTimeError(scheduledForUtc);
+    if (timeError) {
+      toast.error(timeError);
+      return null;
+    }
+    const website = state.website.trim() ? normalizeHttpsUrl(state.website) : null;
+    const xProfile = state.xProfile.trim() ? normalizeXProfile(state.xProfile) : null;
+    if (state.website.trim() && !website) {
+      toast.error("Website must be a valid HTTPS URL.");
+      return null;
+    }
+    if (state.xProfile.trim() && !xProfile) {
+      toast.error("X profile must be an https://x.com/<handle> URL.");
+      return null;
+    }
+    try {
+      const config = launchCurveConfig({
+        presetId: state.presetId,
+        totalSupply: state.totalSupply,
+        creatorTradingFeePercentage: state.feeIssuer,
+        lpLockPct: state.lpLockPct,
+        mintRenounce: state.mintRenounce,
+        antiSniper: state.antiSniper,
+        quoteDecimals: state.quote === "USDC" ? 6 : 9,
+        transferProfile: state.transferProfile,
+        marketCaps: state.marketCaps,
+      });
+      if (marketConfigFingerprint(config) !== state.designed.configFingerprint) {
+        toast.error("The scheduled design no longer matches the transaction config. Rerun the market design.");
+        return null;
+      }
+      const expected = expectedFromConfig(config);
+      return {
+        name: state.name.trim(),
+        ticker: state.ticker.trim(),
+        thesis: state.thesis.trim(),
+        sector: state.sector,
+        website: website ?? "",
+        xProfile: xProfile ?? "",
+        image: state.image.trim(),
+        presetId: state.presetId,
+        raiseTarget: state.raiseTarget,
+        quote: state.quote,
+        totalSupply: state.totalSupply,
+        seedBuy: state.seedBuy.trim(),
+        feeIssuerPct: state.feeIssuer,
+        lpLockPct: state.lpLockPct,
+        antiSniper: state.antiSniper,
+        mintRenounce: state.mintRenounce,
+        feeClaimer: state.feeClaimer.trim(),
+        transferProfile: state.transferProfile,
+        designFingerprint: state.designed.configFingerprint,
+        design: {
+          fingerprint: state.designed.configFingerprint,
+          migrationQuoteThresholdAtoms: expected.migrationQuoteThreshold,
+          canonicalConfig: canonicalConfigText(config),
+          expected,
+          profileName: (state.designed.profileName || state.presetId).slice(0, 80),
+          constraintsPassed: state.designed.constraintsPassed === true,
+          ...(state.designed.constraintPolicy ? { constraintPolicy: state.designed.constraintPolicy } : {}),
+        },
+        scheduledForUtc,
+        marketCaps: state.marketCaps,
+        designed: state.designed,
+      };
+    } catch (error) {
+      toast.error(toUserMessage(error));
+      return null;
+    }
+  }
+
+  async function onSchedule() {
+    if (!wallet.publicKey || !wallet.signMessage) {
+      toast.error("Connect a wallet that supports free message signing to schedule a launch.");
+      return;
+    }
+    const schedule = buildSchedulePayload();
+    if (!schedule) return;
+    setBusy(true);
+    setScheduleResult(null);
+    setLaunchLog(["Preparing a creator-signed scheduled launch intent…"]);
+    try {
+      if (schedule.image && !isLocalTokenImageUrl(schedule.image)) {
+        const checked = (await fetch(`/api/image-check?url=${encodeURIComponent(schedule.image)}`, { cache: "no-store" }).then((response) => response.json()).catch(() => ({ ok: false, error: "image check failed (network)" }))) as ImageCheckResult;
+        if (!checked.ok) throw new Error(`Token image rejected: ${checked.error}`);
+      }
+      const signed = await signSchedulePayload({
+        payload: { v: 1, action: "schedule_create", cluster: getCluster(), schedule },
+        signer: wallet.publicKey.toBase58(),
+        signMessage: wallet.signMessage,
+      });
+      const result = await createScheduledLaunch(signed);
+      if (!result.ok) throw new Error(result.error);
+      setScheduleResult({ id: result.schedule.id, scheduledForUtc: result.schedule.scheduledForUtc });
+      setLaunchLog((log) => [...log, "Schedule saved — no blockchain transaction was sent."]);
+      toast.success("Launch scheduled");
+      router.push(`/upcoming/${result.schedule.id}`);
+    } catch (error) {
+      const message = toUserMessage(error);
+      setLaunchLog((log) => [...log, `Schedule error: ${message}`]);
+      toast.error(message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function onLaunch() {
     if (!state.marketCaps || !state.designed) {
       toast.error("Design a market before deploying. The transaction builds that design's market caps.");
@@ -234,12 +397,24 @@ export function CreateWizard() {
     setReceipt(null);
     setLaunchLog([`Preparing DBC createConfigAndPool (${state.quote} quote)…`]);
     const image = state.image.trim();
+    const scheduledId = search.get("scheduledId");
     let receiptRef: LaunchReceipt = { cluster: getClusterLabel(), items: [] };
     const rec = (next: LaunchReceipt) => {
       receiptRef = next;
       setReceipt(next);
     };
     try {
+      if (scheduledId) {
+        if (!wallet.signMessage) throw new Error("This scheduled launch needs the creator wallet's free message signature before it can be sent.");
+        const check = await signSchedulePayload({
+          payload: { v: 1, action: "schedule_validate", cluster: getCluster(), scheduleId: scheduledId, designFingerprint: state.designed.configFingerprint },
+          signer: wallet.publicKey.toBase58(),
+          signMessage: wallet.signMessage,
+        });
+        const validated = await validateScheduledLaunch(check);
+        if (!validated.ok) throw new Error(validated.error);
+        setLaunchLog((log) => [...log, "Scheduled launch ownership and design fingerprint revalidated."]);
+      }
       if (image && !isLocalTokenImageUrl(image)) {
         const chk = (await fetch(`/api/image-check?url=${encodeURIComponent(image)}`, { cache: "no-store" })
           .then((r) => r.json())
@@ -519,6 +694,23 @@ export function CreateWizard() {
         setLaunchLog((l) => [...l, "Registry: skipped (unsigned) — saved in this browser only"]);
         rec(upsertReceiptItem(receiptRef, { key: "registry", label: "Registry listing", value: "skipped (unsigned) · saved in this browser only", kind: "text", state: "local" }));
       }
+      if (scheduledId && wallet.signMessage) {
+        const close = await signSchedulePayload({
+          payload: {
+            v: 1,
+            action: "schedule_launch",
+            cluster: getCluster(),
+            scheduleId: scheduledId,
+            designFingerprint: state.designed.configFingerprint,
+            launchedPool: prepared.poolPubkey,
+            launchSignature: lastSig,
+          },
+          signer: wallet.publicKey.toBase58(),
+          signMessage: wallet.signMessage,
+        });
+        const closed = await updateScheduledLaunch(close);
+        setLaunchLog((log) => [...log, closed.ok ? "Schedule closed as launched." : `Schedule close failed: ${closed.error}`]);
+      }
       pushActivity({
         id: `${lastSig}-launch`,
         pool: prepared.poolPubkey,
@@ -615,6 +807,10 @@ export function CreateWizard() {
                 result={result}
                 receipt={receipt}
                 onLaunch={onLaunch}
+                onSchedule={onSchedule}
+                scheduleResult={scheduleResult}
+                onModeChange={(launchMode) => patch({ launchMode })}
+                onScheduledForChange={(scheduledForLocal) => patch({ scheduledForLocal })}
                 walletConnected={!!wallet.publicKey}
               />
             )}
@@ -646,14 +842,13 @@ export function CreateWizard() {
             </button>
           </div>
         )}
-        {step === "launch" && result && (
+        {step === "launch" && (result || scheduleResult) && (
           <div className="flex flex-wrap gap-3">
-            <Link href={`/o/${result.pool}`} className="ec-btn-primary">
-              View offering
-            </Link>
-            <Link href={`/trade/${result.pool}`} className="ec-btn-secondary">
-              Trade on curve
-            </Link>
+            {result && <>
+              <Link href={`/o/${result.pool}`} className="ec-btn-primary">View offering</Link>
+              <Link href={`/trade/${result.pool}`} className="ec-btn-secondary">Trade on curve</Link>
+            </>}
+            {scheduleResult && <Link href={`/upcoming/${scheduleResult.id}`} className="ec-btn-primary">View upcoming launch</Link>}
           </div>
         )}
       </div>
@@ -1336,6 +1531,10 @@ function StepLaunch({
   result,
   receipt,
   onLaunch,
+  onSchedule,
+  scheduleResult,
+  onModeChange,
+  onScheduledForChange,
   walletConnected,
 }: {
   state: WizardState;
@@ -1344,14 +1543,22 @@ function StepLaunch({
   result: { pool: string; mint: string; config: string; sig: string } | null;
   receipt: LaunchReceipt | null;
   onLaunch: () => void;
+  onSchedule: () => void;
+  scheduleResult: { id: string; scheduledForUtc: string } | null;
+  onModeChange: (mode: WizardState["launchMode"]) => void;
+  onScheduledForChange: (value: string) => void;
   walletConnected: boolean;
 }) {
+  const min = new Date(Date.now() + 5 * 60 * 1000);
+  const max = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+  const minLocal = new Date(min.getTime() - min.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+  const maxLocal = new Date(max.getTime() - max.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
   return (
     <section className="space-y-4">
       <header>
-        <h1 className="text-2xl font-semibold text-fg-primary">Deploy this market design</h1>
+        <h1 className="text-2xl font-semibold text-fg-primary">Launch this market design</h1>
         <p className="mt-1 text-sm text-fg-secondary">
-          Signs a real Meteora DBC transaction on {getClusterLabel()} for{" "}
+          Choose whether to send the normal Meteora DBC transaction now or reserve a creator-signed launch intent for later. {" "}
           <strong className="text-fg-primary">{state.name}</strong> ($
           {state.ticker}). The curve is the design you selected
           {state.marketCaps
@@ -1365,10 +1572,28 @@ function StepLaunch({
           until that design matches the transaction.
         </p>
       )}
+      <fieldset className="ec-card space-y-3 p-4">
+        <legend className="text-sm font-semibold text-fg-primary">Launch timing</legend>
+        <label className="flex items-start gap-3 rounded-input border border-line p-3">
+          <input type="radio" name="launch-mode" checked={state.launchMode === "now"} onChange={() => onModeChange("now")} />
+          <span><strong className="block text-sm text-fg-primary">Launch now</strong><span className="text-xs text-fg-muted">Continue into the normal wallet transaction flow.</span></span>
+        </label>
+        <label className="flex items-start gap-3 rounded-input border border-line p-3">
+          <input type="radio" name="launch-mode" checked={state.launchMode === "scheduled"} onChange={() => onModeChange("scheduled")} />
+          <span><strong className="block text-sm text-fg-primary">Schedule launch</strong><span className="text-xs text-fg-muted">Reserve intent only. No transaction is sent until you return and sign.</span></span>
+        </label>
+        {state.launchMode === "scheduled" && (
+          <div className="space-y-3 rounded-input border border-accent/20 bg-accent/5 p-3">
+            <label className="block space-y-1.5"><span className="ec-label">Launch date and time</span><input type="datetime-local" className="ec-input" min={minLocal} max={maxLocal} value={state.scheduledForLocal} onChange={(event) => onScheduledForChange(event.target.value)} /><span className="block text-xs text-fg-muted">Your local timezone: {Intl.DateTimeFormat().resolvedOptions().timeZone}. The server stores UTC and decides when this becomes Ready.</span></label>
+            <p className="text-xs text-fg-secondary">Design fingerprint <code className="font-mono text-accent-soft">{state.designed?.configFingerprint ?? "—"}</code></p>
+            <p className="text-xs text-fg-muted">This schedule reserves the launch intent only. No transaction is sent until you return, review, reconnect the same wallet, and sign.</p>
+          </div>
+        )}
+      </fieldset>
       <ol className="ec-card space-y-2 p-4 text-sm text-fg-secondary">
-        <li>1. Sign a free message binding the registry / metadata to the planned pool and mint</li>
-        <li>2. Create DBC config (fee / lock / mint authority from your inputs)</li>
-        <li>3. Create virtual pool + mint ({state.quote} quote)</li>
+        <li>1. {state.launchMode === "scheduled" ? "Sign a free message binding this schedule to your wallet and design" : "Sign a free message binding the registry / metadata to the planned pool and mint"}</li>
+        <li>2. {state.launchMode === "scheduled" ? "Return later and review the same design" : "Create DBC config (fee / lock / mint authority from your inputs)"}</li>
+        <li>3. {state.launchMode === "scheduled" ? "Sign the normal launch transaction when Ready" : `Create virtual pool + mint (${state.quote} quote)`}</li>
         <li>
           4.{" "}
           {state.seedBuy.trim() !== "" && !/^0*(\.0*)?$/.test(state.seedBuy.trim())
@@ -1378,18 +1603,19 @@ function StepLaunch({
       </ol>
       <button
         type="button"
-        disabled={busy || !walletConnected || !!result || !state.designed || !state.marketCaps}
+        disabled={busy || !walletConnected || !!result || !!scheduleResult || !state.designed || !state.marketCaps || state.launchMode === "scheduled"}
         onClick={onLaunch}
         className="ec-btn-primary w-full sm:w-auto"
       >
         {busy
           ? "Preparing & signing…"
-          : result
-            ? "Launched"
-            : walletConnected
-              ? "Deploy this market design"
-              : "Connect wallet to launch"}
+            : result
+              ? "Launched"
+              : walletConnected
+                ? "Deploy this market design"
+                : "Connect wallet to launch"}
       </button>
+      {state.launchMode === "scheduled" && <button type="button" disabled={busy || !walletConnected || !!scheduleResult || !state.designed || !state.marketCaps} onClick={onSchedule} className="ec-btn-primary w-full sm:w-auto">{busy ? "Signing schedule…" : scheduleResult ? "Scheduled" : walletConnected ? "Schedule launch" : "Connect wallet to schedule"}</button>}
       {receipt && receipt.items.length > 0 && <LaunchReceiptCard receipt={receipt} />}
       {log.length > 0 && (
         <details className="ec-card p-4" open={!receipt}>

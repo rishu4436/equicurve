@@ -102,6 +102,9 @@ export type WizardState = {
   image: string;
   imageUploadState: ImageUploadState;
   imageUploadError: string;
+  launchMode: "now" | "scheduled";
+  /** Browser-local datetime-local value; converted to signed UTC before save. */
+  scheduledForLocal: string;
   totalSupply: number;
 };
 
@@ -149,6 +152,8 @@ export const INITIAL_WIZARD: WizardState = {
   image: "",
   imageUploadState: "idle",
   imageUploadError: "",
+  launchMode: "now",
+  scheduledForLocal: "",
   totalSupply: 1_000_000_000,
 };
 

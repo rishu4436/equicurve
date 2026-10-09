@@ -14,12 +14,16 @@ import { listLaunches, type StoredLaunch } from "@/lib/local/launches";
 import { fetchExploreOfferings } from "@/lib/registry/client";
 import type { PresetId } from "@/lib/dbc/types";
 import { clsx } from "clsx";
+import { UpcomingCard } from "@/components/upcoming/UpcomingCard";
+import { listScheduledLaunches } from "@/lib/schedule/client";
+import type { PublicScheduledLaunch } from "@/lib/schedule/types";
 
 const TABS = [
   { id: "trending", label: "Trending" },
   { id: "new", label: "New" },
   { id: "raising", label: "Raising" },
   { id: "graduated", label: "Graduated" },
+  { id: "upcoming", label: "Upcoming" },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -111,6 +115,8 @@ function ExploreInner() {
   const [sector, setSector] = useState<string>("all");
   const [local, setLocal] = useState<DemoOffering[]>([]);
   const [remote, setRemote] = useState<DemoOffering[]>([]);
+  const [upcoming, setUpcoming] = useState<PublicScheduledLaunch[]>([]);
+  const [upcomingLoading, setUpcomingLoading] = useState(true);
   const [showExamples, setShowExamples] = useState(false);
   const [loading, setLoading] = useState(true);
   const [exploreMeta, setExploreMeta] = useState<Pick<
@@ -162,6 +168,10 @@ function ExploreInner() {
   useEffect(() => {
     setLocal(listLaunches().map(launchToOffering));
     void loadRemote();
+    void listScheduledLaunches().then((result) => {
+      if (result.ok) setUpcoming(result.schedules);
+      setUpcomingLoading(false);
+    });
   }, [loadRemote]);
 
   function selectTab(id: TabId) {
@@ -180,7 +190,7 @@ function ExploreInner() {
   }
 
   const items = useMemo(() => {
-    const demo = showExamples ? filterOfferings(tab) : [];
+    const demo = showExamples && tab !== "upcoming" ? filterOfferings(tab) : [];
     // Prefer remote (shared) over local when same pool; local fills gaps.
     let merged: DemoOffering[] = [...remote, ...local, ...demo];
     const seen = new Set<string>();
@@ -230,6 +240,15 @@ function ExploreInner() {
     }
     return merged;
   }, [tab, q, sector, local, remote, showExamples]);
+
+  const filteredUpcoming = useMemo(() => {
+    const query = q.trim().toLowerCase();
+    return upcoming.filter((schedule) => {
+      if (sector !== "all" && schedule.sector !== sector) return false;
+      if (!query) return true;
+      return schedule.name.toLowerCase().includes(query) || schedule.ticker.toLowerCase().includes(query) || schedule.creatorWallet.toLowerCase().includes(query);
+    });
+  }, [q, sector, upcoming]);
 
   const liveCount = useMemo(() => {
     const keys = new Set<string>();
@@ -372,7 +391,11 @@ function ExploreInner() {
         ))}
       </div>
 
-      {!loading && items.length === 0 ? (
+      {tab === "upcoming" ? (
+        upcomingLoading ? <p className="text-sm text-fg-muted">Loading upcoming launches…</p> : filteredUpcoming.length === 0 ? (
+          <div className="ec-card flex flex-col items-center gap-3 p-12 text-center"><p className="text-fg-secondary">No upcoming launches yet.</p><Link href="/create" className="ec-btn-primary">Schedule a launch</Link></div>
+        ) : <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{filteredUpcoming.map((schedule) => <UpcomingCard key={schedule.id} schedule={schedule} />)}</div>
+      ) : !loading && items.length === 0 ? (
         <div className="ec-card flex flex-col items-center gap-3 p-12 text-center">
           <p className="text-fg-secondary">
             {showExamples

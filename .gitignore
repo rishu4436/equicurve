@@ -33,6 +33,8 @@ data/
 
 # Local-first direct image uploads (runtime-only; never commit user assets)
 data/uploads/
+# Local scheduled-launch intent records; never commit runtime schedule data.
+data/scheduled-launches/
 
 # Vercel link metadata (created by `vercel link`)
 .vercel
