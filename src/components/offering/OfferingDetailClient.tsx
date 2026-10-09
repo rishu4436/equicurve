@@ -49,9 +49,11 @@ import {
 import { formatTokenSupply, tokenAccountDistribution } from "@/lib/holders";
 import { withReadConnection } from "@/lib/connection";
 import { formatMarketTimestamp, formatPermanentLock, formatProgressRatio, marketLifecycle } from "@/lib/marketDisplay";
+import { UpdatesPanel } from "@/components/community/UpdatesPanel";
 
 const TABS = [
   "Overview",
+  "Updates",
   "Disclosures",
   "Holders",
   "Activity",
@@ -362,6 +364,9 @@ export function OfferingDetailClient({ id, demo }: Props) {
   const xProfile = profile ? normalizeXProfile(profile.xProfile) : null;
   const projectImage = launch?.image ?? tokenMetadata?.image ?? null;
   const safeProjectImage = projectImage && (isLocalTokenImageUrl(projectImage) || normalizeHttpsUrl(projectImage)) ? projectImage : null;
+  // The API requires a server-verified registry row. A browser RPC read is
+  // useful for display but is not sufficient to unlock creator controls.
+  const canonicalCreator = profile?.creator ?? null;
 
   return (
     <EligibilityGate
@@ -635,6 +640,14 @@ export function OfferingDetailClient({ id, demo }: Props) {
                       <MetadataEditor pool={poolAddress} mint={mint} creator={snapshot?.creator ?? null} />
                     )}
                   </div>
+                )}
+
+                {tab === "Updates" && (
+                  poolAddress && !illustrative ? (
+                    <UpdatesPanel marketId={poolAddress} marketKind="live" creatorWallet={canonicalCreator} />
+                  ) : (
+                    <p className="text-xs text-fg-muted">Updates are available for a verified live market with a canonical pool identity.</p>
+                  )
                 )}
 
                 {tab === "Disclosures" && (

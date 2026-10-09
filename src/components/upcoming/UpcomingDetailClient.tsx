@@ -10,6 +10,7 @@ import { updateScheduledLaunch } from "@/lib/schedule/client";
 import type { PublicScheduledLaunch, ScheduleStatus, ScheduledLaunchDraft } from "@/lib/schedule/types";
 import { getCluster } from "@/lib/constants";
 import { isLocalTokenImageUrl, normalizeHttpsUrl, normalizeXProfile } from "@/lib/validation";
+import { UpdatesPanel } from "@/components/community/UpdatesPanel";
 
 function formatTime(iso: string): string {
   return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short", timeZoneName: "short" }).format(new Date(iso));
@@ -155,6 +156,12 @@ export function UpcomingDetailClient({ id }: { id: string }) {
           <div><p className="text-xs uppercase tracking-widest text-fg-muted">Creator wallet</p><code className="mt-2 block break-all font-mono text-xs text-fg-secondary">{schedule.creatorWallet}</code></div>
         </section>
       </div>
+      {(status === "scheduled" || status === "ready") && (
+        <section className="ec-card p-6 sm:p-8">
+          <div className="mb-5"><p className="ec-eyebrow">Communication</p><h2 className="mt-1 text-2xl font-semibold text-fg-primary">Updates</h2><p className="mt-2 text-sm text-fg-muted">Upcoming creator updates are tied to this schedule identity until a market exists on-chain.</p></div>
+          <UpdatesPanel marketId={schedule.id} marketKind="scheduled" creatorWallet={schedule.creatorWallet} />
+        </section>
+      )}
     </div>
   );
 }
