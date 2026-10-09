@@ -13,7 +13,7 @@ import BN from "bn.js";
 import { getCluster, getDammV2ConfigOverride, WSOL_MINT } from "@/lib/constants";
 import { getCpAmm } from "@/lib/damm/client";
 import { EquiCurveError } from "@/lib/errors";
-import { withRpcRetry } from "@/lib/rpc";
+import { isTransientRpcError, withRpcRetry } from "@/lib/rpc";
 import { setFreshBlockhash } from "@/lib/send";
 import { getDbcClient } from "./client";
 import {
@@ -64,7 +64,8 @@ async function resolveQuoteDecimals(
     const info = await withRpcRetry(() => connection.getParsedAccountInfo(quoteMint));
     const data = info.value?.data as { parsed?: { info?: { decimals?: number } } } | undefined;
     return num(data?.parsed?.info?.decimals);
-  } catch {
+  } catch (e) {
+    if (isTransientRpcError(e)) throw e;
     return null;
   }
 }
@@ -87,7 +88,8 @@ export async function fetchPoolSnapshot(
     config = (await withRpcRetry(() =>
       client.state.getPoolConfig(s.config),
     )) as unknown as Record<string, unknown> | null;
-  } catch {
+  } catch (e) {
+    if (isTransientRpcError(e)) throw e;
     config = null;
   }
 
@@ -228,6 +230,7 @@ export async function verifyDammV2Pool(
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     if (/not found|does not exist|Account does not exist/i.test(msg)) return "missing";
+    if (isTransientRpcError(e)) throw e;
     return "rpc_unavailable";
   }
 }

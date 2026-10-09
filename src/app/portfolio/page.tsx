@@ -20,8 +20,8 @@ import { aggregatePositions, type ParsedTokenAccountLike, type WalletPosition } 
 import type { PublicRegistryLaunch } from "@/lib/registry/types";
 import { toUserMessage } from "@/lib/errors";
 import { fetchDammPoolSnapshot, fetchUserDammPositions, type DammPositionView } from "@/lib/damm";
-import { getReadConnections } from "@/lib/connection";
-import { dedupeRpcRead, withRpcFallback } from "@/lib/rpc";
+import { withReadConnection } from "@/lib/connection";
+import { dedupeRpcRead } from "@/lib/rpc";
 
 type Profile = { name: string; ticker: string; pool: string; source: "registry (verified)" | "registry (unverified)" | "this browser" };
 
@@ -74,10 +74,10 @@ export default function PortfolioPage() {
     setChain({ state: "loading" });
     try {
       const owner = wallet.publicKey;
-      const sources = [connection, ...getReadConnections().filter((item) => item.rpcEndpoint !== connection.rpcEndpoint)];
       const readProgram = (programId: PublicKey) => dedupeRpcRead(
         `portfolio:${owner.toBase58()}:${programId.toBase58()}`,
-        () => withRpcFallback(sources, (source) => source.getParsedTokenAccountsByOwner(owner, { programId }, "confirmed"), {
+        () => withReadConnection(connection, (readConnection) =>
+          readConnection.getParsedTokenAccountsByOwner(owner, { programId }, "confirmed"), {
           retries: 1,
           baseDelayMs: 500,
           timeoutMs: 12_000,
@@ -121,6 +121,7 @@ export default function PortfolioPage() {
     }
     setLpLoading(true);
     setLpError(null);
+    const owner = wallet.publicKey;
     const found: PortfolioLpPosition[] = [];
     const failures: string[] = [];
     for (const launch of launches.filter((item) => item.dammPool)) {
@@ -128,15 +129,20 @@ export default function PortfolioPage() {
         const quoteMint = launch.quote === "USDC" ? getUsdcMint() : WSOL_MINT;
         if (!quoteMint || !launch.dammPool) throw new Error("Quote mint unavailable on this cluster.");
         const pool = new PublicKey(launch.dammPool);
-        const verified = await fetchDammPoolSnapshot({
-          connection,
-          pool,
-          baseMint: launch.mint,
-          quoteMint: quoteMint.toBase58(),
-          source: "launch",
+        const lpRead = await withReadConnection(connection, async (readConnection) => {
+          const verified = await fetchDammPoolSnapshot({
+            connection: readConnection,
+            pool,
+            baseMint: launch.mint,
+            quoteMint: quoteMint.toBase58(),
+            source: "launch",
+          });
+          if (!verified.exists) return { verified, positions: [] as DammPositionView[] };
+          const positions = await fetchUserDammPositions({ connection: readConnection, pool, user: owner });
+          return { verified, positions };
         });
-        if (!verified.exists) continue;
-        const positions = await fetchUserDammPositions({ connection, pool, user: wallet.publicKey });
+        if (!lpRead.verified.exists) continue;
+        const positions = lpRead.positions;
         found.push(...positions.map((position) => ({ ...position, dammPool: launch.dammPool!, ticker: launch.ticker, lockPct: launch.lockPct })));
       } catch (error) {
         failures.push(toUserMessage(error));

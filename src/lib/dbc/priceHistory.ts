@@ -11,6 +11,7 @@ import {
 import type { PricePoint } from "@/lib/local/priceHistory";
 import { atomsRatioToPrice } from "@/lib/amounts";
 import { fetchSpotPrice } from "./spotPrice";
+import { isTransientRpcError } from "@/lib/rpc";
 
 const DBC = DYNAMIC_BONDING_CURVE_PROGRAM_ID;
 
@@ -223,6 +224,7 @@ export async function reconstructPoolPriceHistory(
       slot: s.slot,
     }));
   } catch (e) {
+    if (isTransientRpcError(e)) throw e;
     return {
       points: spot
         ? [
@@ -253,7 +255,8 @@ export async function reconstructPoolPriceHistory(
         chunk.map((c) => c.signature),
         { maxSupportedTransactionVersion: 0, commitment: "confirmed" },
       );
-    } catch {
+    } catch (e) {
+      if (isTransientRpcError(e)) throw e;
       continue;
     }
 

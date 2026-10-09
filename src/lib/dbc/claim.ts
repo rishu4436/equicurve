@@ -175,9 +175,10 @@ export async function prepareClaimCreatorFees(args: {
     );
   }
 
-  const client = getDbcClient(connection);
-  const { kind } = await requireDbcPool(connection, pool);
-  const tx = kind === "transfer-hook"
+  const tx = await withReadConnection(connection, async (readConnection) => {
+    const client = getDbcClient(readConnection);
+    const { kind } = await requireDbcPool(readConnection, pool);
+    return kind === "transfer-hook"
     ? await client.creator.claimCreatorTradingFee2({
         creator,
         payer: creator,
@@ -193,6 +194,7 @@ export async function prepareClaimCreatorFees(args: {
         maxBaseAmount: unclaimedBase,
         maxQuoteAmount: unclaimedQuote,
       });
+  });
 
   await setFreshBlockhash(connection, tx, creator);
 
@@ -236,9 +238,10 @@ export async function prepareClaimPartnerFees(args: {
     );
   }
 
-  const client = getDbcClient(connection);
-  const { kind } = await requireDbcPool(connection, pool);
-  const tx = kind === "transfer-hook"
+  const tx = await withReadConnection(connection, async (readConnection) => {
+    const client = getDbcClient(readConnection);
+    const { kind } = await requireDbcPool(readConnection, pool);
+    return kind === "transfer-hook"
     ? await client.partner.claimPartnerTradingFee2({
         feeClaimer,
         payer: feeClaimer,
@@ -254,6 +257,7 @@ export async function prepareClaimPartnerFees(args: {
         maxBaseAmount: unclaimedBase,
         maxQuoteAmount: unclaimedQuote,
       });
+  });
 
   await setFreshBlockhash(connection, tx, feeClaimer);
 

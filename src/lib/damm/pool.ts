@@ -3,7 +3,7 @@ import { getMint } from "@solana/spl-token";
 import { PublicKey, type Connection } from "@solana/web3.js";
 import type { DestinationCheck } from "@/lib/dbc/curveState";
 import { tryDeriveDammV2PoolAddress, verifyDammV2Pool } from "@/lib/dbc/migrate";
-import { withRpcRetry } from "@/lib/rpc";
+import { isTransientRpcError, withRpcRetry } from "@/lib/rpc";
 import { EquiCurveError } from "@/lib/errors";
 import { getCpAmm } from "./client";
 import type { DammPoolSnapshot } from "./types";
@@ -73,6 +73,7 @@ async function readMintDecimals(
     const info = await withRpcRetry(() => getMint(connection, mint, "confirmed", tokenProgram));
     return info.decimals;
   } catch (e) {
+    if (isTransientRpcError(e)) throw e;
     // Decimals always come from chain — never guessed, not even for SOL/USDC.
     throw new EquiCurveError(`Could not read decimals for mint ${mint.toBase58()}.`, "RPC_UNAVAILABLE", e);
   }
@@ -124,9 +125,18 @@ export async function fetchDammPoolSnapshot(args: {
     readMintDecimals(connection, state.tokenAMint, tokenAProgram),
     readMintDecimals(connection, state.tokenBMint, tokenBProgram),
   ]);
+  const readReserve = async (vault: PublicKey): Promise<string | null> => {
+    try {
+      const value = await withRpcRetry(() => connection.getTokenAccountBalance(vault, "confirmed"));
+      return value.value.amount;
+    } catch (e) {
+      if (isTransientRpcError(e)) throw e;
+      return null;
+    }
+  };
   const [tokenAReserve, tokenBReserve] = await Promise.all([
-    withRpcRetry(() => connection.getTokenAccountBalance(state.tokenAVault, "confirmed")).then((value) => value.value.amount).catch(() => null),
-    withRpcRetry(() => connection.getTokenAccountBalance(state.tokenBVault, "confirmed")).then((value) => value.value.amount).catch(() => null),
+    readReserve(state.tokenAVault),
+    readReserve(state.tokenBVault),
   ]);
   let spotQuotePerBase: string | null = null;
   try {
