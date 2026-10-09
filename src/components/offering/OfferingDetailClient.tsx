@@ -51,9 +51,11 @@ import { formatTokenSupply, tokenAccountDistribution } from "@/lib/holders";
 import { withReadConnection } from "@/lib/connection";
 import { formatMarketTimestamp, formatPermanentLock, formatProgressRatio, marketLifecycle } from "@/lib/marketDisplay";
 import { UpdatesPanel } from "@/components/community/UpdatesPanel";
+import { PassportPanel } from "@/components/passport/PassportPanel";
 
 const TABS = [
   "Overview",
+  "Passport",
   "Updates",
   "Disclosures",
   "Holders",
@@ -648,6 +650,10 @@ export function OfferingDetailClient({ id, demo }: Props) {
                       <MetadataEditor pool={poolAddress} mint={mint} creator={snapshot?.creator ?? null} />
                     )}
                   </div>
+                )}
+
+                {tab === "Passport" && (
+                  poolAddress && !illustrative ? <PassportPanel id={poolAddress} /> : <p className="text-xs text-fg-muted">Passport is available for a canonical live market.</p>
                 )}
 
                 {tab === "Updates" && (
