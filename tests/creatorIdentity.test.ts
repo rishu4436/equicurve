@@ -158,7 +158,9 @@ describe("direct token image upload", () => {
   it("rejects empty and oversized-dimension payloads", async () => {
     expect((await post(Buffer.alloc(0), "image/png")).status).toBe(400);
     const tooLarge = await sharp({ create: { width: 2_049, height: 2_049, channels: 4, background: "#1b263b" } }).png().toBuffer();
-    expect((await post(tooLarge, "image/png", "too-large.png")).status).toBe(422);
+    const response = await post(tooLarge, "image/png", "too-large.png");
+    expect(response.status).toBe(422);
+    await expect(response.json()).resolves.toMatchObject({ code: "too_large_dimensions", error: "Image dimensions must be at most 2048 × 2048 pixels." });
   });
 
   it("does not use the client filename as a storage path", async () => {

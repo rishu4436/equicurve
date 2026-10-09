@@ -3,6 +3,11 @@ import { EXPECTED_CLUSTER_GENESIS_HASH, getConnection, getServerConnection } fro
 import { checkRpcIdentity, summarizeRpcHealth } from "@/lib/rpcHealth";
 import { getCluster, getRpcHost, getServerRpcUrl } from "@/lib/constants";
 import { getRegistryMeta } from "@/lib/registry/store";
+import { getMetadataBackend } from "@/lib/metadata/store";
+import { getScheduleBackend } from "@/lib/schedule/store";
+import { getCommunityBackend } from "@/lib/community/store";
+import { getAuthBackend } from "@/lib/community/auth";
+import { getTokenImageBackend } from "@/lib/uploads/tokenImageStore";
 
 export const dynamic = "force-dynamic";
 
@@ -32,5 +37,13 @@ export async function GET() {
     serverRpcClusterStatus: serverRpc.rpcClusterStatus,
     serverGenesisHash: serverRpc.genesisHash,
     registry: getRegistryMeta(),
+    storage: {
+      registry: getRegistryMeta().backend,
+      metadata: getMetadataBackend(),
+      schedules: getScheduleBackend(),
+      community: getCommunityBackend(),
+      auth: getAuthBackend(),
+      images: getTokenImageBackend(),
+    },
   });
 }

@@ -5,7 +5,8 @@ import bs58 from "bs58";
 import nacl from "tweetnacl";
 import { z } from "zod";
 import { clusterSchema, walletSchema } from "@/lib/validation";
-import { getCommunityStore } from "./store";
+import { createUpstashClient, isUpstashConfigured } from "@/lib/registry/upstashStore";
+import { AuthStorageConfigError, createUpstashAuthStore, type AuthStore } from "./authStore";
 
 export const WALLET_CHALLENGE_TTL_MS = 5 * 60 * 1000;
 export const WALLET_SESSION_TTL_MS = 30 * 60 * 1000;
@@ -36,6 +37,11 @@ export type WalletSession = {
 };
 
 type AuthPayload = { challenges: WalletChallenge[]; sessions: WalletSession[] };
+
+function productionAuthStore(): AuthStore {
+  if (!isUpstashConfigured()) throw new AuthStorageConfigError();
+  return createUpstashAuthStore(createUpstashClient());
+}
 
 const DOMAIN = "EquiCurve community wallet authentication";
 
@@ -123,6 +129,10 @@ export async function issueWalletChallenge(args: { wallet: string; cluster: z.in
   const issuedAt = new Date(nowMs).toISOString();
   const expiresAt = new Date(nowMs + WALLET_CHALLENGE_TTL_MS).toISOString();
   const challenge: WalletChallenge = { nonce: randomBytes(24).toString("hex"), wallet: args.wallet, cluster: args.cluster, issuedAt, expiresAt };
+  if (process.env.NODE_ENV === "production") {
+    await productionAuthStore().putChallenge(challenge);
+    return { challenge, message: authMessage(challenge) };
+  }
   await updateAuth(async (payload) => {
     const clean = purge(payload, nowMs);
     return { value: undefined, payload: { ...clean, challenges: [...clean.challenges, challenge] } };
@@ -144,6 +154,24 @@ export async function verifyWalletChallenge(args: {
   const parsed = walletVerifyRequestSchema.safeParse({ wallet: args.wallet, nonce: args.nonce, signature: args.signature });
   if (!parsed.success) return { ok: false, status: 400, code: "invalid_body", error: parsed.error.issues[0]?.message ?? "Invalid wallet authentication" };
   const nowMs = args.nowMs ?? Date.now();
+  if (process.env.NODE_ENV === "production") {
+    const store = productionAuthStore();
+    const challenge = await store.getChallenge(args.nonce);
+    if (!challenge) return { ok: false, status: 401, code: "unknown_challenge", error: "Wallet challenge is missing or expired" };
+    if (challenge.consumedAt) return { ok: false, status: 409, code: "challenge_replayed", error: "Wallet challenge has already been used" };
+    if (challenge.wallet !== args.wallet || challenge.cluster !== args.cluster) return { ok: false, status: 401, code: "challenge_mismatch", error: "Wallet challenge does not match this wallet or cluster" };
+    if (Date.parse(challenge.expiresAt) <= nowMs) return { ok: false, status: 401, code: "challenge_expired", error: "Wallet challenge expired — request a new one" };
+    let sig: Uint8Array; let pub: Uint8Array;
+    try { sig = bs58.decode(args.signature); pub = bs58.decode(args.wallet); } catch { return { ok: false, status: 400, code: "bad_encoding", error: "Wallet or signature is not base58" }; }
+    if (sig.length !== 64 || pub.length !== 32 || !nacl.sign.detached.verify(new TextEncoder().encode(authMessage(challenge)), sig, pub)) return { ok: false, status: 401, code: "bad_signature", error: "Signature does not match the wallet challenge" };
+    const consumedAt = new Date(nowMs).toISOString();
+    const consumed = await store.consumeChallenge(challenge, consumedAt, consumedAt);
+    if (!consumed) return { ok: false, status: 409, code: "challenge_replayed", error: "Wallet challenge has already been used" };
+    const token = randomBytes(32).toString("base64url");
+    const session: WalletSession = { tokenHash: tokenHash(token), wallet: challenge.wallet, cluster: challenge.cluster, createdAt: consumedAt, expiresAt: new Date(nowMs + WALLET_SESSION_TTL_MS).toISOString() };
+    await store.putSession(session, Math.ceil(WALLET_SESSION_TTL_MS / 1000));
+    return { ok: true, wallet: session.wallet, expiresAt: session.expiresAt, token };
+  }
   return updateAuth(async (payload) => {
     const clean = purge(payload, nowMs);
     const challenge = clean.challenges.find((item) => item.nonce === args.nonce);
@@ -174,6 +202,10 @@ export async function getWalletSession(req: Request): Promise<{ wallet: string; 
   const raw = req.headers.get("cookie")?.split(";").map((part) => part.trim()).find((part) => part.startsWith(`${WALLET_AUTH_COOKIE}=`))?.slice(WALLET_AUTH_COOKIE.length + 1);
   if (!raw) return null;
   const hash = tokenHash(decodeURIComponent(raw));
+  if (process.env.NODE_ENV === "production") {
+    const session = await productionAuthStore().getSession(hash);
+    return session && Date.parse(session.expiresAt) > Date.now() ? { wallet: session.wallet, cluster: session.cluster, expiresAt: session.expiresAt } : null;
+  }
   const sessions = await readAuthFile("sessions") as WalletSession[];
   const session = sessions.find((item) => item.tokenHash === hash && Date.parse(item.expiresAt) > Date.now());
   return session ? { wallet: session.wallet, cluster: session.cluster, expiresAt: session.expiresAt } : null;
@@ -197,9 +229,11 @@ export function hashWalletSessionToken(token: string): string {
 /** Ensures the auth storage configuration is checked by API handlers before mutation. */
 export function assertCommunityAuthStorage(): void {
   if (process.env.NODE_ENV === "production") {
-    // Calling the shared storage selector keeps the production fail-closed
-    // behavior in one place while allowing a future Upstash adapter to land
-    // behind the same abstraction.
-    getCommunityStore();
+    productionAuthStore();
   }
+}
+
+export function getAuthBackend(): "file" | "upstash" | "unconfigured" {
+  if (process.env.NODE_ENV === "production") return isUpstashConfigured() ? "upstash" : "unconfigured";
+  return "file";
 }

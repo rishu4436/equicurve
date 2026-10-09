@@ -3,6 +3,7 @@ import { authorizeScheduleAction } from "@/lib/schedule/authorize";
 import { MAX_SIGNED_SCHEDULE_BODY_BYTES } from "@/lib/auth/scheduleAuth";
 import { getCluster } from "@/lib/constants";
 import { getScheduledLaunchStore, ScheduleStorageConfigError } from "@/lib/schedule/store";
+import { ScheduleConflictError } from "@/lib/schedule/upstashStore";
 import { toPublicScheduledLaunch } from "@/lib/schedule/types";
 import { clientKey, readJsonBody } from "@/lib/server/http";
 import { limitRequest } from "@/lib/server/rateLimit";
@@ -23,6 +24,7 @@ export async function GET() {
     return NextResponse.json({ ok: true, schedules: active, count: active.length });
   } catch (error) {
     if (error instanceof ScheduleStorageConfigError) return err(503, error.message, "storage_unconfigured");
+    if (error instanceof ScheduleConflictError) return err(409, error.message, "schedule_conflict");
     return err(503, "Scheduled launch storage is unavailable.", "storage_unavailable");
   }
 }

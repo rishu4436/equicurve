@@ -16,6 +16,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const MAX_MULTIPART_BYTES = TOKEN_IMAGE_MAX_BYTES + 64 * 1024;
+const IMAGE_DECODE_SAFETY_DIMENSION = 4_096;
 const MIME_TO_FORMAT: Record<TokenImageContentType, string> = {
   "image/png": "png",
   "image/jpeg": "jpeg",
@@ -60,7 +61,7 @@ export async function POST(req: Request) {
   let metadata: Metadata;
   try {
     metadata = await sharp(bytes, {
-      limitInputPixels: TOKEN_IMAGE_MAX_DIMENSION * TOKEN_IMAGE_MAX_DIMENSION,
+      limitInputPixels: IMAGE_DECODE_SAFETY_DIMENSION * IMAGE_DECODE_SAFETY_DIMENSION,
       sequentialRead: true,
     }).metadata();
   } catch {

@@ -3,6 +3,8 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { scheduledLaunchDraftSchema, type ScheduledLaunch, type ScheduleStatus } from "./types";
 import { walletSchema } from "@/lib/validation";
+import { createUpstashClient, isUpstashConfigured } from "@/lib/registry/upstashStore";
+import { createUpstashScheduledLaunchStore } from "./upstashStore";
 
 export const SCHEDULE_DIR = path.join(process.cwd(), "data", "scheduled-launches");
 export const SCHEDULE_FILE = path.join(SCHEDULE_DIR, "registry.json");
@@ -68,6 +70,7 @@ function parseStored(raw: unknown): ScheduledLaunch | null {
     updatedAt: r.updatedAt,
     authIssuedAt: r.authIssuedAt,
     authSignature: r.authSignature,
+    ...(typeof r.revision === "number" ? { revision: r.revision } : {}),
     ...(typeof r.launchedPool === "string" ? { launchedPool: r.launchedPool } : {}),
     ...(typeof r.launchSignature === "string" ? { launchSignature: r.launchSignature } : {}),
     ...(typeof r.invalidatedReason === "string" ? { invalidatedReason: r.invalidatedReason } : {}),
@@ -121,8 +124,16 @@ function localStore(): ScheduledLaunchStore {
 }
 
 export function getScheduledLaunchStore(): ScheduledLaunchStore {
-  if (process.env.NODE_ENV === "production") throw new ScheduleStorageConfigError();
+  if (process.env.NODE_ENV === "production") {
+    if (!isUpstashConfigured()) throw new ScheduleStorageConfigError();
+    return createUpstashScheduledLaunchStore(createUpstashClient());
+  }
   return localStore();
+}
+
+export function getScheduleBackend(): "file" | "upstash" | "unconfigured" {
+  if (process.env.NODE_ENV === "production") return isUpstashConfigured() ? "upstash" : "unconfigured";
+  return "file";
 }
 
 export function newScheduleId(): string {

@@ -4,6 +4,21 @@ EquiCurve is a constrained market-design engine for Meteora DBC launches.
 
 **Current release:** `v0.3.0 Developer Preview` · [Changelog](./CHANGELOG.md) · [Roadmap](./ROADMAP.md) · [Architecture](./docs/ARCHITECTURE.md)
 
+### v0.3.5 persistence backends
+
+Local development uses the existing JSON and filesystem adapters. Production
+selects Upstash Redis for scheduled launches, issuer updates, comments, wallet
+challenges, wallet sessions, registry, metadata, and shared rate limiting. Set
+`UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` (or the supported `KV_*`
+aliases) in the deployment environment. Production fails closed with a narrow
+503 when required Redis configuration is absent; it never treats serverless
+filesystem storage as durable.
+
+Production token images use Vercel Blob through `BLOB_READ_WRITE_TOKEN`.
+Uploads are validated before storage and return durable HTTPS URLs. Image
+binary data is never written to Redis. If Blob is unavailable, image upload
+fails closed while unrelated Redis-backed features continue to operate.
+
 Instead of selecting a bonding curve first, an issuer specifies:
 
 - raise target

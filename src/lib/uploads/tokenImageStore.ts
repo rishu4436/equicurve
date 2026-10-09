@@ -1,6 +1,7 @@
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { del, put } from "@vercel/blob";
 
 export const TOKEN_IMAGE_DIR = path.join(process.cwd(), "data", "uploads", "token-images");
 export const TOKEN_IMAGE_MAX_BYTES = 1_000_000;
@@ -89,6 +90,39 @@ function localStore(): TokenImageStore {
  * durable adapter is added; callers never mistake ephemeral disk for storage.
  */
 export function getTokenImageStore(): TokenImageStore {
-  if (process.env.NODE_ENV === "production") throw new TokenImageStorageConfigError();
+  if (process.env.NODE_ENV === "production") {
+    if (!process.env.BLOB_READ_WRITE_TOKEN?.trim()) throw new TokenImageStorageConfigError();
+    return createVercelBlobStore();
+  }
   return localStore();
+}
+
+const blobUrls = new Map<string, string>();
+
+export function createVercelBlobStore(deps: { put: typeof put; del: typeof del } = { put, del }): TokenImageStore {
+  return {
+    async put({ bytes, contentType, width, height }) {
+      const key = `${randomUUID()}.${EXTENSION[contentType]}`;
+      const result = await deps.put(`equicurve/token-images/${key}`, bytes, {
+        access: "public",
+        contentType,
+        token: process.env.BLOB_READ_WRITE_TOKEN,
+        addRandomSuffix: false,
+      });
+      blobUrls.set(key, result.url);
+      return { key, url: result.url, contentType, bytes: bytes.byteLength, width, height };
+    },
+    async read() { return null; },
+    async delete(key) {
+      const url = blobUrls.get(key);
+      if (url) await deps.del(url, { token: process.env.BLOB_READ_WRITE_TOKEN });
+      blobUrls.delete(key);
+    },
+    publicUrl(key) { return blobUrls.get(key) ?? key; },
+  };
+}
+
+export function getTokenImageBackend(): "filesystem" | "vercel-blob" | "unconfigured" {
+  if (process.env.NODE_ENV === "production") return process.env.BLOB_READ_WRITE_TOKEN?.trim() ? "vercel-blob" : "unconfigured";
+  return "filesystem";
 }

@@ -90,6 +90,8 @@ export type ScheduledLaunch = ScheduledLaunchDraft & {
   updatedAt: string;
   authIssuedAt: string;
   authSignature: string;
+  /** Monotonic persistence revision used by durable stores for CAS writes. */
+  revision?: number;
   launchedPool?: string;
   launchSignature?: string;
   invalidatedReason?: string;

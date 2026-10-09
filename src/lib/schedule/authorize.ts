@@ -20,7 +20,13 @@ function fail(status: number, code: string, error: string, entry?: ScheduledLaun
 }
 
 function withAuth(entry: ScheduledLaunch, body: SignedScheduleBody): ScheduledLaunch {
-  return { ...entry, authIssuedAt: body.auth.issuedAt, authSignature: body.auth.signature, updatedAt: new Date().toISOString() };
+  return {
+    ...entry,
+    revision: (entry.revision ?? 0) + 1,
+    authIssuedAt: body.auth.issuedAt,
+    authSignature: body.auth.signature,
+    updatedAt: new Date().toISOString(),
+  };
 }
 
 export async function authorizeScheduleAction(args: {
@@ -60,6 +66,7 @@ export async function authorizeScheduleAction(args: {
       updatedAt: now,
       authIssuedAt: body.auth.issuedAt,
       authSignature: body.auth.signature,
+      revision: 1,
     };
     return { ok: true, action: "created", entry };
   }

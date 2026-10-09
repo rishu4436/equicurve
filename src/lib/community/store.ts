@@ -7,6 +7,8 @@ import type {
   CommunityPostsPayload,
   IssuerPost,
 } from "./types";
+import { createUpstashClient, isUpstashConfigured } from "@/lib/registry/upstashStore";
+import { createUpstashCommunityStore } from "./upstashStore";
 
 export const COMMUNITY_DIR = path.join(process.cwd(), "data", "community");
 export const COMMUNITY_POSTS_FILE = path.join(COMMUNITY_DIR, "posts", "registry.json");
@@ -171,8 +173,16 @@ function localStore(): CommunityStore {
 
 /** Local files are explicit development storage. Production needs a durable adapter. */
 export function getCommunityStore(): CommunityStore {
-  if (process.env.NODE_ENV === "production") throw new CommunityStorageConfigError();
+  if (process.env.NODE_ENV === "production") {
+    if (!isUpstashConfigured()) throw new CommunityStorageConfigError();
+    return createUpstashCommunityStore(createUpstashClient());
+  }
   return localStore();
+}
+
+export function getCommunityBackend(): "file" | "upstash" | "unconfigured" {
+  if (process.env.NODE_ENV === "production") return isUpstashConfigured() ? "upstash" : "unconfigured";
+  return "file";
 }
 
 export function newCommunityId(): string {
