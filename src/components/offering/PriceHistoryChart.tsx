@@ -1,17 +1,13 @@
 "use client";
 
-import { useConnection } from "@solana/wallet-adapter-react";
-import { PublicKey } from "@solana/web3.js";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { LineChart } from "@/components/ui/LineChart";
-import { reconstructPoolPriceHistory } from "@/lib/dbc/priceHistory";
 import {
   loadPriceHistory,
   mergePricePoints,
   type PricePoint,
 } from "@/lib/local/priceHistory";
 import { formatMarketTimestamp, formatPriceAxis, formatTokenPrice } from "@/lib/marketDisplay";
-import { withReadConnection } from "@/lib/connection";
 
 type Props = {
   poolAddress: string | null;
@@ -107,7 +103,6 @@ export function PriceHistoryChart({
   priceMultiple = 15,
   historicalOnly = false,
 }: Props) {
-  const { connection } = useConnection();
   const [spotAt, setSpotAt] = useState<number | null>(null);
   const [points, setPoints] = useState<PricePoint[]>([]);
   const [spot, setSpot] = useState<number | null>(null);
@@ -127,27 +122,34 @@ export function PriceHistoryChart({
       const cached = loadPriceHistory(poolAddress);
       setPoints(cached);
 
-      const result = await withReadConnection(connection, (readConnection) =>
-        reconstructPoolPriceHistory(
-          readConnection,
-          new PublicKey(poolAddress),
-          { limit: 100 },
-        ),
-      );
-      setSpot(result.spot);
+      const response = await fetch(`/api/markets/${encodeURIComponent(poolAddress)}/price-history`, {
+        headers: { Accept: "application/json" },
+      });
+      const result = (await response.json()) as {
+        ok?: boolean;
+        points?: PricePoint[];
+        spot?: number | null;
+        scanned?: number;
+        parsedSwaps?: number;
+        error?: string | null;
+      };
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error ?? "Price history fetch failed");
+      }
+      setSpot(result.spot ?? null);
       setSpotAt(result.spot != null ? Date.now() : null);
-      setMeta({ scanned: result.scanned, parsedSwaps: result.parsedSwaps });
+      setMeta({ scanned: result.scanned ?? 0, parsedSwaps: result.parsedSwaps ?? 0 });
       if (result.error) setStatus(result.error);
       else setStatus(null);
 
-      const merged = mergePricePoints(poolAddress, result.points);
+      const merged = mergePricePoints(poolAddress, result.points ?? []);
       setPoints(merged);
     } catch (e) {
       setStatus(e instanceof Error ? e.message : "Price history fetch failed");
     } finally {
       setLoading(false);
     }
-  }, [connection, poolAddress, illustrative]);
+  }, [poolAddress, illustrative]);
 
   useEffect(() => {
     void refresh();

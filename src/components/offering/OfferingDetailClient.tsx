@@ -1,7 +1,6 @@
 "use client";
 
 import { useConnection } from "@solana/wallet-adapter-react";
-import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 import { PublicKey } from "@solana/web3.js";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -209,50 +208,33 @@ export function OfferingDetailClient({ id, demo }: Props) {
       }
       setHolders((current) => ({ ...current, loading: true, error: null }));
       try {
-        const mint = new PublicKey(mintStr);
-        const supply = await withReadConnection(connection, (readConnection) =>
-          readConnection.getTokenSupply(mint),
-        );
-        let creatorAta: string | null = null;
-        let creatorBalanceAtoms: string | null = null;
-        if (creatorStr) {
-          const ata = getAssociatedTokenAddressSync(
-            mint,
-            new PublicKey(creatorStr),
-          );
-          creatorAta = ata.toBase58();
-          try {
-            const bal = await withReadConnection(connection, (readConnection) =>
-              readConnection.getTokenAccountBalance(ata),
-            );
-            creatorBalanceAtoms = bal.value.amount;
-          } catch {
-            creatorBalanceAtoms = "0";
-          }
-        }
-        let largest: { address: string; amountAtoms: string }[] = [];
-        let partial = false;
-        try {
-          const big = await withReadConnection(connection, (readConnection) =>
-            readConnection.getTokenLargestAccounts(mint),
-          );
-          largest = big.value.slice(0, 8).map((v) => ({
-            address: v.address.toBase58(),
-            amountAtoms: v.amount,
-          }));
-        } catch {
-          partial = true;
+        const query = creatorStr ? `?creator=${encodeURIComponent(creatorStr)}` : "";
+        const response = await fetch(`/api/markets/${encodeURIComponent(mintStr)}/holders${query}`, {
+          headers: { Accept: "application/json" },
+        });
+        const body = (await response.json()) as {
+          ok?: boolean;
+          supplyAtoms?: string | null;
+          decimals?: number | null;
+          creatorAta?: string | null;
+          creatorBalanceAtoms?: string | null;
+          largest?: { address: string; amountAtoms: string }[];
+          partial?: boolean;
+          error?: string | null;
+        };
+        if (!response.ok || !body.ok || body.supplyAtoms == null || body.decimals == null) {
+          throw new Error(body.error ?? "Holder distribution unavailable");
         }
         if (!cancelled) {
           setHolders({
-            supplyAtoms: supply.value.amount,
-            decimals: supply.value.decimals,
-            creatorAta,
-            creatorBalanceAtoms,
-            largest,
+            supplyAtoms: body.supplyAtoms,
+            decimals: body.decimals,
+            creatorAta: body.creatorAta ?? null,
+            creatorBalanceAtoms: body.creatorBalanceAtoms ?? null,
+            largest: body.largest ?? [],
             loading: false,
-            partial,
-            error: null,
+            partial: body.partial ?? false,
+            error: body.error ?? null,
           });
         }
       } catch (e) {
