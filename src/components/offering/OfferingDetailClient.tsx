@@ -3,6 +3,7 @@
 import { useConnection } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { clsx } from "clsx";
 import { TradePanel } from "@/components/TradePanel";
@@ -90,6 +91,7 @@ function short(a: string, n = 4) {
 
 export function OfferingDetailClient({ id, demo }: Props) {
   const { connection } = useConnection();
+  const searchParams = useSearchParams();
   const [tab, setTab] = useState<TabId>("Overview");
   const [launch, setLaunch] = useState<StoredLaunch | null>(null);
   const [registryLaunch, setRegistryLaunch] = useState<PublicRegistryLaunch | null>(null);
@@ -113,6 +115,12 @@ export function OfferingDetailClient({ id, demo }: Props) {
   });
   const [historyNonce, setHistoryNonce] = useState(0);
   const eligibility = useEligibilityGate();
+
+  useEffect(() => {
+    const requested = searchParams.get("tab")?.toLowerCase();
+    const match = TABS.find((value) => value.toLowerCase() === requested);
+    if (match) setTab(match);
+  }, [searchParams]);
 
   const illustrative = !!(demo?.illustrative || (demo && !demo.pool && !launch));
 
@@ -644,7 +652,7 @@ export function OfferingDetailClient({ id, demo }: Props) {
 
                 {tab === "Updates" && (
                   poolAddress && !illustrative ? (
-                    <UpdatesPanel marketId={poolAddress} marketKind="live" creatorWallet={canonicalCreator} />
+                    <UpdatesPanel marketId={poolAddress} marketKind="live" creatorWallet={canonicalCreator} focusPostId={searchParams.get("post")} />
                   ) : (
                     <p className="text-xs text-fg-muted">Updates are available for a verified live market with a canonical pool identity.</p>
                   )

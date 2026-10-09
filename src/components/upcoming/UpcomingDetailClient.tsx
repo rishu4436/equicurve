@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { toast } from "sonner";
@@ -36,6 +37,7 @@ function linkValue(value: string, kind: "website" | "x"): string | null {
 
 export function UpcomingDetailClient({ id }: { id: string }) {
   const wallet = useWallet();
+  const searchParams = useSearchParams();
   const [schedule, setSchedule] = useState<PublicScheduledLaunch | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -159,7 +161,7 @@ export function UpcomingDetailClient({ id }: { id: string }) {
       {(status === "scheduled" || status === "ready") && (
         <section className="ec-card p-6 sm:p-8">
           <div className="mb-5"><p className="ec-eyebrow">Communication</p><h2 className="mt-1 text-2xl font-semibold text-fg-primary">Updates</h2><p className="mt-2 text-sm text-fg-muted">Upcoming creator updates are tied to this schedule identity until a market exists on-chain.</p></div>
-          <UpdatesPanel marketId={schedule.id} marketKind="scheduled" creatorWallet={schedule.creatorWallet} />
+          <UpdatesPanel marketId={schedule.id} marketKind="scheduled" creatorWallet={schedule.creatorWallet} focusPostId={searchParams.get("post")} />
         </section>
       )}
     </div>

@@ -297,11 +297,12 @@ describe("community route and UI contracts", () => {
     expect(source).toContain("UpdatesPanel");
   });
 
-  it("does not build a global news feed", () => {
-    expect(existsSync(resolve(process.cwd(), "src/app/news"))).toBe(false);
-    const ui = readFileSync(resolve(process.cwd(), "src/components/community/UpdatesPanel.tsx"), "utf8");
-    expect(ui).not.toContain("Popular");
-    expect(ui).not.toContain("Newest global");
+  it("exposes the global news feed without changing the local Updates panel", () => {
+    expect(existsSync(resolve(process.cwd(), "src/app/news"))).toBe(true);
+    const ui = readFileSync(resolve(process.cwd(), "src/components/news/NewsFeed.tsx"), "utf8");
+    expect(ui).toContain("Popular");
+    expect(ui).toContain("Newest");
+    expect(ui).toContain("/api/news");
   });
 
   it("keeps links HTTPS-only and opens them safely", () => {

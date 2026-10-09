@@ -14,7 +14,7 @@ const CATEGORIES: { value: PostCategory; label: string }[] = [
   { value: "important", label: "Important" },
 ];
 
-type Props = { marketId: string; marketKind: CommunityMarketKind; creatorWallet: string | null };
+type Props = { marketId: string; marketKind: CommunityMarketKind; creatorWallet: string | null; focusPostId?: string | null };
 type Draft = { category: PostCategory; title: string; body: string; link: string; imageUrl: string };
 
 const EMPTY_DRAFT: Draft = { category: "update", title: "", body: "", link: "", imageUrl: "" };
@@ -35,7 +35,7 @@ function validDraft(draft: Draft): string | null {
   return null;
 }
 
-export function UpdatesPanel({ marketId, marketKind, creatorWallet }: Props) {
+export function UpdatesPanel({ marketId, marketKind, creatorWallet, focusPostId = null }: Props) {
   const wallet = useWallet();
   const [posts, setPosts] = useState<PublicIssuerPost[]>([]);
   const [comments, setComments] = useState<Record<string, PublicCommunityComment[]>>({});
@@ -69,6 +69,10 @@ export function UpdatesPanel({ marketId, marketKind, creatorWallet }: Props) {
   }, [marketId]);
 
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    if (!focusPostId || !posts.some((post) => post.id === focusPostId)) return;
+    window.setTimeout(() => document.getElementById(`news-post-${focusPostId}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+  }, [focusPostId, posts]);
 
   const ensureSession = useCallback(async (): Promise<boolean> => {
     if (!wallet.publicKey || !wallet.signMessage) {
@@ -182,7 +186,7 @@ export function UpdatesPanel({ marketId, marketKind, creatorWallet }: Props) {
       {sortedPosts.map((post) => {
         const postComments = comments[post.id] ?? [];
         const image = post.imageUrl && (isLocalTokenImageUrl(post.imageUrl) || normalizeHttpsUrl(post.imageUrl)) ? post.imageUrl : null;
-        return <article key={post.id} className="rounded-input border border-line bg-base/40 p-5">
+        return <article id={`news-post-${post.id}`} key={post.id} className="rounded-input border border-line bg-base/40 p-5">
           <div className="flex flex-wrap items-start justify-between gap-3"><div><div className="flex flex-wrap items-center gap-2"><span className="ec-chip border-accent/25 text-accent">{post.pinned ? "Pinned · " : ""}{categoryLabel(post.category)}</span><span className="text-xs text-fg-muted">Creator update</span></div><h3 className="mt-3 text-lg font-semibold text-fg-primary">{post.title}</h3></div>{isCreator && <div className="flex flex-wrap gap-2 text-xs"><button type="button" className="text-accent hover:underline" onClick={() => startEdit(post)}>Edit</button><button type="button" className="text-accent hover:underline" disabled={busy === post.id} onClick={() => void pinPost(post)}>{post.pinned ? "Unpin" : "Pin"}</button><button type="button" className="text-signal-danger hover:underline" disabled={busy === post.id} onClick={() => void deletePost(post)}>Delete</button></div>}</div>
           <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-fg-secondary">{post.body}</p>
           {image && (

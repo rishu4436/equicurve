@@ -21,10 +21,14 @@ export class CommunityStorageConfigError extends Error {
 
 export interface CommunityStore {
   listPosts(marketId: string, includeDeleted?: boolean): Promise<IssuerPost[]>;
+  /** Global-query hook; optional keeps test adapters and future backends small. */
+  listAllPosts?(includeDeleted?: boolean): Promise<IssuerPost[]>;
   getPost(id: string): Promise<IssuerPost | null>;
   putPost(post: IssuerPost): Promise<IssuerPost>;
   pinPost(marketId: string, postId: string, pinned: boolean): Promise<IssuerPost | null>;
   listComments(postId: string, includeDeleted?: boolean): Promise<CommunityComment[]>;
+  /** Batch stats hook for News; deleted comments are excluded by default. */
+  commentStatsForPosts?(postIds: string[]): Promise<Map<string, { commentCount: number; uniqueCommenters: number }>>;
   getComment(id: string): Promise<CommunityComment | null>;
   putComment(comment: CommunityComment): Promise<CommunityComment>;
 }
@@ -93,6 +97,10 @@ function localStore(): CommunityStore {
         .filter((post) => post.marketId === marketId && (includeDeleted || !post.deletedAt))
         .sort((a, b) => Number(b.pinned) - Number(a.pinned) || Date.parse(b.createdAt) - Date.parse(a.createdAt));
     },
+    async listAllPosts(includeDeleted = false) {
+      const payload = await readJson(COMMUNITY_POSTS_FILE, emptyPosts());
+      return payload.posts.filter((post) => includeDeleted || !post.deletedAt);
+    },
     async getPost(id) {
       if (!validUuid(id)) return null;
       const payload = await readJson(COMMUNITY_POSTS_FILE, emptyPosts());
@@ -126,6 +134,24 @@ function localStore(): CommunityStore {
       return payload.comments
         .filter((comment) => comment.postId === postId && (includeDeleted || !comment.deletedAt))
         .sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
+    },
+    async commentStatsForPosts(postIds) {
+      const wanted = new Set(postIds);
+      const payload = await readJson(COMMUNITY_COMMENTS_FILE, emptyComments());
+      const grouped = new Map<string, { commentCount: number; uniqueCommenters: number }>();
+      const wallets = new Map<string, Set<string>>();
+      for (const postId of postIds) grouped.set(postId, { commentCount: 0, uniqueCommenters: 0 });
+      for (const comment of payload.comments) {
+        if (comment.deletedAt || !wanted.has(comment.postId)) continue;
+        const current = grouped.get(comment.postId) ?? { commentCount: 0, uniqueCommenters: 0 };
+        current.commentCount += 1;
+        grouped.set(comment.postId, current);
+        const set = wallets.get(comment.postId) ?? new Set<string>();
+        set.add(comment.authorWallet);
+        wallets.set(comment.postId, set);
+      }
+      for (const [postId, stats] of grouped) stats.uniqueCommenters = wallets.get(postId)?.size ?? 0;
+      return grouped;
     },
     async getComment(id) {
       if (!validUuid(id)) return null;
