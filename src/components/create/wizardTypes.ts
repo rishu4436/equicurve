@@ -29,6 +29,21 @@ export function resolveWizardStep(raw: string | null): WizardStepId {
   return "basics";
 }
 
+/** Review/deploy URLs are only valid for the design currently represented by the inputs. */
+export function hasCurrentDesign(s: WizardState): boolean {
+  return Boolean(
+    s.marketCaps &&
+      s.designed &&
+      s.designed.asset === s.assetKind &&
+      s.designed.objective === s.objective &&
+      s.designed.presetId === s.presetId,
+  );
+}
+
+export function guardWizardStep(requested: WizardStepId, s: WizardState): WizardStepId {
+  return (requested === "review" || requested === "launch") && !hasCurrentDesign(s) ? "design" : requested;
+}
+
 export type WizardState = {
   name: string;
   ticker: string;
@@ -220,9 +235,9 @@ export function canContinue(step: WizardStepId, s: WizardState): boolean {
     case "design":
       return !!s.presetId && !!s.marketCaps && s.marketCaps.migration > s.marketCaps.initial;
     case "review":
-      return s.ackBonding && s.ackDocs && s.ackFees && s.ackClaimer && !!s.marketCaps && !!s.designed;
+      return s.ackBonding && s.ackDocs && s.ackFees && s.ackClaimer && hasCurrentDesign(s);
     case "launch":
-      return !!s.marketCaps && !!s.designed;
+      return hasCurrentDesign(s);
     default:
       return false;
   }

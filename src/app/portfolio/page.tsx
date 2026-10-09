@@ -2,20 +2,26 @@
 
 import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
+import { PublicKey } from "@solana/web3.js";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { formatAtomsExact } from "@/lib/amounts";
-import { explorerAddressUrl, explorerTxUrl, getClusterLabel } from "@/lib/constants";
+import { explorerAddressUrl, explorerTxUrl, getClusterLabel, getUsdcMint, WSOL_MINT } from "@/lib/constants";
 import {
   listActivity,
   listLaunches,
+  activityForWallet,
+  MARKET_CHANGED_EVENT,
   type StoredActivity,
   type StoredLaunch,
 } from "@/lib/local/launches";
 import { aggregatePositions, type ParsedTokenAccountLike, type WalletPosition } from "@/lib/portfolio";
 import type { PublicRegistryLaunch } from "@/lib/registry/types";
 import { toUserMessage } from "@/lib/errors";
+import { fetchDammPoolSnapshot, fetchUserDammPositions, type DammPositionView } from "@/lib/damm";
+import { getReadConnections } from "@/lib/connection";
+import { dedupeRpcRead, withRpcFallback } from "@/lib/rpc";
 
 type Profile = { name: string; ticker: string; pool: string; source: "registry (verified)" | "registry (unverified)" | "this browser" };
 
@@ -25,6 +31,8 @@ type ChainRead =
   | { state: "ok"; positions: WalletPosition[]; readAt: string }
   | { state: "error"; error: string };
 
+type PortfolioLpPosition = DammPositionView & { dammPool: string; ticker: string; lockPct: number };
+
 export default function PortfolioPage() {
   const { connection } = useConnection();
   const wallet = useWallet();
@@ -33,6 +41,10 @@ export default function PortfolioPage() {
   const [history, setHistory] = useState<StoredActivity[]>([]);
   const [registry, setRegistry] = useState<PublicRegistryLaunch[]>([]);
   const [chain, setChain] = useState<ChainRead>({ state: "idle" });
+  const [refreshRevision, setRefreshRevision] = useState(0);
+  const [lpPositions, setLpPositions] = useState<PortfolioLpPosition[]>([]);
+  const [lpError, setLpError] = useState<string | null>(null);
+  const [lpLoading, setLpLoading] = useState(false);
 
   useEffect(() => {
     setLaunches(listLaunches());
@@ -41,7 +53,7 @@ export default function PortfolioPage() {
       .then((r) => r.json())
       .then((j: { launches?: PublicRegistryLaunch[] }) => setRegistry(j.launches ?? []))
       .catch(() => setRegistry([]));
-  }, []);
+  }, [refreshRevision]);
 
   const profiles = useMemo(() => {
     const m = new Map<string, Profile>();
@@ -62,10 +74,18 @@ export default function PortfolioPage() {
     setChain({ state: "loading" });
     try {
       const owner = wallet.publicKey;
-      const [spl, t22] = await Promise.all([
-        connection.getParsedTokenAccountsByOwner(owner, { programId: TOKEN_PROGRAM_ID }, "confirmed"),
-        connection.getParsedTokenAccountsByOwner(owner, { programId: TOKEN_2022_PROGRAM_ID }, "confirmed"),
-      ]);
+      const sources = [connection, ...getReadConnections().filter((item) => item.rpcEndpoint !== connection.rpcEndpoint)];
+      const readProgram = (programId: PublicKey) => dedupeRpcRead(
+        `portfolio:${owner.toBase58()}:${programId.toBase58()}`,
+        () => withRpcFallback(sources, (source) => source.getParsedTokenAccountsByOwner(owner, { programId }, "confirmed"), {
+          retries: 1,
+          baseDelayMs: 500,
+          timeoutMs: 12_000,
+        }),
+      );
+      // Sequential scans avoid a rate-limit burst on public RPC endpoints.
+      const spl = await readProgram(TOKEN_PROGRAM_ID);
+      const t22 = await readProgram(TOKEN_2022_PROGRAM_ID);
       const flat: ParsedTokenAccountLike[] = [];
       for (const [list, program] of [
         [spl.value, "spl-token"],
@@ -92,11 +112,52 @@ export default function PortfolioPage() {
 
   useEffect(() => {
     void readChain();
-  }, [readChain]);
+  }, [readChain, refreshRevision]);
 
-  const walletActs = wallet.publicKey
-    ? history.filter((a) => a.wallet === wallet.publicKey!.toBase58())
-    : history;
+  const readLpPositions = useCallback(async () => {
+    if (!wallet.publicKey) {
+      setLpPositions([]);
+      return;
+    }
+    setLpLoading(true);
+    setLpError(null);
+    const found: PortfolioLpPosition[] = [];
+    const failures: string[] = [];
+    for (const launch of launches.filter((item) => item.dammPool)) {
+      try {
+        const quoteMint = launch.quote === "USDC" ? getUsdcMint() : WSOL_MINT;
+        if (!quoteMint || !launch.dammPool) throw new Error("Quote mint unavailable on this cluster.");
+        const pool = new PublicKey(launch.dammPool);
+        const verified = await fetchDammPoolSnapshot({
+          connection,
+          pool,
+          baseMint: launch.mint,
+          quoteMint: quoteMint.toBase58(),
+          source: "launch",
+        });
+        if (!verified.exists) continue;
+        const positions = await fetchUserDammPositions({ connection, pool, user: wallet.publicKey });
+        found.push(...positions.map((position) => ({ ...position, dammPool: launch.dammPool!, ticker: launch.ticker, lockPct: launch.lockPct })));
+      } catch (error) {
+        failures.push(toUserMessage(error));
+      }
+    }
+    setLpPositions(found);
+    setLpError(failures.length ? `Some DAMM positions could not be refreshed: ${failures[0]}` : null);
+    setLpLoading(false);
+  }, [connection, launches, wallet.publicKey]);
+
+  useEffect(() => {
+    void readLpPositions();
+  }, [readLpPositions, refreshRevision]);
+
+  useEffect(() => {
+    const refresh = () => setRefreshRevision((value) => value + 1);
+    window.addEventListener(MARKET_CHANGED_EVENT, refresh);
+    return () => window.removeEventListener(MARKET_CHANGED_EVENT, refresh);
+  }, []);
+
+  const walletActs = activityForWallet(history, wallet.publicKey?.toBase58() ?? null);
 
   return (
     <div className="space-y-6">
@@ -212,6 +273,15 @@ export default function PortfolioPage() {
             )}
           </section>
 
+          <section className="ec-card overflow-x-auto" data-testid="damm-lp-positions">
+            <div className="flex items-center justify-between border-b border-line px-4 py-3">
+              <div><h2 className="text-sm font-semibold text-fg-primary">Verified DAMM v2 LP positions</h2><p className="text-xs text-fg-muted">Position NFTs are non-fungible ownership records and are shown separately from token balances.</p></div>
+              {wallet.publicKey && <button type="button" className="text-xs text-accent hover:underline" onClick={() => void readLpPositions()}>Refresh</button>}
+            </div>
+            {lpLoading ? <p className="p-4 text-sm text-fg-muted">Reading DAMM v2 positions…</p> : lpError && lpPositions.length === 0 ? <p className="p-4 text-sm text-signal-warn">{lpError}</p> : lpPositions.length === 0 ? <p className="p-4 text-sm text-fg-muted">No verified DAMM v2 LP position found for this wallet in locally known migrated markets.</p> : <table className="w-full min-w-[760px] text-left text-xs"><thead className="border-b border-line text-fg-muted"><tr><th className="px-4 py-3">Market / pool</th><th className="px-4 py-3">Position</th><th className="px-4 py-3">Position NFT</th><th className="px-4 py-3">Lock / ownership</th><th className="px-4 py-3">Liquidity</th></tr></thead><tbody>{lpPositions.map((position) => <tr key={position.position} className="border-b border-line/60"><td className="px-4 py-3"><span className="font-medium text-fg-primary">${position.ticker}</span><a href={explorerAddressUrl(position.dammPool)} target="_blank" rel="noreferrer" className="ml-2 font-mono text-accent hover:underline">{position.dammPool.slice(0, 6)}…</a></td><td className="px-4 py-3 font-mono"><a href={explorerAddressUrl(position.position)} target="_blank" rel="noreferrer" className="text-accent hover:underline">{position.position.slice(0, 6)}…{position.position.slice(-4)}</a></td><td className="px-4 py-3 font-mono">{position.positionNftMint ? <a href={explorerAddressUrl(position.positionNftMint)} target="_blank" rel="noreferrer" className="text-accent hover:underline">{position.positionNftMint.slice(0, 6)}…{position.positionNftMint.slice(-4)}</a> : `${position.positionNftAccount.slice(0, 6)}… token account`}</td><td className="px-4 py-3">{position.lockState ?? `${position.lockPct}% configured`} · owned by connected wallet</td><td className="px-4 py-3 font-mono">{position.liquidityStatus ?? "verified"} · {position.unlockedLiquidity} unlocked</td></tr>)}</tbody></table>}
+            {lpError && lpPositions.length > 0 && <p className="border-t border-line p-3 text-xs text-signal-warn">{lpError}</p>}
+          </section>
+
           <section className="ec-card overflow-x-auto" data-testid="local-launches">
             <div className="border-b border-line px-4 py-3">
               <h2 className="text-sm font-semibold text-fg-primary">Launched from this browser (local record)</h2>
@@ -260,9 +330,10 @@ export default function PortfolioPage() {
       {tab === "history" && (
         <div className="space-y-2" data-testid="local-activity">
           <p className="text-xs text-fg-muted">
-            Locally recorded activity (this browser, unverified). Each entry links to its transaction so you can check
+            Wallet activity for the connected wallet, recorded locally in this browser and unverified. Each entry links to its transaction so you can check
             it on the explorer; swaps made elsewhere do not appear here.
           </p>
+          {!wallet.publicKey && <p className="text-sm text-fg-muted">Connect a wallet to view its scoped local activity.</p>}
           {walletActs.length === 0 ? (
             <p className="text-sm text-fg-muted">No local trade / launch history yet.</p>
           ) : (

@@ -121,6 +121,25 @@ export function getRpcUrl(): string {
   );
 }
 
+function urlList(raw: string | undefined): string[] {
+  return (raw ?? "").split(",").map((value) => value.trim()).filter(Boolean);
+}
+
+/** Explicit browser-visible DEVNET read endpoints; never used on another cluster. */
+export function getDevnetRpcReadUrls(): string[] {
+  const primary = getRpcUrl();
+  if (getCluster() !== "devnet") return [primary];
+  return [...new Set([primary, ...urlList(process.env.NEXT_PUBLIC_DEVNET_RPC_FALLBACK_URLS)])];
+}
+
+/** Explicit server-only DEVNET read endpoints; private URLs stay server-side. */
+export function getServerDevnetRpcReadUrls(): string[] {
+  const primary = getServerRpcUrl();
+  if (getCluster() !== "devnet") return [primary];
+  const configured = typeof window === "undefined" ? urlList(process.env.DEVNET_RPC_FALLBACK_URLS) : [];
+  return [...new Set([primary, ...configured])];
+}
+
 /**
  * Server-side RPC URL. Prefer a private, dedicated endpoint in `RPC_URL`
  * (never exposed to the browser bundle — may contain an API key); falls back

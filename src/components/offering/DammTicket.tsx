@@ -8,7 +8,6 @@ import { clsx } from "clsx";
 import {
   DOCS,
   explorerAddressUrl,
-  explorerTxUrl,
   quoteLabelForMint,
 } from "@/lib/constants";
 import {
@@ -30,6 +29,8 @@ import { pushActivity, updateLaunch } from "@/lib/local/launches";
 import { signAndSendTransaction } from "@/lib/send";
 import { freshnessMessage, quoteFreshness } from "@/lib/trade/quoteFreshness";
 import { SwapReview, type SwapReviewRow } from "@/components/trade/SwapReview";
+import { formatTokenPrice } from "@/lib/marketDisplay";
+import { transactionNotice } from "@/lib/transactionUi";
 
 type Props = {
   dbcPool: string;
@@ -40,6 +41,8 @@ type Props = {
   dammConfig?: string | null;
   onGateRequired?: () => boolean;
   gateOk?: boolean;
+  lockPct?: number | null;
+  onMarketChanged?: () => void;
 };
 
 function shortAddr(value: string, n = 4) {
@@ -58,6 +61,8 @@ export function DammTicket({
   dammConfig: dammConfigProp,
   onGateRequired,
   gateOk,
+  lockPct,
+  onMarketChanged,
 }: Props) {
   const { connection } = useConnection();
   const wallet = useWallet();
@@ -204,12 +209,13 @@ export function DammTicket({
         wallet: wallet.publicKey.toBase58(),
         at: new Date().toISOString(),
       });
-      toast.success(`DAMM swap confirmed — ${sig.slice(0, 8)}…`);
-      window.open(explorerTxUrl(sig), "_blank");
+      const txNotice = transactionNotice(sig, "DAMM v2 swap confirmed");
+      toast.success(txNotice.message, { action: { label: "Explorer", onClick: () => window.open(txNotice.explorerUrl, "_blank", "noopener,noreferrer") } });
       setQuote(null);
       setPendingTx(null);
       setNotice(null);
       await refresh();
+      onMarketChanged?.();
     } catch (e) {
       toast.error(toUserMessage(e));
     } finally {
@@ -272,9 +278,10 @@ export function DammTicket({
         wallet: wallet.publicKey.toBase58(),
         at: new Date().toISOString(),
       });
-      toast.success(`Position fees claimed — ${sig.slice(0, 8)}…`);
-      window.open(explorerTxUrl(sig), "_blank");
+      const txNotice = transactionNotice(sig, "Position fees claimed");
+      toast.success(txNotice.message, { action: { label: "Explorer", onClick: () => window.open(txNotice.explorerUrl, "_blank", "noopener,noreferrer") } });
       await refresh();
+      onMarketChanged?.();
     } catch (e) {
       toast.error(toUserMessage(e));
     } finally {
@@ -325,6 +332,16 @@ export function DammTicket({
       )}
 
       <dl className="space-y-2 text-xs">
+        {snap?.exists && (
+          <>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-input border border-line bg-subtle p-3"><dt className="text-fg-muted">SOL / quote reserve</dt><dd className="mt-1 font-mono text-fg-primary">{snap.quoteMint === snap.tokenAMint ? (snap.tokenAReserve == null ? "Unavailable" : `${formatRaw(snap.tokenAReserve, snap.tokenADecimals)} ${quoteLabel}`) : (snap.tokenBReserve == null ? "Unavailable" : `${formatRaw(snap.tokenBReserve, snap.tokenBDecimals)} ${quoteLabel}`)}</dd></div>
+              <div className="rounded-input border border-line bg-subtle p-3"><dt className="text-fg-muted">Base-token reserve</dt><dd className="mt-1 font-mono text-fg-primary">{snap.baseMint === snap.tokenAMint ? (snap.tokenAReserve == null ? "Unavailable" : formatRaw(snap.tokenAReserve, snap.tokenADecimals)) : (snap.tokenBReserve == null ? "Unavailable" : formatRaw(snap.tokenBReserve, snap.tokenBDecimals))}</dd></div>
+            </div>
+            <div className="flex justify-between gap-3"><dt className="text-fg-muted">Current DAMM spot</dt><dd className="text-right font-mono text-fg-primary">{snap.spotQuotePerBase == null ? "Unavailable" : formatTokenPrice(Number(snap.spotQuotePerBase), quoteLabel).primary}</dd></div>
+            <div className="flex justify-between gap-3"><dt className="text-fg-muted">Liquidity lock</dt><dd className="text-fg-primary">{lockPct == null ? "Verified percentage unavailable" : lockPct === 100 ? "100% permanently locked" : `${lockPct}% configured lock`}</dd></div>
+          </>
+        )}
         <div className="flex justify-between gap-3">
           <dt className="text-fg-muted">DAMM pool</dt>
           <dd className="font-mono text-fg-primary">
@@ -557,6 +574,10 @@ export function DammTicket({
                       {shortAddr(p.position, 6)}
                     </a>
                   </p>
+                  <p className="mt-1 text-fg-muted">
+                    Position NFT: <span className="font-mono text-fg-secondary">{p.positionNftMint ? shortAddr(p.positionNftMint, 6) : shortAddr(p.positionNftAccount, 6)}</span> · ownership {p.owner ? shortAddr(p.owner, 6) : "verified by connected wallet query"}
+                  </p>
+                  <p className="text-fg-muted">Lock: {p.lockState ?? "unknown"} · liquidity: {p.liquidityStatus ?? (p.unlockedLiquidity === "0" ? "locked/empty" : "active")}</p>
                   <p className="mt-1 text-fg-muted">
                     Unlocked liquidity:{" "}
                     <span className="font-mono text-fg-secondary">

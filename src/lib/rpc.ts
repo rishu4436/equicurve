@@ -83,11 +83,45 @@ export async function withRpcRetry<T>(
     } catch (e) {
       lastErr = e;
       if (attempt === retries || !shouldRetry(e)) throw e;
-      const jitter = Math.floor(Math.random() * base * 0.25);
-      await doSleep(base * 2 ** attempt + jitter);
+      await doSleep(base * 2 ** attempt);
     }
   }
   throw lastErr;
+}
+
+/**
+ * Try explicitly configured same-cluster sources for a read. Each source gets
+ * the bounded retry policy above; non-transient failures stop immediately.
+ */
+export async function withRpcFallback<S, T>(
+  sources: readonly S[],
+  read: (source: S) => Promise<T>,
+  opts: RetryOptions = {},
+): Promise<T> {
+  if (sources.length === 0) throw new Error("No RPC endpoints are configured.");
+  let lastError: unknown;
+  for (let index = 0; index < sources.length; index++) {
+    try {
+      return await withRpcRetry(() => read(sources[index]!), opts);
+    } catch (error) {
+      lastError = error;
+      if (!isTransientRpcError(error) || index === sources.length - 1) throw error;
+    }
+  }
+  throw lastError;
+}
+
+const inFlightReads = new Map<string, Promise<unknown>>();
+
+/** Coalesce identical concurrent read-only requests without caching settled chain data. */
+export function dedupeRpcRead<T>(key: string, read: () => Promise<T>): Promise<T> {
+  const existing = inFlightReads.get(key) as Promise<T> | undefined;
+  if (existing) return existing;
+  const pending = read().finally(() => {
+    if (inFlightReads.get(key) === pending) inFlightReads.delete(key);
+  });
+  inFlightReads.set(key, pending);
+  return pending;
 }
 
 /** Map with a fixed concurrency limit, preserving order. */

@@ -13,11 +13,19 @@ export type DammPoolSnapshot = {
   sqrtPrice: string;
   tokenADecimals: number;
   tokenBDecimals: number;
+  tokenAReserve?: string | null;
+  tokenBReserve?: string | null;
+  /** Verified pool sqrt price expressed as quote units per base token. */
+  spotQuotePerBase?: string | null;
 };
 
 export type DammPositionView = {
   position: string;
   positionNftAccount: string;
+  positionNftMint?: string;
+  owner?: string;
+  lockState?: "permanently-locked" | "partially-locked" | "unlocked";
+  liquidityStatus?: "active" | "empty";
   unlockedLiquidity: string;
   /** Claimable fees in token A atoms (SDK getUnClaimLpFee), not the stale checkpoint field. */
   feeAPending: string;

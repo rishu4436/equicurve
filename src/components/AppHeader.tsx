@@ -25,9 +25,11 @@ export function AppHeader() {
   const pathname = usePathname();
   const [menu, setMenu] = useState(false);
   const [resources, setResources] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const resourceRef = useRef<HTMLDivElement>(null);
   const resourceButton = useRef<HTMLButtonElement>(null);
   const menuButton = useRef<HTMLButtonElement>(null);
+  useEffect(() => setMounted(true), []);
   useEffect(() => { setMenu(false); setResources(false); }, [pathname]);
   useEffect(() => {
     const dismiss = (event: KeyboardEvent) => {
@@ -62,7 +64,7 @@ export function AppHeader() {
             {resources && <div id="resource-menu" className="ec-card absolute right-0 top-12 w-80 p-2 shadow-2xl">{RESOURCES.map(item => <Link key={item.href} href={item.href} className="block rounded-lg px-3 py-2.5 hover:bg-subtle"><span className="block text-sm font-medium">{item.label}</span><span className="mt-1 block text-xs text-fg-muted">{item.description}</span></Link>)}</div>}
           </div>
         </nav>
-        <div className="flex items-center gap-2"><WalletMultiButton /><button ref={menuButton} type="button" onClick={() => setMenu(!menu)} aria-label={menu ? "Close navigation" : "Open navigation"} aria-expanded={menu} aria-controls="mobile-navigation" className="flex h-11 w-11 items-center justify-center rounded-input border border-line lg:hidden"><svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d={menu ? "M6 6l12 12M18 6L6 18" : "M4 7h16M4 12h16M4 17h16"} /></svg></button></div>
+        <div className="flex items-center gap-2">{mounted ? <WalletMultiButton /> : <button type="button" className="wallet-adapter-button" disabled>Connect wallet</button>}<button ref={menuButton} type="button" onClick={() => setMenu(!menu)} aria-label={menu ? "Close navigation" : "Open navigation"} aria-expanded={menu} aria-controls="mobile-navigation" className="flex h-11 w-11 items-center justify-center rounded-input border border-line lg:hidden"><svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d={menu ? "M6 6l12 12M18 6L6 18" : "M4 7h16M4 12h16M4 17h16"} /></svg></button></div>
       </div>
       {menu && <nav id="mobile-navigation" aria-label="Mobile navigation" className="max-h-[calc(100dvh-72px)] overflow-y-auto border-t border-line px-5 py-4 lg:hidden"><div className="grid grid-cols-2 gap-2">{[...NAV, ...RESOURCES].map(item => <Link key={item.href} href={item.href} aria-current={active(item.href) ? "page" : undefined} onClick={() => setMenu(false)} className={clsx("rounded-input px-4 py-3 text-sm", active(item.href) ? "bg-accent/10 text-accent" : "bg-elevated text-fg-secondary hover:bg-subtle")}>{item.label}</Link>)}</div></nav>}
     </header>

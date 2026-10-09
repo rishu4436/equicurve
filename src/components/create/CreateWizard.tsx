@@ -3,7 +3,7 @@
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { getClusterLabel, getCluster, getOptionalPoolConfigKey, isLocalRpc, WSOL_MINT } from "@/lib/constants";
 import { launchCurveConfig, planLaunchAddresses, prepareLaunchTransaction } from "@/lib/dbc/create";
@@ -37,6 +37,7 @@ import { OfferingPreviewCard } from "./OfferingPreviewCard";
 import {
   applyWizardPatch,
   canContinue,
+  guardWizardStep,
   resolveWizardStep,
   stepErrors,
   INITIAL_WIZARD,
@@ -65,8 +66,6 @@ export function CreateWizard() {
   const router = useRouter();
   const search = useSearchParams();
 
-  const initialStep = useMemo((): WizardStepId => resolveWizardStep(search.get("step")), [search]);
-
   const initialPreset = useMemo((): PresetId => {
     const q = search.get("preset");
     if (q && ALL_PRESET_IDS.includes(q as PresetId)) {
@@ -75,11 +74,18 @@ export function CreateWizard() {
     return "short";
   }, [search]);
 
-  const [step, setStep] = useState<WizardStepId>(initialStep);
-  const [state, setState] = useState<WizardState>({
+  const initialState = useMemo<WizardState>(() => ({
     ...INITIAL_WIZARD,
     presetId: initialPreset,
-  });
+  }), [initialPreset]);
+
+  const initialStep = useMemo(
+    (): WizardStepId => guardWizardStep(resolveWizardStep(search.get("step")), initialState),
+    [search, initialState],
+  );
+
+  const [step, setStep] = useState<WizardStepId>(initialStep);
+  const [state, setState] = useState<WizardState>(initialState);
   const [busy, setBusy] = useState(false);
   const [showErrors, setShowErrors] = useState(false);
   const [launchLog, setLaunchLog] = useState<string[]>([]);
@@ -90,7 +96,12 @@ export function CreateWizard() {
     sig: string;
   } | null>(null);
   const [receipt, setReceipt] = useState<LaunchReceipt | null>(null);
+  const [launchKeypairs, setLaunchKeypairs] = useState<{ config: Keypair; baseMint: Keypair } | null>(null);
   const eligibility = useEligibilityGate();
+
+  useEffect(() => {
+    setLaunchKeypairs({ config: Keypair.generate(), baseMint: Keypair.generate() });
+  }, []);
 
   const idx = stepIndex(step);
   const feePlatform = 100 - state.feeIssuer;
@@ -124,16 +135,21 @@ export function CreateWizard() {
     }
     return built;
   }, [state, walletAddr]);
+  const plannedAddresses = useMemo(
+    () => launchKeypairs ? planLaunchAddresses({ quoteLabel: state.quote, keypairs: launchKeypairs }) : null,
+    [launchKeypairs, state.quote],
+  );
 
   function patch(p: Partial<WizardState>) {
     setState((s) => applyWizardPatch(s, p));
   }
 
   function go(next: WizardStepId, presetId?: PresetId) {
+    const guarded = guardWizardStep(next, state);
     setShowErrors(false);
-    setStep(next);
+    setStep(guarded);
     const url = new URL(window.location.href);
-    url.searchParams.set("step", next);
+    url.searchParams.set("step", guarded);
     url.searchParams.set("preset", presetId ?? state.presetId);
     window.history.replaceState({}, "", url.toString());
   }
@@ -229,10 +245,7 @@ export function CreateWizard() {
           .catch(() => ({ ok: false, error: "image check failed (network)" }))) as ImageCheckResult;
         if (!chk.ok) throw new Error(`Token image rejected: ${chk.error}`);
       }
-      const launchKeypairs = {
-        config: Keypair.generate(),
-        baseMint: Keypair.generate(),
-      };
+      if (!launchKeypairs) throw new Error("Launch identities are still being prepared. Try again in a moment.");
       const planned = planLaunchAddresses({ quoteLabel: state.quote, keypairs: launchKeypairs });
       const cluster = getCluster();
       const description = state.thesis.trim();
@@ -575,6 +588,7 @@ export function CreateWizard() {
                 onEdit={go}
                 review={review}
                 walletAddr={walletAddr}
+                planned={plannedAddresses}
               />
             )}
             {step === "launch" && (
@@ -1147,12 +1161,14 @@ function StepReview({
   onEdit,
   review,
   walletAddr,
+  planned,
 }: {
   state: WizardState;
   patch: (p: Partial<WizardState>) => void;
   onEdit: (s: WizardStepId) => void;
   review: LaunchReview;
   walletAddr: string | null;
+  planned: ReturnType<typeof planLaunchAddresses> | null;
 }) {
   const claimer = state.feeClaimer.trim() || walletAddr;
   return (
@@ -1201,6 +1217,17 @@ function StepReview({
           <strong className="text-fg-primary">${state.ticker}</strong> (fixed after launch). Bonding price ≠ NAV.
         </p>
       </header>
+      <div className="ec-card space-y-2 p-4 text-xs" data-testid="planned-launch-identities">
+        <p className="font-semibold text-fg-primary">Expected identities before signing</p>
+        <dl className="grid gap-2 font-mono sm:grid-cols-2">
+          <div><dt className="text-fg-muted">Expected mint</dt><dd className="break-all text-fg-primary">{planned?.mint ?? "Preparing…"}</dd></div>
+          <div><dt className="text-fg-muted">Expected DBC config</dt><dd className="break-all text-fg-primary">{planned?.config ?? "Preparing…"}</dd></div>
+          <div><dt className="text-fg-muted">Expected DBC pool</dt><dd className="break-all text-fg-primary">{planned?.pool ?? "Preparing…"}</dd></div>
+          <div><dt className="text-fg-muted">Design fingerprint</dt><dd className="break-all text-fg-primary">{state.designed?.configFingerprint ?? "Missing design"}</dd></div>
+          <div><dt className="text-fg-muted">Network</dt><dd className="text-fg-primary">{getClusterLabel()}</dd></div>
+        </dl>
+        <p className="text-fg-muted">These addresses come from the same keypairs and planning function used to build the transaction.</p>
+      </div>
       {review.errors.length > 0 && (
         <ul className="space-y-1 rounded-input border border-signal-danger/30 bg-signal-danger/10 px-3 py-2 text-xs text-signal-danger">
           {review.errors.map((e) => (

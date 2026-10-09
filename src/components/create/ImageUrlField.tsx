@@ -12,9 +12,11 @@ type Status = { state: "idle" } | { state: "checking" } | { state: "done"; resul
  */
 export function ImageUrlField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const [status, setStatus] = useState<Status>({ state: "idle" });
+  const [previewBroken, setPreviewBroken] = useState(false);
 
   useEffect(() => {
     const url = value.trim();
+    setPreviewBroken(false);
     if (!url) {
       setStatus({ state: "idle" });
       return;
@@ -56,24 +58,32 @@ export function ImageUrlField({ value, onChange }: { value: string; onChange: (v
       </label>
       <div className="flex items-center gap-3">
         <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-card border border-line bg-subtle text-xs text-fg-muted">
-          {ok ? (
+          {ok && !previewBroken ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={value} alt="Token image preview" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+            <img
+              src={value}
+              alt="Token image preview"
+              className="h-full w-full object-cover"
+              referrerPolicy="no-referrer"
+              onError={() => setPreviewBroken(true)}
+            />
           ) : (
-            "preview"
+            value.trim() ? "broken" : "no image"
           )}
         </div>
         <p className="text-xs text-fg-muted">
-          {status.state === "idle" && "Shown in wallets and explorers via the hosted metadata JSON."}
+          {status.state === "idle" && "No image supplied. Metadata will truthfully omit a usable image until you add a valid HTTPS URL."}
           {status.state === "checking" && "Checking image (HEAD request from the server)…"}
           {status.state === "done" &&
-            (status.result.ok ? (
+            (status.result.ok && !previewBroken ? (
               <span className="text-signal-grad">
                 OK · {status.result.contentType}
                 {status.result.bytes != null ? ` · ${(status.result.bytes / 1024).toFixed(0)} KB` : " · size not reported"}
               </span>
             ) : (
-              <span className="text-signal-danger">{status.result.error}</span>
+              <span className="text-signal-danger">
+                {previewBroken ? "The URL passed the server check, but the browser could not render the image." : status.result.ok ? "Image preview failed." : status.result.error}
+              </span>
             ))}
         </p>
       </div>

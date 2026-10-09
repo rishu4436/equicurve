@@ -37,6 +37,16 @@ export type PoolFeeRoles = {
   feeClaimer: string;
 };
 
+export function hasClaimableFees(
+  breakdown: FeeBreakdown | null,
+  role: "creator" | "partner",
+): boolean {
+  if (!breakdown) return false;
+  const prefix = role === "creator" ? "creator" : "partner";
+  return !new BN(breakdown[`${prefix}UnclaimedBase`]).isZero()
+    || !new BN(breakdown[`${prefix}UnclaimedQuote`]).isZero();
+}
+
 function sideFromSdk(side: {
   unclaimedBaseFee: { toString(): string };
   unclaimedQuoteFee: { toString(): string };

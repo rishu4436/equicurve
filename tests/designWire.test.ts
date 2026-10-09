@@ -3,6 +3,7 @@ import { buildLaunchReview } from "@/lib/dbc/launchReview";
 import {
   applyWizardPatch,
   canContinue,
+  guardWizardStep,
   DESIGN_INPUT_KEYS,
   INITIAL_WIZARD,
   resolveWizardStep,
@@ -134,6 +135,7 @@ describe("wizard design wiring", () => {
   it("blocks review and deploy when no current design is selected", () => {
     const base: WizardState = {
       ...INITIAL_WIZARD,
+      presetId: "equity",
       name: "Acme Robotics",
       ticker: "ACME",
       thesis: "Tokenized exposure to a robotics issuer.",
@@ -153,6 +155,22 @@ describe("wizard design wiring", () => {
     expect(canContinue("review", withDesign)).toBe(true);
     expect(canContinue("launch", withDesign)).toBe(true);
     expect(canContinue("review", { ...withDesign, ackBonding: false })).toBe(false);
+  });
+
+  it("guards direct, refreshed, missing, and stale review state while allowing a current design", () => {
+    const base = { ...INITIAL_WIZARD, presetId: "equity" as const };
+    expect(guardWizardStep("review", base)).toBe("design");
+    expect(guardWizardStep("launch", base)).toBe("design");
+
+    const current = {
+      ...base,
+      marketCaps: { initial: 4, migration: 20 },
+      designed: designedFixture(),
+    };
+    expect(guardWizardStep("review", current)).toBe("review");
+    expect(guardWizardStep("launch", current)).toBe("launch");
+    expect(guardWizardStep("review", { ...current, objective: "stable" })).toBe("design");
+    expect(guardWizardStep("review", { ...current, designed: null })).toBe("design");
   });
 });
 

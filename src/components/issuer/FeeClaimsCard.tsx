@@ -5,17 +5,18 @@ import { PublicKey } from "@solana/web3.js";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { explorerTxUrl } from "@/lib/constants";
 import {
   fetchPoolFeeBreakdown,
   prepareClaimCreatorFees,
   prepareClaimPartnerFees,
   resolvePoolFeeRoles,
+  hasClaimableFees,
   type FeeBreakdown,
   type PoolFeeRoles,
 } from "@/lib/dbc/claim";
 import { toUserMessage } from "@/lib/errors";
 import { pushActivity } from "@/lib/local/launches";
+import { transactionNotice } from "@/lib/transactionUi";
 import { signAndSendTransaction } from "@/lib/send";
 import { formatQuoteAtoms } from "@/lib/amounts";
 
@@ -74,6 +75,8 @@ export function FeeClaimsCard({ pool, quote = "SOL" }: Props) {
   const walletPk = wallet.publicKey?.toBase58() ?? null;
   const isCreator = !!(walletPk && roles && roles.creator === walletPk);
   const isPartner = !!(walletPk && roles && roles.feeClaimer === walletPk);
+  const creatorClaimable = hasClaimableFees(fees, "creator");
+  const partnerClaimable = hasClaimableFees(fees, "partner");
 
   async function claimCreator() {
     if (!wallet.publicKey) {
@@ -96,8 +99,8 @@ export function FeeClaimsCard({ pool, quote = "SOL" }: Props) {
         wallet: wallet.publicKey.toBase58(),
         at: new Date().toISOString(),
       });
-      toast.success("Creator claim submitted — " + sig.slice(0, 8));
-      window.open(explorerTxUrl(sig), "_blank");
+      const txNotice = transactionNotice(sig, "Creator fee claim confirmed");
+      toast.success(txNotice.message, { action: { label: "Explorer", onClick: () => window.open(txNotice.explorerUrl, "_blank", "noopener,noreferrer") } });
       await refresh();
     } catch (e) {
       toast.error(toUserMessage(e));
@@ -127,8 +130,8 @@ export function FeeClaimsCard({ pool, quote = "SOL" }: Props) {
         wallet: wallet.publicKey.toBase58(),
         at: new Date().toISOString(),
       });
-      toast.success("Partner claim submitted — " + sig.slice(0, 8));
-      window.open(explorerTxUrl(sig), "_blank");
+      const txNotice = transactionNotice(sig, "Partner fee claim confirmed");
+      toast.success(txNotice.message, { action: { label: "Explorer", onClick: () => window.open(txNotice.explorerUrl, "_blank", "noopener,noreferrer") } });
       await refresh();
     } catch (e) {
       toast.error(toUserMessage(e));
@@ -191,10 +194,10 @@ export function FeeClaimsCard({ pool, quote = "SOL" }: Props) {
         <button
           type="button"
           className="ec-btn-primary"
-          disabled={busy || !wallet.publicKey || !isCreator}
+          disabled={busy || !wallet.publicKey || !isCreator || !creatorClaimable}
           onClick={() => void claimCreator()}
         >
-          {busyCreator ? "Claiming…" : "Claim creator fees"}
+          {busyCreator ? "Claiming…" : creatorClaimable ? "Claim creator fees" : "No creator fees to claim"}
         </button>
         {!isCreator && wallet.publicKey && roles && (
           <p className="text-xs text-fg-muted">
@@ -204,10 +207,10 @@ export function FeeClaimsCard({ pool, quote = "SOL" }: Props) {
         <button
           type="button"
           className="ec-btn-primary"
-          disabled={busy || !wallet.publicKey || !isPartner}
+          disabled={busy || !wallet.publicKey || !isPartner || !partnerClaimable}
           onClick={() => void claimPartner()}
         >
-          {busyPartner ? "Claiming…" : "Claim partner fees"}
+          {busyPartner ? "Claiming…" : partnerClaimable ? "Claim partner fees" : "No partner fees to claim"}
         </button>
         {!isPartner && wallet.publicKey && roles && (
           <p className="text-xs text-fg-muted">

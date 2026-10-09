@@ -155,7 +155,10 @@ export function serializeDesign(policy: LaunchPolicy) {
 
 export function designFromApiRequest(input: DesignApiRequest) {
   const acceptedBudget = input.acceptedConstraints;
-  return serializeDesign(designPolicy(briefFromRequest(input), acceptedBudget ? { acceptedBudget: acceptedBudget as ConstraintBudget } : undefined));
+  return serializeDesign(designPolicy(briefFromRequest(input), {
+    requestedBudget: input.constraints as ConstraintBudget,
+    ...(acceptedBudget ? { acceptedBudget: acceptedBudget as ConstraintBudget } : {}),
+  }));
 }
 
 /** Rebuilds the policy from the public request; never trusts a client candidate object. */
@@ -165,7 +168,12 @@ export function resolveSelectedDesign(reference: SelectedDesignReference) {
   }
   const policy = designPolicy(
     briefFromRequest(reference.designRequest),
-    reference.designRequest.acceptedConstraints ? { acceptedBudget: reference.designRequest.acceptedConstraints as ConstraintBudget } : undefined,
+    {
+      requestedBudget: reference.designRequest.constraints as ConstraintBudget,
+      ...(reference.designRequest.acceptedConstraints
+        ? { acceptedBudget: reference.designRequest.acceptedConstraints as ConstraintBudget }
+        : {}),
+    },
   );
   const candidate = policy.candidates.find((row) => row.profileId === reference.selection.candidateId);
   if (!candidate) throw new DeveloperApiError("CANDIDATE_NOT_FOUND", "Selected candidate was not found in the server-computed design.");
@@ -243,8 +251,8 @@ function publicConfig(config: ReturnType<typeof materializeRecipe>, quote: Launc
     enableFirstSwapWithMinFee: Boolean(c.enableFirstSwapWithMinFee),
     collectFeeMode: atom(c.collectFeeMode),
     migrationOption: atom(c.migrationOption),
-    tokenQuoteDecimal: atom(c.tokenQuoteDecimal),
-    tokenBaseDecimal: atom(c.tokenBaseDecimal),
+    tokenQuoteDecimal: atom(c.tokenQuoteDecimal ?? (quote === "USDC" ? 6 : 9)),
+    tokenBaseDecimal: atom(c.tokenBaseDecimal ?? 9),
     migration: migrationAttestation(config),
     units: {
       sqrtStartPrice: "raw_sdk_integer",
@@ -265,6 +273,14 @@ function publicConfig(config: ReturnType<typeof materializeRecipe>, quote: Launc
   };
 }
 
+export function configIntegrity(expectedFingerprint: string, actualFingerprint: string) {
+  return {
+    designFingerprint: expectedFingerprint,
+    configFingerprint: actualFingerprint,
+    matches: expectedFingerprint === actualFingerprint,
+  };
+}
+
 export function configFromReference(reference: SelectedDesignReference) {
   const { policy, candidate } = resolveSelectedDesign(reference);
   if (!deploymentAllowed(policy, candidate)) {
@@ -273,7 +289,8 @@ export function configFromReference(reference: SelectedDesignReference) {
   try {
     const config = materializeRecipe(candidate.recipe);
     const configFingerprint = marketConfigFingerprint(config);
-    if (configFingerprint !== candidate.configFingerprint) {
+    const integrity = configIntegrity(candidate.configFingerprint, configFingerprint);
+    if (!integrity.matches) {
       throw new DeveloperApiError("FINGERPRINT_MISMATCH", "Canonical config fingerprint does not match the selected design.", 500);
     }
     return {
@@ -286,7 +303,7 @@ export function configFromReference(reference: SelectedDesignReference) {
       acceptedConstraints: policy.negotiation.applied,
       config: publicConfig(config, policy.brief.quote),
       canonicalConfig: canonicalMarketConfig(config),
-      integrity: { designFingerprint: candidate.configFingerprint, configFingerprint, matches: true },
+      integrity,
       provenance: "canonical_meteora_launch_config",
     };
   } catch (error) {

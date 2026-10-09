@@ -26,6 +26,7 @@ const DESCRIPTION =
 export const metadata: Metadata = {
   title: TITLE,
   description: DESCRIPTION,
+  icons: { icon: "/favicon.ico", shortcut: "/favicon.ico" },
   openGraph: {
     title: TITLE,
     description: DESCRIPTION,

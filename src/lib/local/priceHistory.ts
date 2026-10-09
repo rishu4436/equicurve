@@ -14,6 +14,8 @@ export type PricePoint = {
   price: number;
   /** Tx signature when sourced from a confirmed swap. */
   sig?: string;
+  /** Confirmed Solana slot, used to order equal/missing block times deterministically. */
+  slot?: number;
   source: PricePointSource;
 };
 
@@ -80,7 +82,7 @@ export function mergePricePoints(
 
   const merged = [...bySig.values(), ...noSig]
     .filter((p) => p.price > 0 && Number.isFinite(p.price))
-    .sort((a, b) => a.t - b.t);
+    .sort((a, b) => a.t - b.t || (a.slot ?? 0) - (b.slot ?? 0) || (a.sig ?? "").localeCompare(b.sig ?? ""));
 
   // Dedupe near-identical consecutive points
   const deduped: PricePoint[] = [];

@@ -44,6 +44,9 @@ import {
   type StoredActivity,
   type StoredLaunch,
 } from "@/lib/local/launches";
+import { formatTokenSupply, tokenAccountDistribution } from "@/lib/holders";
+import { withRpcRetry } from "@/lib/rpc";
+import { formatMarketTimestamp, formatProgressRatio, marketLifecycle } from "@/lib/marketDisplay";
 
 const TABS = [
   "Overview",
@@ -61,10 +64,13 @@ type Props = {
 };
 
 type HolderHint = {
-  supply: string | null;
+  supplyAtoms: string | null;
+  decimals: number | null;
   creatorAta: string | null;
-  creatorBalance: string | null;
-  largest: { address: string; amount: string }[];
+  creatorBalanceAtoms: string | null;
+  largest: { address: string; amountAtoms: string }[];
+  loading: boolean;
+  partial: boolean;
   error: string | null;
 };
 
@@ -90,10 +96,13 @@ export function OfferingDetailClient({ id, demo }: Props) {
   const [snapReadFailed, setSnapReadFailed] = useState(false);
   const [snapCheckedAt, setSnapCheckedAt] = useState<string | null>(null);
   const [holders, setHolders] = useState<HolderHint>({
-    supply: null,
+    supplyAtoms: null,
+    decimals: null,
     creatorAta: null,
-    creatorBalance: null,
+    creatorBalanceAtoms: null,
     largest: [],
+    loading: false,
+    partial: false,
     error: null,
   });
   const [historyNonce, setHistoryNonce] = useState(0);
@@ -113,7 +122,7 @@ export function OfferingDetailClient({ id, demo }: Props) {
     setActivity(
       listActivity(getLaunch(id)?.pool ?? (id.length >= 32 ? id : undefined)),
     );
-  }, [id]);
+  }, [id, historyNonce]);
 
   const refreshSnap = useCallback(async () => {
     if (!poolAddress) {
@@ -142,7 +151,7 @@ export function OfferingDetailClient({ id, demo }: Props) {
 
   useEffect(() => {
     void refreshSnap();
-  }, [refreshSnap]);
+  }, [refreshSnap, historyNonce]);
 
   useEffect(() => {
     let cancelled = false;
@@ -179,7 +188,7 @@ export function OfferingDetailClient({ id, demo }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [connection, poolAddress]);
+  }, [connection, poolAddress, historyNonce]);
 
 
   useEffect(() => {
@@ -189,19 +198,23 @@ export function OfferingDetailClient({ id, demo }: Props) {
       const creatorStr = snapshot?.creator ?? launch?.creator;
       if (!mintStr) {
         setHolders({
-          supply: null,
+          supplyAtoms: null,
+          decimals: null,
           creatorAta: null,
-          creatorBalance: null,
+          creatorBalanceAtoms: null,
           largest: [],
+          loading: false,
+          partial: false,
           error: null,
         });
         return;
       }
+      setHolders((current) => ({ ...current, loading: true, error: null }));
       try {
         const mint = new PublicKey(mintStr);
-        const supply = await connection.getTokenSupply(mint);
+        const supply = await withRpcRetry(() => connection.getTokenSupply(mint));
         let creatorAta: string | null = null;
-        let creatorBalance: string | null = null;
+        let creatorBalanceAtoms: string | null = null;
         if (creatorStr) {
           const ata = getAssociatedTokenAddressSync(
             mint,
@@ -209,38 +222,45 @@ export function OfferingDetailClient({ id, demo }: Props) {
           );
           creatorAta = ata.toBase58();
           try {
-            const bal = await connection.getTokenAccountBalance(ata);
-            creatorBalance = `${bal.value.uiAmountString ?? "0"} (${bal.value.amount} raw)`;
+            const bal = await withRpcRetry(() => connection.getTokenAccountBalance(ata));
+            creatorBalanceAtoms = bal.value.amount;
           } catch {
-            creatorBalance = "0 (no ATA yet)";
+            creatorBalanceAtoms = "0";
           }
         }
-        let largest: { address: string; amount: string }[] = [];
+        let largest: { address: string; amountAtoms: string }[] = [];
+        let partial = false;
         try {
-          const big = await connection.getTokenLargestAccounts(mint);
+          const big = await withRpcRetry(() => connection.getTokenLargestAccounts(mint));
           largest = big.value.slice(0, 8).map((v) => ({
             address: v.address.toBase58(),
-            amount: v.uiAmountString ?? v.amount,
+            amountAtoms: v.amount,
           }));
         } catch {
-          /* optional — some RPCs rate-limit this */
+          partial = true;
         }
         if (!cancelled) {
           setHolders({
-            supply: `${supply.value.uiAmountString ?? supply.value.amount} (decimals ${supply.value.decimals})`,
+            supplyAtoms: supply.value.amount,
+            decimals: supply.value.decimals,
             creatorAta,
-            creatorBalance,
+            creatorBalanceAtoms,
             largest,
+            loading: false,
+            partial,
             error: null,
           });
         }
       } catch (e) {
         if (!cancelled) {
           setHolders({
-            supply: null,
+            supplyAtoms: null,
+            decimals: null,
             creatorAta: null,
-            creatorBalance: null,
+            creatorBalanceAtoms: null,
             largest: [],
+            loading: false,
+            partial: false,
             error: e instanceof Error ? e.message : "Holder fetch failed",
           });
         }
@@ -250,7 +270,7 @@ export function OfferingDetailClient({ id, demo }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [connection, snapshot, launch, demo]);
+  }, [connection, snapshot, launch, demo, historyNonce]);
 
   const name = launch?.name ?? demo?.name ?? "Live DBC pool";
   const ticker = launch?.ticker ?? demo?.ticker ?? "POOL";
@@ -263,6 +283,20 @@ export function OfferingDetailClient({ id, demo }: Props) {
     ? quoteLabelForMint(snapshot.quoteMint)
     : launch?.quote ?? demo?.quote ?? "SOL";
   const lockPct = snapshot?.lockPct ?? launch?.lockPct ?? demo?.lockPct ?? 10;
+  const holderRows = holders.supplyAtoms != null && holders.decimals != null
+    ? tokenAccountDistribution({
+        supplyAtoms: holders.supplyAtoms,
+        decimals: holders.decimals,
+        creatorAta: holders.creatorAta,
+        accounts: holders.largest,
+      })
+    : [];
+  const holderSupply = holders.supplyAtoms != null && holders.decimals != null
+    ? formatTokenSupply(holders.supplyAtoms, holders.decimals, ticker)
+    : null;
+  const creatorBalance = holders.creatorBalanceAtoms != null && holders.decimals != null
+    ? `${formatAtomsExact(holders.creatorBalanceAtoms, holders.decimals)} ${ticker}`
+    : null;
   const presetId = launch?.presetId ?? demo?.presetId ?? "short";
   const raiseTarget = launch?.raiseTarget ?? demo?.raiseTarget ?? 0;
   const raisedDemo = demo?.raised ?? 0;
@@ -295,6 +329,7 @@ export function OfferingDetailClient({ id, demo }: Props) {
   const statusUnverified = !snapshot && !illustrative;
   const migratedOnChain = curvePhase === "migrated";
   const dammLive = migratedOnChain && destination === "exists";
+  const lifecycle = marketLifecycle(curvePhase, destination);
 
   const mint = snapshot?.baseMint ?? launch?.mint ?? demo?.mint;
   const config = snapshot?.config ?? launch?.config;
@@ -344,9 +379,10 @@ export function OfferingDetailClient({ id, demo }: Props) {
                   </span>
                 )}
                 <span className="rounded-pill border border-line bg-subtle px-2 py-0.5 text-xs text-fg-secondary">
-                  Lock ≥{lockPct}%
+                   {lockPct === 100 ? "100% permanently locked" : `${lockPct}% configured lock`}
                 </span>
                 <span className="ec-chip">Quote: {quote}</span>
+                <span className="ec-chip">Active venue: {lifecycle.activeVenue}</span>
               </div>
               {(mint || poolAddress) && (
                 <p className="mt-2 font-mono text-xs text-fg-muted">
@@ -424,7 +460,6 @@ export function OfferingDetailClient({ id, demo }: Props) {
                   <button
                     type="button"
                     onClick={() => {
-                      void refreshSnap();
                       setHistoryNonce((n) => n + 1);
                     }}
                     className="text-xs text-accent hover:underline"
@@ -440,13 +475,14 @@ export function OfferingDetailClient({ id, demo }: Props) {
                 progress={progressPct == null ? null : progressPct / 100}
                 illustrative={illustrative}
                 priceMultiple={presetPriceMultiple(presetId, quote === "USDC" ? "USDC" : "SOL")}
+                historicalOnly={lifecycle.activeVenue === "DAMM v2"}
               />
               <div className="mt-4 flex items-center gap-4 border-t border-line pt-4">
                 <div className="space-y-1 text-sm text-fg-secondary">
                   <p>
                     Quote progress{" "}
                     <span className="font-mono text-fg-primary">
-                      {progressPct == null ? "unknown" : `${progressPct.toFixed(2)}%`}
+                      {formatProgressRatio(snapshot?.quoteProgress ?? null)}
                     </span>
                   </p>
                   {snapshot && (
@@ -455,14 +491,14 @@ export function OfferingDetailClient({ id, demo }: Props) {
                       <span className="font-mono text-fg-primary">
                         {snapshot.baseProgress == null
                           ? "unknown"
-                          : `${(snapshot.baseProgress * 100).toFixed(2)}%`}
+                          : formatProgressRatio(snapshot.baseProgress)}
                       </span>
                     </p>
                   )}
                   {raiseTarget > 0 && !snapshot && illustrative && (
                     <p>
-                      Example raised ${raisedDemo.toLocaleString()} / $
-                      {raiseTarget.toLocaleString()}
+                      Example raised ${raisedDemo.toLocaleString("en-US")} / $
+                      {raiseTarget.toLocaleString("en-US")}
                     </p>
                   )}
                   <p className="text-xs text-fg-muted">
@@ -474,7 +510,7 @@ export function OfferingDetailClient({ id, demo }: Props) {
                   {poolAddress && !illustrative && (
                     <p className="text-xs text-fg-muted">
                       {getCluster()} · last checked{" "}
-                      {snapCheckedAt ? new Date(snapCheckedAt).toLocaleTimeString() : "never"}
+                      {snapCheckedAt ? formatMarketTimestamp(snapCheckedAt, false) : "never"}
                     </p>
                   )}
                 </div>
@@ -545,7 +581,7 @@ export function OfferingDetailClient({ id, demo }: Props) {
                       <div>
                         <dt className="text-fg-muted">Issuer-stated raise target</dt>
                         <dd className="font-mono text-fg-primary">
-                          {raiseTarget ? `${raiseTarget.toLocaleString()} (display only)` : "—"}
+                          {raiseTarget ? `${raiseTarget.toLocaleString("en-US")} (display only)` : "—"}
                         </dd>
                       </div>
                     </dl>
@@ -624,11 +660,14 @@ export function OfferingDetailClient({ id, demo }: Props) {
                 )}
 
                 {tab === "Holders" && (
-                  <div className="space-y-3">
-                    <p className="text-xs text-fg-muted">
-                      No top-holder indexer. Best-effort mint supply + creator
-                      ATA via RPC.
-                    </p>
+                  <div className="space-y-4">
+                    <div>
+                      <h3 className="text-sm font-semibold text-fg-primary">Holders / token accounts</h3>
+                      <p className="mt-1 text-xs text-fg-muted">
+                        Verified RPC token-account distribution. Token accounts are not assumed to be unique people.
+                        The RPC returns only the largest accounts, so this view is intentionally marked partial.
+                      </p>
+                    </div>
                     {!mint && (
                       <div className="rounded-input border border-line bg-subtle px-3 py-4 text-xs text-fg-muted">
                         {illustrative
@@ -637,98 +676,20 @@ export function OfferingDetailClient({ id, demo }: Props) {
                       </div>
                     )}
                     {mint && (
-                      <dl className="space-y-2 font-mono text-xs">
-                        <div className="flex justify-between gap-4">
-                          <dt className="text-fg-muted">Mint supply</dt>
-                          <dd className="text-right text-fg-primary">
-                            {holders.supply ?? "…"}
-                          </dd>
-                        </div>
-                        {(snapshot?.creator || launch?.creator) && (
-                          <div className="flex justify-between gap-4">
-                            <dt className="text-fg-muted">Creator</dt>
-                            <dd>
-                              <a
-                                href={explorerAddressUrl(
-                                  snapshot?.creator ?? launch!.creator,
-                                )}
-                                className="text-accent hover:underline"
-                                target="_blank"
-                                rel="noreferrer"
-                              >
-                                {short(
-                                  snapshot?.creator ?? launch!.creator,
-                                  6,
-                                )}
-                              </a>
-                            </dd>
-                          </div>
-                        )}
-                        {holders.creatorAta && (
-                          <div className="flex justify-between gap-4">
-                            <dt className="text-fg-muted">Creator ATA</dt>
-                            <dd>
-                              <a
-                                href={explorerAddressUrl(holders.creatorAta)}
-                                className="text-accent hover:underline"
-                                target="_blank"
-                                rel="noreferrer"
-                              >
-                                {short(holders.creatorAta, 6)}
-                              </a>
-                            </dd>
-                          </div>
-                        )}
-                        {holders.creatorBalance && (
-                          <div className="flex justify-between gap-4">
-                            <dt className="text-fg-muted">Creator balance</dt>
-                            <dd className="text-right text-fg-primary">
-                              {holders.creatorBalance}
-                            </dd>
-                          </div>
-                        )}
-                        {snapshot && (
-                          <div className="flex justify-between gap-4">
-                            <dt className="text-fg-muted">Base mint</dt>
-                            <dd>
-                              <a
-                                href={explorerAddressUrl(snapshot.baseMint)}
-                                className="text-accent hover:underline"
-                                target="_blank"
-                                rel="noreferrer"
-                              >
-                                {short(snapshot.baseMint, 6)}
-                              </a>
-                            </dd>
-                          </div>
-                        )}
+                      <dl className="grid gap-3 sm:grid-cols-3">
+                        <div className="rounded-input border border-line bg-subtle p-3"><dt className="text-xs text-fg-muted">Total supply</dt><dd className="mt-1 font-mono text-sm text-fg-primary">{holderSupply ?? "Unknown"}</dd></div>
+                        <div className="rounded-input border border-line bg-subtle p-3"><dt className="text-xs text-fg-muted">Known top accounts</dt><dd className="mt-1 font-mono text-sm text-fg-primary">{holders.loading ? "Loading…" : holderRows.length ? `${holderRows.length} (partial)` : "Unknown"}</dd></div>
+                        <div className="rounded-input border border-line bg-subtle p-3"><dt className="text-xs text-fg-muted">Creator balance</dt><dd className="mt-1 font-mono text-sm text-fg-primary">{creatorBalance ?? "Unknown"}</dd></div>
                       </dl>
                     )}
-                    {holders.largest.length > 0 && (
-                      <div className="space-y-2 pt-2">
-                        <p className="text-xs font-medium text-fg-primary">
-                          Largest accounts (RPC)
-                        </p>
-                        {holders.largest.map((row) => (
-                          <div
-                            key={row.address}
-                            className="flex items-center justify-between gap-3 rounded-input border border-line bg-subtle px-3 py-2 font-mono text-xs"
-                          >
-                            <a
-                              href={explorerAddressUrl(row.address)}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-accent hover:underline"
-                            >
-                              {row.address.slice(0, 4)}…{row.address.slice(-4)}
-                            </a>
-                            <span className="text-fg-primary">{row.amount}</span>
-                          </div>
-                        ))}
+                    {holderRows.length > 0 && (
+                      <div className="overflow-x-auto rounded-input border border-line">
+                        <table className="w-full min-w-[520px] text-left text-xs"><thead className="border-b border-line text-fg-muted"><tr><th className="px-3 py-2"># / token account</th><th className="px-3 py-2">Role</th><th className="px-3 py-2 text-right">Balance</th><th className="px-3 py-2 text-right">Supply</th></tr></thead><tbody>{holderRows.map((row, index) => <tr key={row.address} className="border-b border-line/60"><td className="px-3 py-2 font-mono"><span className="mr-2 text-fg-muted">{index + 1}</span><a href={explorerAddressUrl(row.address)} target="_blank" rel="noreferrer" className="text-accent hover:underline">{short(row.address, 6)}</a></td><td className="px-3 py-2 text-fg-muted">{row.role}</td><td className="px-3 py-2 text-right font-mono">{row.balance} {ticker}</td><td className="px-3 py-2 text-right font-mono">{row.supplyPct}</td></tr>)}</tbody></table>
                       </div>
                     )}
+                    {holders.partial && <p className="text-xs text-signal-warn">Supply is verified, but the largest-account list is unavailable from the current RPC.</p>}
                     {holders.error && (
-                      <p className="text-xs text-signal-warn">{holders.error}</p>
+                      <p className="text-xs text-signal-warn">Holder distribution unavailable — RPC data is degraded: {holders.error}</p>
                     )}
                   </div>
                 )}
@@ -760,7 +721,7 @@ export function OfferingDetailClient({ id, demo }: Props) {
                               </span>
                               <div className="text-xs text-fg-muted">
                                 {row.blockTime
-                                  ? new Date(row.blockTime * 1000).toLocaleString()
+                                  ? formatMarketTimestamp(row.blockTime * 1000)
                                   : `slot ${row.slot}`}
                               </div>
                             </div>
@@ -800,7 +761,7 @@ export function OfferingDetailClient({ id, demo }: Props) {
                                 </span>
                               ) : null}
                               <div className="text-xs text-fg-muted">
-                                {new Date(a.at).toLocaleString()}
+                                {formatMarketTimestamp(a.at)}
                               </div>
                             </div>
                             <a
@@ -896,6 +857,8 @@ export function OfferingDetailClient({ id, demo }: Props) {
                 dammConfig={dammConfig}
                 onGateRequired={() => eligibility.ensure()}
                 gateOk={eligibility.ok || undefined}
+                lockPct={snapshot.lockPct}
+                onMarketChanged={() => setHistoryNonce((n) => n + 1)}
               />
             ) : null}
 
@@ -911,7 +874,7 @@ export function OfferingDetailClient({ id, demo }: Props) {
               </div>
             ) : null}
 
-            {poolAddress && !migratedOnChain ? (
+            {poolAddress && curvePhase === "raising" ? (
               <TradePanel
                 poolAddress={poolAddress}
                 compact
@@ -919,7 +882,13 @@ export function OfferingDetailClient({ id, demo }: Props) {
                 gateOk={eligibility.ok || undefined}
                 onSwapComplete={() => setHistoryNonce((n) => n + 1)}
               />
-            ) : (
+            ) : poolAddress && curvePhase === "complete" ? (
+              <div className="ec-card space-y-3 border-gold/30 p-5 text-sm">
+                <h2 className="font-semibold text-gold">Curve complete</h2>
+                <p className="text-fg-secondary">DBC execution is closed. This market is eligible or preparing to migrate; DAMM v2 becomes the active venue only after its pool is verified.</p>
+                <GraduationStatusCard view={gradView} snapshot={snapshot} />
+              </div>
+            ) : !poolAddress || illustrative ? (
               <div className="ec-card space-y-3 p-5 text-sm text-fg-secondary">
                 <h2 className="font-semibold text-fg-primary">Trade ticket</h2>
                 <p>
@@ -934,7 +903,7 @@ export function OfferingDetailClient({ id, demo }: Props) {
                   Open Trade
                 </Link>
               </div>
-            )}
+            ) : null}
             
             {poolAddress && !illustrative && (
               <FeeClaimsCard
@@ -945,7 +914,7 @@ export function OfferingDetailClient({ id, demo }: Props) {
             <div className="ec-card p-4 text-xs text-fg-muted">
               <p className="mb-1 font-medium text-fg-secondary">Trust mini-strip</p>
               <p>
-                Lock ≥{lockPct}% · Issuer disclosures are self-attested (not verified) · Program IDs →{" "}
+                {lockPct === 100 ? "100% permanently locked" : `${lockPct}% configured lock`} · Issuer disclosures are self-attested (not verified) · Program IDs →{" "}
                 <Link href="/trust" className="text-accent hover:underline">
                   Trust Center
                 </Link>

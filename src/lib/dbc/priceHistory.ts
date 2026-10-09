@@ -214,12 +214,13 @@ export async function reconstructPoolPriceHistory(
   const bDec = baseDecimals;
   const qDec = quoteDecimals;
 
-  let sigs: { signature: string; blockTime: number | null }[] = [];
+  let sigs: { signature: string; blockTime: number | null; slot: number }[] = [];
   try {
     const raw = await connection.getSignaturesForAddress(pool, { limit });
     sigs = raw.map((s) => ({
       signature: s.signature,
       blockTime: s.blockTime ?? null,
+      slot: s.slot,
     }));
   } catch (e) {
     return {
@@ -287,6 +288,7 @@ export async function reconstructPoolPriceHistory(
         t: tMs,
         price,
         sig: metaSig.signature,
+        slot: metaSig.slot,
         source: "swap",
       });
     }
@@ -300,7 +302,7 @@ export async function reconstructPoolPriceHistory(
     });
   }
 
-  points.sort((a, b) => a.t - b.t);
+  points.sort((a, b) => a.t - b.t || (a.slot ?? 0) - (b.slot ?? 0) || (a.sig ?? "").localeCompare(b.sig ?? ""));
 
   return {
     points,

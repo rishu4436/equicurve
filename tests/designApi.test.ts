@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { constraintsFor } from "@/lib/market/constraints";
-import { configFromReference, designFromApiRequest, designRequestSchema, robustnessFromReference, selectedDesignReferenceSchema } from "@/lib/market/designApi";
+import { configFromReference, configIntegrity, designFromApiRequest, designRequestSchema, robustnessFromReference, selectedDesignReferenceSchema } from "@/lib/market/designApi";
 import { marketConfigFingerprint } from "@/lib/dbc/configFingerprint";
 import { designPolicy, materializeRecipe } from "@/lib/market/policy";
 import { POST } from "@/app/api/v1/design/route";
@@ -103,6 +103,21 @@ describe("v0.3 design API application contract", () => {
     expect(second).toEqual(first);
     expect(first.result.acceptedConstraints).toEqual(first.result.requestedConstraints);
     expect(first.result.negotiation.status).toBe("needs-decision");
+  });
+
+  it("honors caller-supplied requested constraints instead of replacing them with profile defaults", () => {
+    const supplied = {
+      ...journey().constraints,
+      maxReferenceImpactBps: 1,
+      maxWhaleImpactBps: 2,
+      maxConcentration: 0.1,
+      minRetailProgress: 0.9,
+    };
+    const response = designFromApiRequest(designRequestSchema.parse(journey({ constraints: supplied })));
+    expect(response.result.requestedConstraints).toEqual(supplied);
+    expect(response.result.acceptedConstraints).toEqual(supplied);
+    expect(response.result.candidates.every((row) => !row.feasible)).toBe(true);
+    expect(response.result.conflicts.length).toBeGreaterThan(0);
   });
 
   it("recalculates only when the caller explicitly accepts a wider budget", () => {
@@ -225,12 +240,36 @@ describe("v0.3 design API application contract", () => {
     expect(response.integrity.configFingerprint).toBe(reference.selection.fingerprint);
     expect(response.config.curve.length).toBeGreaterThan(0);
     expect(typeof response.config.migrationQuoteThreshold).toBe("string");
+    expect(response.config.tokenQuoteDecimal).toBe("9");
+    expect(response.config.tokenBaseDecimal).toBe("9");
     expect(response.config.quote).toMatchObject({ label: "SOL", decimals: 9, mint: expect.any(String) });
     expect(response.config.units.migrationQuoteThreshold).toBe("quote_atoms");
     expect(typeof response.canonicalConfig).toBe("string");
     expect(JSON.stringify(response)).not.toContain("bigint");
     expect(response.config.curve.every((point) => typeof point.sqrtPrice === "string" && typeof point.liquidity === "string")).toBe(true);
     expect(Object.values(response.config.migration).every((value) => typeof value === "string")).toBe(true);
+  });
+
+  it("serializes canonical SOL and USDC decimals and derives integrity.matches", () => {
+    const sol = configFromReference(selectedReference());
+    const usdcInput = designRequestSchema.parse({
+      ...acceptedJourney(),
+      quote: "USDC",
+      raiseTarget: "100",
+      typicalTrade: "0.2",
+    });
+    const usdcDesign = designFromApiRequest(usdcInput).result;
+    const usdc = configFromReference(selectedDesignReferenceSchema.parse({
+      schemaVersion: "1",
+      engineVersion: "0.2.0",
+      fingerprintVersion: "config-v1",
+      designRequest: usdcInput,
+      selection: { candidateId: usdcDesign.preferred.id, fingerprint: usdcDesign.preferred.fingerprint },
+    }));
+    expect(sol.config).toMatchObject({ tokenQuoteDecimal: "9", tokenBaseDecimal: "9" });
+    expect(usdc.config).toMatchObject({ tokenQuoteDecimal: "6", tokenBaseDecimal: "9" });
+    expect(configIntegrity("a", "a").matches).toBe(true);
+    expect(configIntegrity("a", "b").matches).toBe(false);
   });
 
   it("uses the same canonical config builder and is repeatable", () => {

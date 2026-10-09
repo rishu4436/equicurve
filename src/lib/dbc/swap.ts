@@ -15,6 +15,15 @@ export type SwapDirection = "buy" | "sell";
 
 export const DEFAULT_SLIPPAGE_BPS = 100;
 
+export function swapQuoteFailureMessage(direction: SwapDirection, message: string): string {
+  if (/insufficient liquidity/i.test(message)) {
+    return direction === "sell"
+      ? "Wallet balance is sufficient, but the curve cannot quote this sell size. Reduce the amount."
+      : "The curve cannot fill this buy size. Reduce the amount.";
+  }
+  return `Quote failed: ${message}`;
+}
+
 function expectedQuoteDecimals(mint: PublicKey): number | null {
   if (mint.equals(WSOL_MINT)) return 9;
   if (isUsdcMint(mint)) return 6;
@@ -52,6 +61,8 @@ export type SwapQuoteView = {
   /** Total trading fee (creator/partner + protocol + referral), quote atoms. */
   feeAtoms: string;
   feeDecimals: number;
+  /** SDK-computed impact from the same quote, null when the SDK cannot provide it. */
+  priceImpactPct: string | null;
   /** "exact_in" or "partial_fill" (buy that reaches the curve end). */
   mode: BuyPlan["mode"];
   /** Input the curve will consume (atoms). Equals amountIn except for partial fills. */
@@ -209,14 +220,7 @@ export async function quoteAndBuildSwap(args: {
         });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    if (/insufficient liquidity/i.test(msg)) {
-      throw new EquiCurveError(
-        "Not enough base tokens left in the curve for this sell/buy size. Reduce the amount.",
-        "VALIDATION",
-        e,
-      );
-    }
-    throw new EquiCurveError(`Quote failed: ${msg}`, "SDK", e);
+    throw new EquiCurveError(swapQuoteFailureMessage(direction, msg), /insufficient liquidity/i.test(msg) ? "VALIDATION" : "SDK", e);
   }
 
   const quote = plan.quote;
@@ -250,6 +254,14 @@ export async function quoteAndBuildSwap(args: {
     BigInt((quote.tradingFee ?? new BN(0)).toString(10)) +
     BigInt((quote.protocolFee ?? new BN(0)).toString(10)) +
     BigInt((quote.referralFee ?? new BN(0)).toString(10));
+  const impact = (quote as unknown as { priceImpact?: { toFixed?: (digits: number) => string } | string | number }).priceImpact;
+  const priceImpactPct = impact == null
+    ? null
+    : typeof impact === "object" && typeof impact.toFixed === "function"
+      ? impact.toFixed(4)
+      : Number.isFinite(Number(impact))
+        ? Number(impact).toFixed(4)
+        : null;
 
   return {
     tx,
@@ -262,6 +274,7 @@ export async function quoteAndBuildSwap(args: {
     slippageBps,
     feeAtoms: fee.toString(10),
     feeDecimals: quoteDecimals,
+    priceImpactPct,
     mode: plan.mode,
     fillableIn: plan.fillableIn.toString(10),
     unusedIn: plan.unusedIn.toString(10),

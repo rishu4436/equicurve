@@ -539,10 +539,13 @@ function promisingMultiples(rows: CandidateReport[], presets: PresetId[]): numbe
 
 export function designPolicy(
   input: LaunchBrief,
-  options?: { acceptedBudget?: ConstraintBudget },
+  options?: { requestedBudget?: ConstraintBudget; acceptedBudget?: ConstraintBudget },
 ): LaunchPolicy {
   const parsed = parseBrief(input);
   const limitsSpec = constraintsFor(parsed.brief.asset, parsed.brief.objective);
+  const requested = options?.requestedBudget ?? budgetFrom(limitsSpec);
+  const requestedError = constraintBudgetError(requested);
+  if (requestedError) throw new EquiCurveError(requestedError, "VALIDATION");
   const coarse = multiplesIn(limitsSpec);
   const rows: CandidateReport[] = [];
   const collect = (multiples: number[]) => {
@@ -559,7 +562,7 @@ export function designPolicy(
   }
   const mark = () => {
     for (const row of rows) {
-      row.rejected = constraintViolations(row, limitsSpec);
+      row.rejected = constraintViolations(row, requested);
       row.feasible = row.rejected.length === 0;
     }
   };
@@ -579,8 +582,7 @@ export function designPolicy(
     candidateCount: rows.length,
     note: "Coarse anchors are the minimum, midpoint, and maximum of the permitted price-multiple range. One finer midpoint is then scored beside each promising anchor. This sample does not prove a global optimum.",
   };
-  const requested = budgetFrom(limitsSpec);
-  const inspection = rankFrontier(inspectionPool(rows, limitsSpec), parsed.brief.objective);
+  const inspection = rankFrontier(inspectionPool(rows, { ...limitsSpec, ...requested }), parsed.brief.objective);
   if (!inspection[0]) throw new EquiCurveError("The frontier was empty.", "SDK");
   let status: ConstraintNegotiation["status"] = rows.some((row) => row.feasible) ? "satisfied" : "needs-decision";
   let applied = requested;
@@ -622,7 +624,9 @@ export function designPolicy(
   const limits = [
     "Order flow is synthetic. It is not a prediction of who will trade or what the price will be.",
     OBSERVED_NOTE,
-    `Hard constraints come from the asset profile (${parsed.brief.asset}) and the objective (${parsed.brief.objective}).`,
+    options?.requestedBudget
+      ? "Hard constraints are the caller-supplied requested budget validated by the same market-design engine."
+      : `Hard constraints come from the asset profile (${parsed.brief.asset}) and the objective (${parsed.brief.objective}).`,
   ];
   if (status === "needs-decision") {
     limits.push(

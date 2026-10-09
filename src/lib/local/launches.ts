@@ -10,6 +10,11 @@ import { clearPriceHistory } from "@/lib/local/priceHistory";
 
 export const LAUNCHES_KEY = "equicurve.launches.v1";
 export const ACTIVITY_KEY = "equicurve.activity.v1";
+export const MARKET_CHANGED_EVENT = "equicurve:market-changed";
+
+function notifyMarketChanged(): void {
+  if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(MARKET_CHANGED_EVENT));
+}
 
 export type StoredLaunch = {
   id: string; // pool address preferred
@@ -89,6 +94,7 @@ export function upsertLaunch(launch: StoredLaunch): void {
     (l) => l.pool !== launch.pool && l.id !== launch.id,
   );
   localStorage.setItem(LAUNCHES_KEY, JSON.stringify([launch, ...prev]));
+  notifyMarketChanged();
 }
 
 export function updateLaunch(
@@ -100,6 +106,7 @@ export function updateLaunch(
     l.pool === pool ? { ...l, ...patch } : l,
   );
   localStorage.setItem(LAUNCHES_KEY, JSON.stringify(next));
+  notifyMarketChanged();
 }
 
 export function listActivity(pool?: string): StoredActivity[] {
@@ -119,6 +126,13 @@ export function pushActivity(entry: StoredActivity): void {
     ACTIVITY_KEY,
     JSON.stringify([entry, ...prev].slice(0, 200)),
   );
+  notifyMarketChanged();
+}
+
+export function activityForWallet(activity: StoredActivity[], wallet: string | null): StoredActivity[] {
+  if (!wallet) return [];
+  const normalized = wallet.toLowerCase();
+  return activity.filter((entry) => entry.wallet?.toLowerCase() === normalized);
 }
 
 export function launchesForWallet(wallet: string): StoredLaunch[] {

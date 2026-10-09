@@ -1,10 +1,11 @@
 import { Connection, type Commitment } from "@solana/web3.js";
-import { getRpcUrl, getServerRpcUrl } from "./constants";
+import { getDevnetRpcReadUrls, getRpcUrl, getServerDevnetRpcReadUrls, getServerRpcUrl } from "./constants";
 import { EquiCurveError } from "./errors";
 import { withRpcRetry } from "./rpc";
 
 let cached: Connection | null = null;
 let serverCached: Connection | null = null;
+const readConnections = new Map<string, Connection>();
 
 /** Browser/public connection (NEXT_PUBLIC_RPC_URL). */
 export function getConnection(commitment: Commitment = "confirmed"): Connection {
@@ -31,6 +32,26 @@ export function getServerConnection(commitment: Commitment = "confirmed"): Conne
     serverCached = new Connection(rpc, { commitment, disableRetryOnRateLimit: true });
   }
   return serverCached;
+}
+
+function connectionsFor(urls: readonly string[], commitment: Commitment): Connection[] {
+  return urls.map((url) => {
+    const key = `${url}|${commitment}`;
+    let connection = readConnections.get(key);
+    if (!connection) {
+      connection = new Connection(url, { commitment, disableRetryOnRateLimit: true });
+      readConnections.set(key, connection);
+    }
+    return connection;
+  });
+}
+
+export function getReadConnections(commitment: Commitment = "confirmed"): Connection[] {
+  return connectionsFor(getDevnetRpcReadUrls(), commitment);
+}
+
+export function getServerReadConnections(commitment: Commitment = "confirmed"): Connection[] {
+  return connectionsFor(getServerDevnetRpcReadUrls(), commitment);
 }
 
 export async function pingRpc(connection: Connection = getServerConnection()): Promise<{

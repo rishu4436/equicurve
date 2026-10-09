@@ -10,6 +10,7 @@ import {
   mergePricePoints,
   type PricePoint,
 } from "@/lib/local/priceHistory";
+import { formatMarketTimestamp, formatPriceAxis, formatTokenPrice } from "@/lib/marketDisplay";
 
 type Props = {
   poolAddress: string | null;
@@ -20,26 +21,12 @@ type Props = {
   illustrative?: boolean;
   /** Graduation price ÷ start price for the theoretical shape (preset). */
   priceMultiple?: number;
+  /** DBC is no longer the execution venue; retain swaps as history only. */
+  historicalOnly?: boolean;
 };
 
-function formatPrice(p: number, quote: string): string {
-  if (!(p > 0) || !Number.isFinite(p)) return "—";
-  if (p >= 1) return `${p.toPrecision(4)} ${quote}`;
-  if (p >= 0.0001) return `${p.toFixed(6)} ${quote}`;
-  return `${p.toExponential(2)} ${quote}`;
-}
-
 function formatTime(t: number): string {
-  try {
-    return new Date(t).toLocaleString(undefined, {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return "";
-  }
+  return formatMarketTimestamp(t);
 }
 
 /**
@@ -59,26 +46,43 @@ export function curveShapeYs(priceMultiple: number, n = 32): number[] {
   return ys;
 }
 
+export function liveSpotPoint(
+  history: PricePoint[],
+  spot: number | null,
+  historicalOnly = false,
+): Array<{ x: number; y: number }> {
+  if (spot == null || historicalOnly) return [];
+  const observed = history.filter((point) => point.source === "spot").at(-1);
+  const swap = history.filter((point) => point.source === "swap").at(-1);
+  return [{ x: observed?.t ?? swap?.t ?? 0, y: spot }];
+}
+
 function ChartSvg({
-  history, spot, quoteLabel, progress, priceMultiple, mode,
+  history, spot, quoteLabel, progress, priceMultiple, mode, historicalOnly,
 }: {
   history: PricePoint[]; spot: number | null; quoteLabel: string; progress: number | null;
   priceMultiple: number; mode: "live" | "illustrative" | "thin";
+  historicalOnly: boolean;
 }) {
   const swaps = history.filter(point => point.source === "swap");
+  const liveSpot = liveSpotPoint(history, spot, historicalOnly);
   const shape = curveShapeYs(priceMultiple);
   return (
     <div className="space-y-5">
       {mode !== "illustrative" && <div className="ec-chart-frame p-4 sm:p-5">
         <div className="mb-5 flex flex-wrap items-center justify-between gap-2"><h4 className="text-sm font-medium">Swap price history</h4><span className="ec-chip">Partial on-chain history</span></div>
         <LineChart label="Confirmed swap execution prices over time"
-          series={[{ name: "Confirmed swaps", color: "#6DE0C5", points: swaps.map(point => ({ x: point.t, y: point.price })) }]}
+          series={[
+            { name: "Historical DBC swaps", color: "#6DE0C5", points: swaps.map(point => ({ x: point.t, y: point.price })) },
+            { name: "Live DBC spot", color: "#F3C969", points: liveSpot },
+          ]}
           xLabel="Time" yLabel={`${quoteLabel} / token`}
-          formatX={value => new Date(value).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-          formatDetailX={formatTime} formatDetailY={value => formatPrice(value, quoteLabel)}
-          formatY={value => value >= 1 ? value.toPrecision(3) : value.toExponential(1)} />
+          formatX={value => formatMarketTimestamp(value, false)}
+          formatDetailX={formatTime} formatDetailY={value => formatTokenPrice(value, quoteLabel).secondary}
+          formatY={value => formatPriceAxis(value, quoteLabel)} />
         {swaps.length > 0 && <p className="mt-3 text-xs text-fg-muted">{formatTime(swaps[0].t)} — {formatTime(swaps[swaps.length - 1].t)}</p>}
-        {swaps.length === 0 && <p className="mt-3 text-xs leading-relaxed text-fg-muted">{spot != null ? "A spot observation is available above. No confirmed swap history is available to plot yet." : "Refresh to look for parseable swaps. Missing history is never filled with simulated prices."}</p>}
+        {historicalOnly && <p className="mt-3 text-xs leading-relaxed text-fg-muted">DBC is historical after migration. Current DAMM v2 spot and verified reserves are shown in the active market panel below; incompatible venue data is not joined into this line.</p>}
+        {swaps.length === 0 && !historicalOnly && <p className="mt-3 text-xs leading-relaxed text-fg-muted">{spot != null ? "Live spot is marked on the chart. No confirmed DBC swap history is available to connect yet." : "Refresh to look for parseable swaps. Missing history is never filled with simulated prices."}</p>}
       </div>}
       <details className="rounded-xl border border-line p-4 sm:p-5" open={mode === "illustrative" ? true : undefined}>
         <summary className="text-sm font-medium text-fg-secondary">Theoretical curve shape <span className="ml-2 text-xs font-normal text-fg-muted">Illustrative · separate scale</span></summary>
@@ -100,6 +104,7 @@ export function PriceHistoryChart({
   progress,
   illustrative = false,
   priceMultiple = 15,
+  historicalOnly = false,
 }: Props) {
   const { connection } = useConnection();
   const [spotAt, setSpotAt] = useState<number | null>(null);
@@ -124,7 +129,7 @@ export function PriceHistoryChart({
       const result = await reconstructPoolPriceHistory(
         connection,
         new PublicKey(poolAddress),
-        { limit: 40 },
+        { limit: 100 },
       );
       setSpot(result.spot);
       setSpotAt(result.spot != null ? Date.now() : null);
@@ -173,10 +178,10 @@ export function PriceHistoryChart({
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {displaySpot != null && !illustrative && (
+          {displaySpot != null && !illustrative && !historicalOnly && (
             <span className="font-mono text-sm text-gold">
-              {formatPrice(displaySpot, quoteLabel)}
-              <span className="ml-1 text-xs text-fg-muted">{spotAt ? "live spot" : "cached spot"}</span>
+              <span className="block">{formatTokenPrice(displaySpot, quoteLabel).primary}</span>
+              <span className="block text-xs text-fg-muted">{formatTokenPrice(displaySpot, quoteLabel).secondary} · {spotAt ? "live spot" : "cached spot"}</span>
             </span>
           )}
           {poolAddress && !illustrative && (
@@ -199,6 +204,7 @@ export function PriceHistoryChart({
         progress={progress}
         priceMultiple={priceMultiple}
         mode={mode}
+        historicalOnly={historicalOnly}
       />
 
       <ul className="grid gap-1 text-xs text-fg-muted sm:grid-cols-3" data-testid="price-legend">
@@ -206,14 +212,14 @@ export function PriceHistoryChart({
           <span className="mt-1 inline-block h-0.5 w-3 shrink-0 bg-accent" />
           <span>
             <strong className="text-fg-secondary">Swap-derived history</strong> · execution price (incl. fees) of
-            confirmed swaps in the last {meta.scanned || 40} pool signatures. Partial, not a full chart.
+            confirmed swaps in the last {meta.scanned || 100} pool signatures. Partial when the RPC range is exhausted.
           </span>
         </li>
         <li className="flex items-start gap-1.5">
           <span className="mt-0.5 inline-block h-2 w-2 shrink-0 rounded-full bg-gold" />
           <span>
-            <strong className="text-fg-secondary">{displaySpot == null ? "Spot observation" : spotAt ? "Live spot" : "Cached spot"}</strong> · marginal price from the pool&apos;s √price
-            {spotAt ? `, read ${new Date(spotAt).toLocaleTimeString()}` : displaySpot != null ? ", cached in this browser; observation time unavailable" : ""}. No fee, no size.
+            <strong className="text-fg-secondary">{historicalOnly ? "DBC spot archived" : displaySpot == null ? "Spot observation" : spotAt ? "Live spot" : "Cached spot"}</strong> · marginal price from the pool&apos;s √price
+            {spotAt ? `, read ${formatMarketTimestamp(spotAt, false)}` : displaySpot != null ? ", cached in this browser; observation time unavailable" : ""}. No fee, no size.
           </span>
         </li>
         <li className="flex items-start gap-1.5">

@@ -1,4 +1,4 @@
-import { getTokenProgram } from "@meteora-ag/cp-amm-sdk";
+import { getPriceFromSqrtPrice, getTokenProgram } from "@meteora-ag/cp-amm-sdk";
 import { getMint } from "@solana/spl-token";
 import { PublicKey, type Connection } from "@solana/web3.js";
 import type { DestinationCheck } from "@/lib/dbc/curveState";
@@ -102,6 +102,9 @@ export async function fetchDammPoolSnapshot(args: {
       sqrtPrice: "0",
       tokenADecimals: 0,
       tokenBDecimals: 0,
+      tokenAReserve: null,
+      tokenBReserve: null,
+      spotQuotePerBase: null,
     };
   }
 
@@ -121,6 +124,19 @@ export async function fetchDammPoolSnapshot(args: {
     readMintDecimals(connection, state.tokenAMint, tokenAProgram),
     readMintDecimals(connection, state.tokenBMint, tokenBProgram),
   ]);
+  const [tokenAReserve, tokenBReserve] = await Promise.all([
+    withRpcRetry(() => connection.getTokenAccountBalance(state.tokenAVault, "confirmed")).then((value) => value.value.amount).catch(() => null),
+    withRpcRetry(() => connection.getTokenAccountBalance(state.tokenBVault, "confirmed")).then((value) => value.value.amount).catch(() => null),
+  ]);
+  let spotQuotePerBase: string | null = null;
+  try {
+    const priceBPerA = Number(String(getPriceFromSqrtPrice(state.sqrtPrice, tokenADecimals, tokenBDecimals)));
+    const baseIsA = state.tokenAMint.toBase58() === baseMint;
+    const oriented = baseIsA ? priceBPerA : 1 / priceBPerA;
+    spotQuotePerBase = Number.isFinite(oriented) && oriented > 0 ? String(oriented) : null;
+  } catch {
+    spotQuotePerBase = null;
+  }
 
   return {
     address: pool.toBase58(),
@@ -135,5 +151,8 @@ export async function fetchDammPoolSnapshot(args: {
     sqrtPrice: state.sqrtPrice?.toString?.() ?? String(state.sqrtPrice),
     tokenADecimals,
     tokenBDecimals,
+    tokenAReserve,
+    tokenBReserve,
+    spotQuotePerBase,
   };
 }

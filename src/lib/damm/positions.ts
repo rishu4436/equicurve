@@ -18,10 +18,22 @@ export function toDammPositionView(
   row: { position: PublicKey; positionNftAccount: PublicKey; positionState: PositionState },
 ): DammPositionView {
   const st = row.positionState;
+  const details = st as unknown as {
+    nftMint?: PublicKey;
+    owner?: PublicKey;
+    permanentLockedLiquidity?: { toString(): string };
+    unlockedLiquidity?: { toString(): string };
+  };
+  const permanent = BigInt(details.permanentLockedLiquidity?.toString?.() ?? "0");
+  const unlocked = BigInt(details.unlockedLiquidity?.toString?.() ?? "0");
   const fees = getUnClaimLpFee(poolState, st);
   return {
     position: row.position.toBase58(),
     positionNftAccount: row.positionNftAccount.toBase58(),
+    positionNftMint: details.nftMint?.toBase58?.(),
+    owner: details.owner?.toBase58?.(),
+    lockState: permanent > 0n && unlocked === 0n ? "permanently-locked" : permanent > 0n ? "partially-locked" : "unlocked",
+    liquidityStatus: permanent + unlocked > 0n ? "active" : "empty",
     unlockedLiquidity: st.unlockedLiquidity?.toString?.() ?? "0",
     feeAPending: fees.feeTokenA.toString(),
     feeBPending: fees.feeTokenB.toString(),

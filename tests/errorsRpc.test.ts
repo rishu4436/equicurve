@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { EquiCurveError, mapError, parseCustomErrorCode } from "@/lib/errors";
-import { isTransientRpcError, withRpcRetry, withTimeout, RpcTimeoutError } from "@/lib/rpc";
+import { dedupeRpcRead, isTransientRpcError, withRpcFallback, withRpcRetry, withTimeout, RpcTimeoutError } from "@/lib/rpc";
 
 const DBC = "dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN";
 const DAMM = "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG";
@@ -52,6 +52,20 @@ describe("mapError", () => {
 });
 
 describe("withRpcRetry", () => {
+  it("coalesces concurrent identical reads without caching settled chain data", async () => {
+    let calls = 0;
+    let release!: (value: number) => void;
+    const pending = new Promise<number>((resolve) => { release = resolve; });
+    const read = () => { calls += 1; return pending; };
+    const a = dedupeRpcRead("same", read);
+    const b = dedupeRpcRead("same", read);
+    expect(calls).toBe(1);
+    release(7);
+    await expect(Promise.all([a, b])).resolves.toEqual([7, 7]);
+    await dedupeRpcRead("same", async () => { calls += 1; return 8; });
+    expect(calls).toBe(2);
+  });
+
   it("retries transient errors then succeeds", async () => {
     let calls = 0;
     const sleeps: number[] = [];
@@ -66,7 +80,27 @@ describe("withRpcRetry", () => {
     expect(r).toBe("ok");
     expect(calls).toBe(3);
     expect(sleeps).toHaveLength(2);
-    expect(sleeps[1]).toBeGreaterThan(sleeps[0] * 1.5 - 1);
+    expect(sleeps).toEqual([250, 500]);
+  });
+
+  it("falls back only across the bounded list for transient read failures", async () => {
+    const calls: string[] = [];
+    const result = await withRpcFallback(["primary", "backup"], async (source) => {
+      calls.push(source);
+      if (source === "primary") throw new Error("429 Too Many Requests");
+      return "ok";
+    }, { retries: 0 });
+    expect(result).toBe("ok");
+    expect(calls).toEqual(["primary", "backup"]);
+  });
+
+  it("does not switch endpoints for a non-transient read error", async () => {
+    const calls: string[] = [];
+    await expect(withRpcFallback(["primary", "backup"], async (source) => {
+      calls.push(source);
+      throw new Error("invalid account data");
+    }, { retries: 0 })).rejects.toThrow(/invalid account/);
+    expect(calls).toEqual(["primary"]);
   });
 
   it("does not retry non-transient errors", async () => {
