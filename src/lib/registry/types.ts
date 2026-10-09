@@ -18,7 +18,7 @@ export type RegistryMeta = {
  * Trust model:
  * - pool / mint / config / creator / quote / feeClaimer / lock / status /
  *   isMigrated / dammPool are written ONLY from on-chain reads by the server.
- * - name / ticker / thesis / sector / preset / raiseTarget / website are an
+ * - name / ticker / thesis / sector / preset / raiseTarget / website / xProfile are an
  *   off-chain profile authored by the on-chain creator (wallet-signed).
  * - design is that creator's signed config attestation. It is not a
  *   verification flag. The deployment chip comes from a live chain comparison.
@@ -45,6 +45,8 @@ export type RegistryLaunch = {
   presetId: PresetId;
   raiseTarget: number;
   website?: string;
+  /** Canonical creator-provided X profile, included only when signed. */
+  xProfile?: string;
 
   cluster: string;
   createdAt: string;

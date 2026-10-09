@@ -37,6 +37,9 @@ import { fetchPoolSnapshot } from "@/lib/dbc/migrate";
 import type { PoolSnapshot } from "@/lib/dbc/types";
 import type { DesignedMarket } from "@/lib/market/types";
 import type { DemoOffering } from "@/lib/demo/offerings";
+import type { PublicRegistryLaunch } from "@/lib/registry/types";
+import type { TokenMetadataJson } from "@/lib/metadata/store";
+import { isLocalTokenImageUrl, normalizeHttpsUrl, normalizeXProfile } from "@/lib/validation";
 import {
   getLaunch,
   listActivity,
@@ -87,6 +90,8 @@ export function OfferingDetailClient({ id, demo }: Props) {
   const { connection } = useConnection();
   const [tab, setTab] = useState<TabId>("Overview");
   const [launch, setLaunch] = useState<StoredLaunch | null>(null);
+  const [registryLaunch, setRegistryLaunch] = useState<PublicRegistryLaunch | null>(null);
+  const [tokenMetadata, setTokenMetadata] = useState<TokenMetadataJson | null>(null);
   const [activity, setActivity] = useState<StoredActivity[]>([]);
   const [rpcActivity, setRpcActivity] = useState<RpcActivity[]>([]);
   const [rpcActivityError, setRpcActivityError] = useState<string | null>(null);
@@ -122,6 +127,36 @@ export function OfferingDetailClient({ id, demo }: Props) {
       listActivity(getLaunch(id)?.pool ?? (id.length >= 32 ? id : undefined)),
     );
   }, [id, historyNonce]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const pool = launch?.pool ?? (demo?.pool ?? (id.length >= 32 && !demo ? id : null));
+    if (!pool) {
+      setRegistryLaunch(null);
+      return;
+    }
+    void fetch("/api/launches", { cache: "no-store" })
+      .then((response) => response.json())
+      .then((body: { launches?: PublicRegistryLaunch[] }) => {
+        if (!cancelled) setRegistryLaunch(body.launches?.find((row) => row.pool === pool) ?? null);
+      })
+      .catch(() => { if (!cancelled) setRegistryLaunch(null); });
+    return () => { cancelled = true; };
+  }, [id, demo, demo?.pool, launch?.pool, historyNonce]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const mint = snapshot?.baseMint ?? launch?.mint ?? demo?.mint;
+    if (!mint) {
+      setTokenMetadata(null);
+      return;
+    }
+    void fetch(`/api/metadata/${encodeURIComponent(mint)}`, { cache: "no-store" })
+      .then((response) => response.ok ? response.json() as Promise<TokenMetadataJson> : null)
+      .then((body) => { if (!cancelled) setTokenMetadata(body); })
+      .catch(() => { if (!cancelled) setTokenMetadata(null); });
+    return () => { cancelled = true; };
+  }, [demo?.mint, launch?.mint, snapshot?.baseMint, historyNonce]);
 
   const refreshSnap = useCallback(async () => {
     if (!poolAddress) {
@@ -258,16 +293,18 @@ export function OfferingDetailClient({ id, demo }: Props) {
     };
   }, [connection, snapshot, launch, demo, historyNonce]);
 
-  const name = launch?.name ?? demo?.name ?? "Live DBC pool";
-  const ticker = launch?.ticker ?? demo?.ticker ?? "POOL";
+  const profile = registryLaunch?.verified ? registryLaunch : (launch?.registryVerified ? launch : null);
+  const name = launch?.name ?? registryLaunch?.name ?? demo?.name ?? "Live DBC pool";
+  const ticker = launch?.ticker ?? registryLaunch?.ticker ?? demo?.ticker ?? "POOL";
   const thesis =
     launch?.thesis ??
+    registryLaunch?.thesis ??
     demo?.thesis ??
     "On-chain pool opened via EquiCurve Create. Trade on-curve; graduate to DAMM v2 when ready.";
-  const sector = launch?.sector ?? demo?.sector ?? "Other";
+  const sector = launch?.sector ?? registryLaunch?.sector ?? demo?.sector ?? "Other";
   const quote = snapshot?.quoteMint
     ? quoteLabelForMint(snapshot.quoteMint)
-    : launch?.quote ?? demo?.quote ?? "SOL";
+    : launch?.quote ?? registryLaunch?.quote ?? demo?.quote ?? "SOL";
   const lockPct = snapshot?.lockPct ?? launch?.lockPct ?? demo?.lockPct ?? 10;
   const holderRows = holders.supplyAtoms != null && holders.decimals != null
     ? tokenAccountDistribution({
@@ -283,8 +320,8 @@ export function OfferingDetailClient({ id, demo }: Props) {
   const creatorBalance = holders.creatorBalanceAtoms != null && holders.decimals != null
     ? `${formatAtomsExact(holders.creatorBalanceAtoms, holders.decimals)} ${ticker}`
     : null;
-  const presetId = launch?.presetId ?? demo?.presetId ?? "short";
-  const raiseTarget = launch?.raiseTarget ?? demo?.raiseTarget ?? 0;
+  const presetId = launch?.presetId ?? registryLaunch?.presetId ?? demo?.presetId ?? "short";
+  const raiseTarget = launch?.raiseTarget ?? registryLaunch?.raiseTarget ?? demo?.raiseTarget ?? 0;
   const raisedDemo = demo?.raised ?? 0;
   const mintRetained = launch?.mintRenounce === false;
 
@@ -321,6 +358,10 @@ export function OfferingDetailClient({ id, demo }: Props) {
   const config = snapshot?.config ?? launch?.config;
   const migrationCfg = snapshot ? migrationConfigForSnapshot(snapshot) : null;
   const dammConfig = migrationCfg?.expectedDammConfig ?? null;
+  const website = profile ? normalizeHttpsUrl(profile.website) : null;
+  const xProfile = profile ? normalizeXProfile(profile.xProfile) : null;
+  const projectImage = launch?.image ?? tokenMetadata?.image ?? null;
+  const safeProjectImage = projectImage && (isLocalTokenImageUrl(projectImage) || normalizeHttpsUrl(projectImage)) ? projectImage : null;
 
   return (
     <EligibilityGate
@@ -345,8 +386,11 @@ export function OfferingDetailClient({ id, demo }: Props) {
 
         <header className="flex flex-col gap-6 border-b border-line pb-8 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-card border border-line bg-subtle text-xl font-semibold text-accent">
-              {ticker.slice(0, 2)}
+            <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-card border border-line bg-subtle text-xl font-semibold text-accent">
+              {safeProjectImage ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={safeProjectImage} alt="Project image" className="h-full w-full object-cover" />
+              ) : ticker.slice(0, 2)}
             </div>
             <div>
               <h1 className="text-2xl font-semibold text-fg-primary">{name}</h1>
@@ -369,6 +413,8 @@ export function OfferingDetailClient({ id, demo }: Props) {
                 </span>
                 <span className="ec-chip">Quote: {quote}</span>
                 <span className="ec-chip">Active venue: {lifecycle.activeVenue}</span>
+                {website && <a href={website} target="_blank" rel="noopener noreferrer" className="ec-chip text-accent hover:underline">Website ↗</a>}
+                {xProfile && <a href={xProfile} target="_blank" rel="noopener noreferrer" className="ec-chip text-accent hover:underline">X ↗</a>}
               </div>
               {(mint || poolAddress) && (
                 <p className="mt-2 font-mono text-xs text-fg-muted">

@@ -27,6 +27,11 @@ export type StoredLaunch = {
   sector: Sector;
   quote: "SOL" | "USDC";
   raiseTarget: number;
+  website?: string;
+  xProfile?: string;
+  image?: string;
+  /** True only after a creator-signed remote registry write was accepted. */
+  registryVerified?: boolean;
   presetId: PresetId;
   /** Legacy display field; prefer feeIssuerPct. */
   feeBps: number;

@@ -24,7 +24,7 @@ import {
   signedLaunchBodySchema,
   verifyLaunchAuth,
 } from "@/lib/auth/launchAuth";
-import { addressSchema, firstIssue, type LaunchProfile } from "@/lib/validation";
+import { addressSchema, firstIssue, normalizeLaunchProfile, type LaunchProfile } from "@/lib/validation";
 import type { RegistryDesign } from "./design";
 import type { RegistryLaunch } from "./types";
 import { quoteVerificationError, supportedQuoteLabel } from "./quote";
@@ -67,6 +67,7 @@ export function entryFromChain(args: {
     presetId: prev?.presetId ?? "flat",
     raiseTarget: prev?.raiseTarget ?? 0,
     website: prev?.website,
+    xProfile: prev?.xProfile,
   };
   return {
     pool: s.pool,
@@ -88,6 +89,7 @@ export function entryFromChain(args: {
     presetId: base.presetId,
     raiseTarget: base.raiseTarget,
     website: base.website || undefined,
+    xProfile: base.xProfile || undefined,
     cluster,
     createdAt: prev?.createdAt ?? nowIso,
     registeredAt: prev?.registeredAt ?? nowIso,
@@ -104,6 +106,7 @@ function sameDesign(a: RegistryDesign | null | undefined, b: RegistryDesign | nu
 }
 
 function sameProfile(prev: RegistryLaunch, p: LaunchProfile): boolean {
+  const next = normalizeLaunchProfile(p);
   return (
     canonicalJson({
       name: prev.name,
@@ -113,7 +116,8 @@ function sameProfile(prev: RegistryLaunch, p: LaunchProfile): boolean {
       presetId: prev.presetId,
       raiseTarget: prev.raiseTarget,
       website: prev.website || undefined,
-    }) === canonicalJson({ ...p, website: p.website || undefined })
+      xProfile: prev.xProfile || undefined,
+    }) === canonicalJson({ ...next, website: next.website || undefined, xProfile: next.xProfile || undefined })
   );
 }
 
@@ -139,6 +143,7 @@ export async function authorizeRegistration(args: {
   }
   const v = verifyLaunchAuth(body, args.nowMs);
   if (!v.ok) return fail(v.status, v.code, v.error);
+  const profile = normalizeLaunchProfile(payload.profile);
 
   const chain = await args.lookup(payload.pool);
   if (chain.status === "not_found") {
@@ -160,7 +165,7 @@ export async function authorizeRegistration(args: {
   const existing = await args.getExisting(payload.pool);
   if (existing?.authIssuedAt && Date.parse(existing.authIssuedAt) >= v.issuedAtMs) {
     const designKept = payload.design == null || sameDesign(existing.design, payload.design);
-    if (existing.authSigner === v.signer && sameProfile(existing, payload.profile) && designKept) {
+    if (existing.authSigner === v.signer && sameProfile(existing, profile) && designKept) {
       return { ok: true, entry: existing, unchanged: true };
     }
     return fail(409, "stale_authorization", "A newer authorization for this pool is already stored");
@@ -168,7 +173,7 @@ export async function authorizeRegistration(args: {
   const nextDesign = payload.design ?? existing?.design ?? null;
   const entry = entryFromChain({
     snapshot: snap,
-    profile: payload.profile,
+    profile,
     prev: existing,
     cluster: args.serverCluster,
     nowIso: new Date(args.nowMs).toISOString(),
@@ -179,7 +184,7 @@ export async function authorizeRegistration(args: {
   const unchanged =
     !!existing &&
     existing.authSigner === v.signer &&
-    sameProfile(existing, payload.profile) &&
+    sameProfile(existing, profile) &&
     sameDesign(existing.design, nextDesign);
   if (!entry) return fail(503, "config_unavailable", "Pool configuration could not be verified");
   return { ok: true, entry, unchanged };

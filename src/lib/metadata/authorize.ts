@@ -15,7 +15,7 @@
  *   identical content from the owner is an idempotent no-op
  */
 import { canonicalJson, signedLaunchBodySchema, verifyLaunchAuth } from "@/lib/auth/launchAuth";
-import { firstIssue } from "@/lib/validation";
+import { firstIssue, isLocalTokenImageUrl } from "@/lib/validation";
 import type { ChainLookupResult } from "@/lib/registry/authorize";
 import type { ImageCheckResult } from "./imageCheck";
 import { checkMetadataEdit } from "./policy";
@@ -91,7 +91,7 @@ export async function authorizeMetadataWrite(args: {
   };
 
   const imageOk = async (): Promise<MetadataWriteResult | null> => {
-    if (!meta.image || !args.checkImage) return null;
+    if (!meta.image || isLocalTokenImageUrl(meta.image) || !args.checkImage) return null;
     // Unchanged image on an existing record is not re-fetched.
     if (args.existing?.meta.image === meta.image) return null;
     const r = await args.checkImage(meta.image);

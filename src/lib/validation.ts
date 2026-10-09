@@ -125,6 +125,16 @@ export function isHttpsUrl(value: unknown): value is string {
   }
 }
 
+/** Normalize an accepted HTTPS URL without weakening the shared URL policy. */
+export function normalizeHttpsUrl(value: unknown): string | null {
+  if (!isHttpsUrl(value)) return null;
+  try {
+    return new URL(String(value).trim()).toString();
+  } catch {
+    return null;
+  }
+}
+
 export const httpsUrlSchema = z
   .string()
   .trim()
@@ -135,6 +145,44 @@ export const optionalHttpsUrlSchema = z
   .string()
   .trim()
   .refine((s) => s === "" || isHttpsUrl(s), `Must be empty or an https:// URL (max ${LIMITS.urlMax} chars)`);
+
+const X_HANDLE_RE = /^[A-Za-z0-9_]{1,15}$/;
+
+/** Return the canonical public X profile URL, or null for every other URL. */
+export function normalizeXProfile(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const raw = value.trim();
+  if (!raw || raw.length > LIMITS.urlMax || !noControl(raw)) return null;
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash) return null;
+    const host = url.hostname.toLowerCase().replace(/^www\./, "");
+    if (host !== "x.com" && host !== "twitter.com") return null;
+    const parts = url.pathname.split("/").filter(Boolean);
+    if (parts.length !== 1 || !X_HANDLE_RE.test(parts[0] ?? "")) return null;
+    return `https://x.com/${parts[0]}`;
+  } catch {
+    return null;
+  }
+}
+
+export const optionalXProfileSchema = z
+  .string()
+  .trim()
+  .refine((s) => s === "" || normalizeXProfile(s) !== null, "Use an https://x.com/<handle> profile (1–15 letters, numbers or underscores)");
+
+/** Local uploads are same-origin paths; remote metadata remains HTTPS-only. */
+export function isLocalTokenImageUrl(value: unknown): value is string {
+  return typeof value === "string" && /^\/uploads\/token-images\/[a-f0-9-]{36}\.(?:png|jpg|webp|avif)$/i.test(value);
+}
+
+export const optionalImageUrlSchema = z
+  .string()
+  .trim()
+  .refine(
+    (s) => s === "" || isHttpsUrl(s) || isLocalTokenImageUrl(s),
+    `Must be empty, a local uploaded image, or an https:// URL (max ${LIMITS.urlMax} chars)`,
+  );
 
 /* --------------------------------------------------------------- numbers */
 
@@ -164,10 +212,18 @@ export const launchProfileSchema = z
     presetId: presetIdSchema,
     raiseTarget: raiseTargetSchema,
     website: optionalHttpsUrlSchema.optional(),
+    xProfile: optionalXProfileSchema.optional(),
   })
   .strict();
 
 export type LaunchProfile = z.infer<typeof launchProfileSchema>;
+
+/** Canonical profile values before they are persisted or sent in a new signature. */
+export function normalizeLaunchProfile(profile: LaunchProfile): LaunchProfile {
+  const website = profile.website ? normalizeHttpsUrl(profile.website) ?? undefined : undefined;
+  const xProfile = profile.xProfile ? normalizeXProfile(profile.xProfile) ?? undefined : undefined;
+  return { ...profile, website, xProfile };
+}
 
 /** Hosted token metadata JSON (Metaplex-style off-chain JSON). */
 export const tokenMetadataSchema = z
@@ -175,7 +231,7 @@ export const tokenMetadataSchema = z
     name: nameSchema,
     symbol: symbolSchema,
     description: descriptionSchema,
-    image: optionalHttpsUrlSchema,
+    image: optionalImageUrlSchema,
     external_url: optionalHttpsUrlSchema.optional(),
   })
   .strict();
@@ -198,6 +254,7 @@ export type WizardValidationInput = {
   thesis: string;
   sector: string;
   website: string;
+  xProfile?: string;
   uri: string;
   /** Token image URL (optional, https). */
   image?: string;
@@ -246,8 +303,9 @@ export function validateWizard(s: WizardValidationInput): FieldErrors {
   e.thesis = check(thesisSchema, s.thesis);
   e.sector = check(sectorSchema, s.sector);
   e.website = check(optionalHttpsUrlSchema, s.website);
+  e.xProfile = check(optionalXProfileSchema, s.xProfile ?? "");
   e.uri = validateMetadataUriOverride(s.uri);
-  e.image = check(optionalHttpsUrlSchema, s.image ?? "");
+  e.image = check(optionalImageUrlSchema, s.image ?? "");
   e.raiseTarget = check(raiseTargetSchema, s.raiseTarget);
   e.quote = check(quoteSchema, s.quote);
   e.seedBuy = validateSeedBuy(s.seedBuy, s.quote);

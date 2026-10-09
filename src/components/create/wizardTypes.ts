@@ -4,6 +4,7 @@ import { MIN_LP_LOCK_PCT } from "@/lib/dbc/presets";
 import { parseUiAmount } from "@/lib/amounts";
 import type { AssetKind, ConstraintBudget, DesignedMarket, MarketObjective } from "@/lib/market/types";
 import { validateWizard, type FieldErrors } from "@/lib/validation";
+import type { ImageUploadState } from "./TokenImageUpload";
 
 export const WIZARD_STEPS = [
   { id: "basics", label: "Asset" },
@@ -50,6 +51,7 @@ export type WizardState = {
   thesis: string;
   sector: Sector;
   website: string;
+  xProfile: string;
   raiseTarget: number;
   /** Quote mint wired on-chain when known for cluster (SOL default). */
   quote: "SOL" | "USDC";
@@ -98,6 +100,8 @@ export type WizardState = {
   uri: string;
   /** Token image (https). Checked server-side (type / size) before it is stored. */
   image: string;
+  imageUploadState: ImageUploadState;
+  imageUploadError: string;
   totalSupply: number;
 };
 
@@ -107,6 +111,7 @@ export const INITIAL_WIZARD: WizardState = {
   thesis: "",
   sector: "Equity",
   website: "",
+  xProfile: "",
   raiseTarget: 100,
   quote: "SOL",
   seedBuy: "0",
@@ -142,6 +147,8 @@ export const INITIAL_WIZARD: WizardState = {
   feeClaimer: "",
   uri: "",
   image: "",
+  imageUploadState: "idle",
+  imageUploadError: "",
   totalSupply: 1_000_000_000,
 };
 
@@ -151,7 +158,7 @@ export function stepIndex(id: WizardStepId): number {
 
 /** Fields validated on each step (schema-backed via validateWizard). */
 export const STEP_FIELDS: Record<WizardStepId, (keyof FieldErrors)[]> = {
-  basics: ["name", "ticker", "thesis", "sector", "website", "uri", "image"],
+  basics: ["name", "ticker", "thesis", "sector", "website", "xProfile", "uri", "image"],
   goals: ["raiseTarget", "quote", "seedBuy", "totalSupply"],
   terms: ["feeIssuer", "lpLockPct", "feeClaimer"],
   design: ["presetId"],
@@ -225,6 +232,7 @@ export function stepErrors(step: WizardStepId, s: WizardState): FieldErrors {
 
 export function canContinue(step: WizardStepId, s: WizardState): boolean {
   if (Object.keys(stepErrors(step, s)).length > 0) return false;
+  if (step === "basics" && ["uploading", "invalid", "failed"].includes(s.imageUploadState)) return false;
   switch (step) {
     case "basics":
       return true;

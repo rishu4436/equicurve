@@ -3,7 +3,7 @@
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { ImageUrlField } from "@/components/create/ImageUrlField";
+import { TokenImageUpload } from "@/components/create/TokenImageUpload";
 import { signLaunchPayload, type LaunchAuthPayload } from "@/lib/auth/launchAuth";
 import { getCluster } from "@/lib/constants";
 import { toUserMessage } from "@/lib/errors";
@@ -109,7 +109,7 @@ export function MetadataEditor({ pool, mint, creator }: { pool: string; mint: st
             <span className="ec-label">Description</span>
             <textarea className="ec-input min-h-[64px]" maxLength={500} value={description} onChange={(e) => setDescription(e.target.value)} />
           </label>
-          <ImageUrlField value={image} onChange={setImage} />
+          <TokenImageUpload value={image} onChange={setImage} />
           <label className="block space-y-1.5">
             <span className="ec-label">Website</span>
             <input className="ec-input" value={website} onChange={(e) => setWebsite(e.target.value.trim())} placeholder="https://" />
@@ -119,6 +119,9 @@ export function MetadataEditor({ pool, mint, creator }: { pool: string; mint: st
           </button>
           <p className="text-xs text-fg-muted">
             Free message signature, no transaction. Wallets and explorers may cache the old JSON for a while.
+          </p>
+          <p className="text-xs text-fg-muted">
+            X is bound to the creator-signed launch profile in Phase 1; signed X editing will follow in a later profile-editor phase.
           </p>
         </>
       )}

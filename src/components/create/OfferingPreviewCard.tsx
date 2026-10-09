@@ -3,6 +3,7 @@
 import { CurveMiniViz } from "@/components/ui/CurveMiniViz";
 import { getPreset } from "@/lib/dbc/presets";
 import type { WizardState } from "./wizardTypes";
+import { isLocalTokenImageUrl, normalizeHttpsUrl, normalizeXProfile } from "@/lib/validation";
 
 export function OfferingPreviewCard({ state }: { state: WizardState }) {
   const preset = getPreset(state.presetId);
@@ -10,13 +11,19 @@ export function OfferingPreviewCard({ state }: { state: WizardState }) {
     Boolean,
   ).length;
   const feePlatform = 100 - state.feeIssuer;
+  const website = normalizeHttpsUrl(state.website);
+  const xProfile = normalizeXProfile(state.xProfile);
+  const image = state.image && (isLocalTokenImageUrl(state.image) || normalizeHttpsUrl(state.image)) ? state.image : "";
 
   return (
     <aside className="ec-card space-y-5 self-start p-5 lg:sticky lg:top-28">
       <div className="flex justify-between border-b border-line pb-4 text-xs"><span className="font-medium text-fg-secondary">Your market brief</span><span className="text-fg-muted">Draft preview</span></div>
       <div className="flex items-start gap-3">
-        <div className="flex h-12 w-12 items-center justify-center rounded-card border border-line bg-subtle text-lg font-semibold text-accent">
-          {(state.ticker || "??").slice(0, 2)}
+        <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-card border border-line bg-subtle text-lg font-semibold text-accent">
+          {image ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={image} alt="Project image preview" className="h-full w-full object-cover" />
+          ) : (state.ticker || "??").slice(0, 2)}
         </div>
         <div className="min-w-0 flex-1">
           <p className="truncate font-semibold text-fg-primary">
@@ -28,6 +35,13 @@ export function OfferingPreviewCard({ state }: { state: WizardState }) {
           <span className="ec-chip mt-1">{state.sector}</span>
         </div>
       </div>
+
+      {(website || xProfile) && (
+        <div className="flex flex-wrap gap-1.5 text-xs">
+          {website && <a href={website} target="_blank" rel="noopener noreferrer" className="ec-chip text-accent hover:underline">Website ↗</a>}
+          {xProfile && <a href={xProfile} target="_blank" rel="noopener noreferrer" className="ec-chip text-accent hover:underline">X ↗</a>}
+        </div>
+      )}
 
       <p className="line-clamp-2 text-sm text-fg-secondary">
         {state.thesis || "One-line thesis appears here as you type…"}

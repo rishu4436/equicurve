@@ -1,6 +1,6 @@
 import type { PublicRegistryLaunch, RegistryFilePayload, RegistryLaunch } from "./types";
 import { parseStoredDesign } from "./design";
-import { isValidPublicKey, PRESET_IDS, SECTORS } from "@/lib/validation";
+import { isValidPublicKey, normalizeHttpsUrl, normalizeXProfile, PRESET_IDS, SECTORS } from "@/lib/validation";
 import { registryUsdcMints, supportedQuoteLabel } from "./quote";
 
 export const MAX_REGISTRY_ENTRIES = 500;
@@ -100,7 +100,8 @@ export function coerceStoredLaunch(raw: unknown): RegistryLaunch | null {
       ? (r.presetId as RegistryLaunch["presetId"])
       : "flat",
     raiseTarget: typeof r.raiseTarget === "number" && r.raiseTarget >= 0 ? r.raiseTarget : 0,
-    website: typeof r.website === "string" && r.website ? r.website : undefined,
+    website: typeof r.website === "string" && r.website ? normalizeHttpsUrl(r.website) ?? undefined : undefined,
+    xProfile: typeof r.xProfile === "string" && r.xProfile ? normalizeXProfile(r.xProfile) ?? undefined : undefined,
     cluster: str(r.cluster, 20) || "devnet",
     createdAt: str(r.createdAt, 40) || now,
     registeredAt: str(r.registeredAt, 40) || now,

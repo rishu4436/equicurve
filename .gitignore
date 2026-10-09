@@ -31,6 +31,9 @@ next-env.d.ts
 # Local token metadata store
 data/
 
+# Local-first direct image uploads (runtime-only; never commit user assets)
+data/uploads/
+
 # Vercel link metadata (created by `vercel link`)
 .vercel
 

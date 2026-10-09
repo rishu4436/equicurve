@@ -23,11 +23,11 @@ import { constraintFailureFromDesigned } from "@/lib/market/constraintNotice";
 import { SEARCH_MAX_RAISE_UI } from "@/lib/market/searchDomain";
 import { MarketDesignStep } from "./MarketDesignStep";
 import { LaunchReceiptCard } from "./LaunchReceiptCard";
-import { ImageUrlField } from "./ImageUrlField";
+import { TokenImageUpload } from "./TokenImageUpload";
 import type { ImageCheckResult } from "@/lib/metadata/imageCheck";
 import type { PresetId } from "@/lib/dbc/types";
 import { toUserMessage } from "@/lib/errors";
-import { validateSeedBuy } from "@/lib/validation";
+import { isLocalTokenImageUrl, normalizeHttpsUrl, normalizeXProfile, validateSeedBuy } from "@/lib/validation";
 import { pushActivity, upsertLaunch } from "@/lib/local/launches";
 import { registerLaunchRemote } from "@/lib/registry/client";
 import { setFreshBlockhash, signAndSendTransaction } from "@/lib/send";
@@ -240,7 +240,7 @@ export function CreateWizard() {
       setReceipt(next);
     };
     try {
-      if (image) {
+      if (image && !isLocalTokenImageUrl(image)) {
         const chk = (await fetch(`/api/image-check?url=${encodeURIComponent(image)}`, { cache: "no-store" })
           .then((r) => r.json())
           .catch(() => ({ ok: false, error: "image check failed (network)" }))) as ImageCheckResult;
@@ -250,7 +250,10 @@ export function CreateWizard() {
       const planned = planLaunchAddresses({ quoteLabel: state.quote, keypairs: launchKeypairs });
       const cluster = getCluster();
       const description = state.thesis.trim();
-      const website = state.website.trim();
+      const website = state.website.trim() ? normalizeHttpsUrl(state.website) : null;
+      const xProfile = state.xProfile.trim() ? normalizeXProfile(state.xProfile) : null;
+      if (state.website.trim() && !website) throw new Error("Website must be a valid HTTPS URL.");
+      if (state.xProfile.trim() && !xProfile) throw new Error("X profile must be an https://x.com/<handle> URL.");
       const payload: LaunchAuthPayload = {
         v: 1,
         action: "launch",
@@ -265,6 +268,7 @@ export function CreateWizard() {
           presetId: state.presetId,
           raiseTarget: state.raiseTarget,
           ...(website ? { website } : {}),
+          ...(xProfile ? { xProfile } : {}),
         },
         metadata: {
           name: state.name.trim(),
@@ -472,6 +476,9 @@ export function CreateWizard() {
         sector: state.sector,
         quote: prepared.quoteLabel,
         raiseTarget: state.raiseTarget,
+        website: website ?? undefined,
+        xProfile: xProfile ?? undefined,
+        image: image || undefined,
         presetId: state.presetId,
         designed: state.designed ?? undefined,
         feeBps: 0,
@@ -497,6 +504,10 @@ export function CreateWizard() {
         // Server verifies the signature, re-reads the pool on-chain and checks
         // the signer is the pool creator before listing it.
         const reg = await registerLaunchRemote(signed);
+        if (reg.ok) {
+          // Mark the browser record as backed by the same signed registry write.
+          upsertLaunch({ ...launchRecord, registryVerified: true });
+        }
         setLaunchLog((l) => [
           ...l,
           reg.ok
@@ -715,6 +726,10 @@ function StepBasics({
           ))}
         </select>
       </label>
+      <div className="rounded-card border border-line bg-subtle/30 p-4">
+        <p className="text-sm font-semibold text-fg-primary">Project presence</p>
+        <p className="mt-1 text-xs text-fg-muted">These links are included in your creator-signed profile and shown beside the offering identity.</p>
+      </div>
       <label className="block space-y-1.5">
         <span className="ec-label">Website (optional)</span>
         <input
@@ -724,11 +739,26 @@ function StepBasics({
           placeholder="https://"
         />
       </label>
-      <ImageUrlField value={state.image} onChange={(image) => patch({ image })} />
+      <label className="block space-y-1.5">
+        <span className="ec-label">X profile (optional)</span>
+        <input
+          className="ec-input"
+          value={state.xProfile}
+          onChange={(e) => patch({ xProfile: e.target.value })}
+          placeholder="https://x.com/yourhandle"
+          inputMode="url"
+        />
+        <p className="text-xs text-fg-muted">Creator-provided X · 1–15 letters, numbers or underscores.</p>
+      </label>
+      <TokenImageUpload
+        value={state.image}
+        onChange={(image) => patch({ image })}
+        onStatusChange={(imageUploadState, imageUploadError) => patch({ imageUploadState, imageUploadError: imageUploadError ?? "" })}
+      />
       <p className="rounded-input border border-line bg-subtle px-3 py-2 text-xs text-fg-muted">
         Name and ticker are written on-chain at launch and are <strong className="text-fg-primary">fixed forever</strong>{" "}
         (as is the mint address). After launch you can still edit the description, image and website with a
-        wallet-signed update on the offering page.
+        wallet-signed update on the offering page. X is launch-bound in Phase 1 and is not an unsigned editable field.
       </p>
       <details className="rounded-xl border border-line p-4">
       <summary className="text-sm text-fg-secondary">Advanced metadata settings</summary>
