@@ -11,6 +11,7 @@ import { effectiveScheduleStatus, type ScheduledLaunch } from "@/lib/schedule/ty
 import { getScheduledLaunchStore } from "@/lib/schedule/store";
 import { getRecordedDeployment } from "@/lib/registry/publicDeployments";
 import { getRegistryLaunch } from "@/lib/registry/store";
+import { readMetadata } from "@/lib/metadata/store";
 import { resolveDeploymentRecord, type ResolvedDeployment } from "@/lib/registry/design";
 import type { RegistryDesign } from "@/lib/registry/design";
 import type { RegistryLaunch } from "@/lib/registry/types";
@@ -330,6 +331,9 @@ export function buildScheduledPassport(schedule: ScheduledLaunch): PassportRespo
     config: null,
     creator: schedule.creatorWallet,
     quote: schedule.quote,
+    website: schedule.website || null,
+    xProfile: schedule.xProfile || null,
+    imageUrl: schedule.image || null,
     name: schedule.name,
     ticker: schedule.ticker,
     lifecycle: "Scheduled",
@@ -351,8 +355,9 @@ export function buildLivePassportFromReadings(args: {
   holders: HolderObservation | null;
   swapCount: number | null;
   checkedAt: string;
+  imageUrl?: string | null;
 }): PassportResponse {
-  const { id, registry, catalog, snapshot, onChain, destination, holders, swapCount, checkedAt } = args;
+  const { id, registry, catalog, snapshot, onChain, destination, holders, swapCount, checkedAt, imageUrl = null } = args;
   const resolved = args.resolved ?? resolveDeploymentRecord({ pool: id, registry, catalog });
   const design = designFromSources({ registry, registryDesign: registry.design, deployment: resolved, targetRaise: registry.raiseTarget, quote: registry.quote });
   const deployment = deploymentFromReadback({ resolved, registry, snapshot, onChain, checkedAt });
@@ -365,6 +370,9 @@ export function buildLivePassportFromReadings(args: {
     config: (resolved?.config ?? registry.config) || null,
     creator: registry.creator || null,
     quote: registry.quote,
+    website: registry.website || null,
+    xProfile: registry.xProfile || null,
+    imageUrl,
     name: registry.name,
     ticker: registry.ticker,
     lifecycle: lifecycleFor(snapshot, destination),
@@ -385,6 +393,8 @@ async function livePassport(id: string, registry: RegistryLaunch, catalog: Retur
   let destination: "exists" | "missing" | "unknown" | null = null;
   let holders: HolderObservation | null = null;
   let swapCount: number | null = null;
+  let imageUrl: string | null = null;
+  try { imageUrl = (await readMetadata(registry.mint))?.image || null; } catch { imageUrl = null; }
   if (connection) {
     try { snapshot = await withReadConnection(connection, (read) => fetchPoolSnapshot(read, pool), { server: true }); } catch { snapshot = null; }
     if (snapshot?.config && resolved) {
@@ -403,7 +413,7 @@ async function livePassport(id: string, registry: RegistryLaunch, catalog: Retur
       } catch { destination = "unknown"; }
     }
   }
-  return buildLivePassportFromReadings({ id, registry, catalog, resolved, snapshot, onChain, destination, holders, swapCount, checkedAt });
+  return buildLivePassportFromReadings({ id, registry, catalog, resolved, snapshot, onChain, destination, holders, swapCount, checkedAt, imageUrl });
 }
 
 export async function getPassport(id: string): Promise<PassportResponse> {

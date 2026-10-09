@@ -60,6 +60,9 @@ export type PassportMarket = {
   config: string | null;
   creator: string | null;
   quote: string | null;
+  website: string | null;
+  xProfile: string | null;
+  imageUrl: string | null;
   name: string;
   ticker: string;
   lifecycle: "Raising" | "Curve complete" | "Migrated" | "DAMM v2 active" | "Scheduled" | "Unknown";

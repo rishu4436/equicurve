@@ -29,7 +29,7 @@ const designRecord = {
 const registry = {
   pool: POOL, mint: MINT, config: "Config1111111111111111111111111111111111111", creator: CREATOR, quoteMint: MINT, quote: "SOL",
   feeClaimer: CREATOR, lockPct: 100, creatorFeePct: 70, status: "raising", isMigrated: false, dammPool: null,
-  name: "Passport Market", ticker: "PASS", thesis: "A test market", sector: "Other", presetId: "exponential", raiseTarget: 100,
+  name: "Passport Market", ticker: "PASS", thesis: "A test market", sector: "Other", presetId: "exponential", raiseTarget: 100, website: "https://example.com/pass", xProfile: "https://x.com/pass",
   cluster: "devnet", createdAt: "2026-10-09T00:00:00.000Z", registeredAt: "2026-10-09T00:00:00.000Z", updatedAt: "2026-10-09T00:00:00.000Z",
   chainCheckedAt: "2026-10-09T00:00:00.000Z", authSigner: CREATOR, authIssuedAt: "2026-10-09T00:00:00.000Z", design: designRecord,
 } as unknown as RegistryLaunch;
@@ -37,7 +37,7 @@ const registry = {
 const scheduled = {
   id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", creatorWallet: CREATOR, cluster: "devnet", status: "scheduled",
   createdAt: "2026-10-09T00:00:00.000Z", updatedAt: "2026-10-09T00:00:00.000Z", authIssuedAt: "2026-10-09T00:00:00.000Z", authSignature: "signature",
-  name: "Upcoming Passport", ticker: "UP", thesis: "Scheduled", sector: "Other", website: "", xProfile: "", image: "", presetId: "exponential", raiseTarget: 100, quote: "SOL", totalSupply: 1_000_000,
+  name: "Upcoming Passport", ticker: "UP", thesis: "Scheduled", sector: "Other", website: "https://example.com/upcoming", xProfile: "https://x.com/upcoming", image: "/uploads/token-images/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.png", presetId: "exponential", raiseTarget: 100, quote: "SOL", totalSupply: 1_000_000,
   seedBuy: "0", feeIssuerPct: 70, lpLockPct: 100, antiSniper: true, mintRenounce: true, feeClaimer: "", transferProfile: "open-spl", designFingerprint: designRecord.fingerprint, design: designRecord,
   scheduledForUtc: "2026-10-10T00:00:00.000Z", marketCaps: { initial: 1, migration: 10 }, designed: {
     policyId: "policy-1", modelVersion: "0.3.0", sdkVersion: "1.5.12", seed: 1, configHash: "hash", asset: "community", objective: "participation", presetId: "exponential", profileName: "Exponential · 3×", thresholdAtoms: "1000", referenceImpactBps: 10, retailProgress: 0.3, whaleImpactBps: 100, stressGraduationRate: 0.9, stressPaths: 10, stressP10Progress: 0.3, stressWorstProgress: 0.1, configFingerprint: designRecord.fingerprint, constraintPolicy: designRecord.constraintPolicy,
@@ -73,6 +73,9 @@ describe("Market Passport", () => {
     const result = buildScheduledPassport(scheduled);
     expect(result.market.kind).toBe("scheduled");
     expect(result.market.pool).toBeNull();
+    expect(result.market.website).toBe("https://example.com/upcoming");
+    expect(result.market.xProfile).toBe("https://x.com/upcoming");
+    expect(result.market.imageUrl).toContain("/uploads/token-images/");
     expect(result.schedule?.note).toBe("No market exists on-chain yet");
     expect(result.observed.quoteProgress).toBeNull();
     expect(result.monitor.status).toBe("not_applicable");
@@ -82,6 +85,9 @@ describe("Market Passport", () => {
     const result = buildLivePassportFromReadings({ id: POOL, registry, catalog: null, snapshot, onChain: null, destination: null, holders: null, swapCount: null, checkedAt: "2026-10-09T12:00:00.000Z" });
     expect(result.market.kind).toBe("live");
     expect(result.market.pool).toBe(POOL);
+    expect(result.market.website).toBe("https://example.com/pass");
+    expect(result.market.xProfile).toBe("https://x.com/pass");
+    expect(result.market.imageUrl).toBeNull();
     expect(result.deployment.status).toBe("unknown");
     expect(result.observed.quoteProgress).toBe(0.5);
     expect(result.observed.observedSwapCount).toBeNull();
@@ -174,6 +180,7 @@ describe("Passport contracts", () => {
     expect(route).toContain("export async function GET");
     expect(route).not.toContain("export async function POST");
     expect(route).toContain("Cache-Control");
+    expect(route).toContain("rate_limited");
   });
 
   it("adds the primary live Passport tab and scheduled view", () => {
