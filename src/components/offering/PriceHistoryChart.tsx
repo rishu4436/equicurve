@@ -67,7 +67,7 @@ function ChartSvg({
   return (
     <div className="space-y-5">
       {mode !== "illustrative" && <div className="ec-chart-frame p-4 sm:p-5">
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-2"><h4 className="text-sm font-medium">Swap price history</h4><span className="ec-chip">Partial on-chain history</span></div>
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-2"><h4 className="text-sm font-medium">{historicalOnly ? "Historical DBC swaps" : "Swap price history"}</h4><span className="ec-chip">Partial on-chain history</span></div>
         <LineChart label="Confirmed swap execution prices over time"
           series={[
             { name: "Historical DBC swaps", color: "#6DE0C5", points: swaps.map(point => ({ x: point.t, y: point.price })) },
@@ -78,7 +78,7 @@ function ChartSvg({
           formatDetailX={formatTime} formatDetailY={value => formatTokenPrice(value, quoteLabel).secondary}
           formatY={value => formatPriceAxis(value, quoteLabel)} />
         {swaps.length > 0 && <p className="mt-3 text-xs text-fg-muted">{formatTime(swaps[0].t)} — {formatTime(swaps[swaps.length - 1].t)}</p>}
-        {historicalOnly && <p className="mt-3 text-xs leading-relaxed text-fg-muted">DBC is historical after migration. Current DAMM v2 spot and verified reserves are shown in the active market panel below; incompatible venue data is not joined into this line.</p>}
+        {historicalOnly && <p className="mt-3 text-xs leading-relaxed text-fg-muted">DBC history · market now trades on DAMM v2. Current DAMM v2 spot and verified reserves are shown in the active market panel; incompatible venue data is not joined into this line.</p>}
         {swaps.length === 0 && !historicalOnly && <p className="mt-3 text-xs leading-relaxed text-fg-muted">{spot != null ? "Live spot is marked on the chart. No confirmed DBC swap history is available to connect yet." : "Refresh to look for parseable swaps. Missing history is never filled with simulated prices."}</p>}
       </div>}
       <details className="rounded-xl border border-line p-4 sm:p-5" open={mode === "illustrative" ? true : undefined}>
@@ -216,7 +216,7 @@ export function PriceHistoryChart({
         <li className="flex items-start gap-1.5">
           <span className="mt-1 inline-block h-0.5 w-3 shrink-0 bg-accent" />
           <span>
-            <strong className="text-fg-secondary">Swap-derived history</strong> · execution price (incl. fees) of
+            <strong className="text-fg-secondary">{historicalOnly ? "Historical DBC swaps" : "Swap-derived history"}</strong> · execution price (incl. fees) of
             confirmed swaps in the last {meta.scanned || 100} pool signatures. Partial when the RPC range is exhausted.
           </span>
         </li>

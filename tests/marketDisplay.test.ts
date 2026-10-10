@@ -13,7 +13,7 @@ describe("market terminal display", () => {
       primary: "13.70 lamports / EQFULL",
       secondary: "0.0000000137 SOL / EQFULL",
     });
-    expect(formatPriceAxis(6.8e-9, "SOL")).toBe("6.8ℓ");
+    expect(formatPriceAxis(6.8e-9, "SOL")).toBe("6.8 lamports");
   });
 
   it("maps lifecycle to one active execution venue", () => {

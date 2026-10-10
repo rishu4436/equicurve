@@ -49,7 +49,8 @@ import {
 } from "@/lib/local/launches";
 import { formatTokenSupply, tokenAccountDistribution } from "@/lib/holders";
 import { withReadConnection } from "@/lib/connection";
-import { formatMarketTimestamp, formatPermanentLock, formatProgressRatio, marketLifecycle } from "@/lib/marketDisplay";
+import { formatMarketTimestamp, formatMetricValue, formatPermanentLock, formatProgressRatio, formatTokenPriceExact, marketLifecycle } from "@/lib/marketDisplay";
+import type { MarketMetrics } from "@/lib/market/metrics";
 import { UpdatesPanel } from "@/components/community/UpdatesPanel";
 import { PassportPanel } from "@/components/passport/PassportPanel";
 
@@ -105,6 +106,9 @@ export function OfferingDetailClient({ id, demo }: Props) {
   const [snapError, setSnapError] = useState<string | null>(null);
   const [snapReadFailed, setSnapReadFailed] = useState(false);
   const [snapCheckedAt, setSnapCheckedAt] = useState<string | null>(null);
+  const [metrics, setMetrics] = useState<MarketMetrics | null>(null);
+  const [metricMode, setMetricMode] = useState<"price" | "mcap">("price");
+  const [denomination, setDenomination] = useState<"SOL" | "USD">("SOL");
   const [holders, setHolders] = useState<HolderHint>({
     supplyAtoms: null,
     decimals: null,
@@ -197,6 +201,26 @@ export function OfferingDetailClient({ id, demo }: Props) {
   useEffect(() => {
     void refreshSnap();
   }, [refreshSnap, historyNonce]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!poolAddress || illustrative) {
+      setMetrics(null);
+      return;
+    }
+    void fetch(`/api/markets/${encodeURIComponent(poolAddress)}/metrics`, {
+      cache: "no-store",
+      headers: { Accept: "application/json" },
+    })
+      .then(async (response) => {
+        const body = (await response.json()) as { ok?: boolean; error?: string; [key: string]: unknown };
+        if (!response.ok || !body.ok) throw new Error(body.error ?? "Market metrics unavailable");
+        return body as unknown as MarketMetrics & { ok: true };
+      })
+      .then((body) => { if (!cancelled) setMetrics(body); })
+      .catch(() => { if (!cancelled) setMetrics(null); });
+    return () => { cancelled = true; };
+  }, [poolAddress, illustrative, historyNonce]);
 
   useEffect(() => {
     let cancelled = false;
@@ -365,6 +389,22 @@ export function OfferingDetailClient({ id, demo }: Props) {
   const migratedOnChain = curvePhase === "migrated";
   const dammLive = migratedOnChain && destination === "exists";
   const lifecycle = marketLifecycle(curvePhase, destination);
+  const terminalVenue = metrics?.market.activeVenue ?? lifecycle.activeVenue;
+  const terminalPrice = denomination === "USD" ? metrics?.price.usdPerToken ?? null : metrics?.price.solPerToken ?? null;
+  const terminalMcap = denomination === "USD" ? metrics?.valuation.marketCapUsd ?? null : metrics?.valuation.marketCapSol ?? null;
+  const terminalValue = metricMode === "price" ? terminalPrice : terminalMcap;
+  const terminalDisplay = metricMode === "price"
+    ? (terminalValue
+      ? denomination === "USD"
+        ? `${formatMetricValue(terminalValue, "USD")} / ${ticker}`
+        : formatTokenPriceExact(terminalValue, "SOL", ticker).primary
+      : "—")
+    : formatMetricValue(terminalValue, denomination);
+  const terminalReason = metricMode === "mcap" && !terminalMcap
+    ? "Circulating supply unavailable"
+    : denomination === "USD" && !terminalPrice && metrics?.price.solPerToken
+      ? "USD reference unavailable"
+      : null;
 
   const mint = snapshot?.baseMint ?? launch?.mint ?? demo?.mint;
   const config = snapshot?.config ?? launch?.config;
@@ -497,6 +537,83 @@ export function OfferingDetailClient({ id, demo }: Props) {
             </div>
           )}
         </header>
+
+        <section className="ec-card space-y-5 p-4 sm:p-5" aria-label="Live market terminal" data-testid="market-terminal">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2 text-xs text-fg-muted">
+                <span className="uppercase tracking-[0.16em]">Live market</span>
+                <span className="ec-chip">Active venue: {terminalVenue}</span>
+              </div>
+              <div className="mt-2 flex flex-wrap items-end gap-x-4 gap-y-1">
+                <div>
+                  <p className="text-xs text-fg-muted">{metricMode === "price" ? "Current price" : "Market Cap"}</p>
+                  <p className="font-mono text-2xl font-semibold tracking-tight text-fg-primary sm:text-3xl">{terminalDisplay}</p>
+                </div>
+                {metricMode === "mcap" && terminalReason && <p className="pb-1 text-xs text-fg-muted">{terminalReason}</p>}
+              </div>
+              <p className="mt-2 text-xs text-fg-muted">
+                {metrics?.price.sourceVenue === "damm-v2"
+                  ? "DAMM v2 spot · verified pool state"
+                  : metrics?.price.sourceVenue === "dbc"
+                    ? "DBC spot · verified pool √price"
+                    : "Current venue price is unavailable"}
+                {metrics?.price.observedAt ? ` · observed ${formatMarketTimestamp(metrics.price.observedAt, false)}` : ""}
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-2 self-stretch sm:flex sm:flex-wrap sm:self-auto" role="group" aria-label="Market terminal controls">
+              <div className="rounded-input border border-line bg-subtle p-1" role="group" aria-label="Metric">
+                {(["price", "mcap"] as const).map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={metricMode === value}
+                    onClick={() => setMetricMode(value)}
+                    className={clsx("min-h-10 rounded-md px-3 text-xs font-medium transition-colors", metricMode === value ? "bg-accent/15 text-accent" : "text-fg-secondary hover:text-fg-primary")}
+                  >
+                    {value === "price" ? "Price" : "MCap"}
+                  </button>
+                ))}
+              </div>
+              <div className="rounded-input border border-line bg-subtle p-1" role="group" aria-label="Denomination">
+                {(["USD", "SOL"] as const).map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={denomination === value}
+                    onClick={() => setDenomination(value)}
+                    className={clsx("min-h-10 rounded-md px-3 text-xs font-medium transition-colors", denomination === value ? "bg-accent/15 text-accent" : "text-fg-secondary hover:text-fg-primary")}
+                  >
+                    {value}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="grid gap-px overflow-hidden rounded-input border border-line bg-line sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+            {[
+              { label: "Price", value: metrics?.price[denomination === "USD" ? "usdPerToken" : "solPerToken"] ?? null, kind: "price" as const },
+              { label: "Market Cap", value: metrics?.valuation[denomination === "USD" ? "marketCapUsd" : "marketCapSol"] ?? null, kind: "amount" as const },
+              { label: "FDV", value: metrics?.valuation[denomination === "USD" ? "fdvUsd" : "fdvSol"] ?? null, kind: "amount" as const },
+              { label: "Liquidity", value: metrics?.liquidity[denomination === "USD" ? "usd" : "sol"] ?? null, kind: "amount" as const },
+              { label: "24h Volume", value: metrics?.volume24h[denomination === "USD" ? "usd" : "sol"] ?? null, kind: "amount" as const },
+              { label: "24h Change", value: metrics?.change24hPct ?? null, kind: "change" as const },
+              { label: "Holders", value: metrics?.holders.supplyAtoms ? String(metrics.holders.largestCount) : null, kind: "holders" as const },
+            ].map((stat) => (
+              <div key={stat.label} className="bg-subtle px-3 py-3">
+                <p className="text-[11px] uppercase tracking-[0.12em] text-fg-muted">{stat.label}</p>
+                <p className="mt-1 font-mono text-sm text-fg-primary">
+                  {stat.kind === "price" ? (stat.value ? (denomination === "USD" ? `${formatMetricValue(stat.value, "USD")} / ${ticker}` : formatTokenPriceExact(stat.value, "SOL", ticker).primary) : "—") : stat.kind === "amount" ? formatMetricValue(stat.value, denomination) : stat.kind === "change" ? (stat.value ? `${Number(stat.value) > 0 ? "+" : ""}${stat.value}%` : "—") : (stat.value ?? "—")}
+                </p>
+              </div>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-fg-muted">
+            <span>Price: {metrics?.provenance.price ?? "Unavailable"}</span>
+            <span>FDV: {metrics?.provenance.valuation ?? "Unavailable"}</span>
+            <span>Holders: {metrics?.provenance.holders ?? "Unavailable"}</span>
+          </div>
+        </section>
 
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_400px]">
           <div className="min-w-0 space-y-5">

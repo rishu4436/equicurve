@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => {
     getServerConnection: vi.fn(() => connection),
     withReadConnection: vi.fn(async (_primary: unknown, read: (connection: unknown) => Promise<unknown>) => read(connection)),
     reconstructPoolPriceHistory: vi.fn(),
+    buildMarketMetrics: vi.fn(),
     limitRequest: vi.fn(async () => ({ ok: true, retryAfterSec: 0 })),
     clientKey: vi.fn(() => "test-client"),
   };
@@ -26,11 +27,15 @@ vi.mock("@/lib/connection", () => ({
 vi.mock("@/lib/dbc/priceHistory", () => ({
   reconstructPoolPriceHistory: mocks.reconstructPoolPriceHistory,
 }));
+vi.mock("@/lib/market/metrics", () => ({
+  buildMarketMetrics: mocks.buildMarketMetrics,
+}));
 vi.mock("@/lib/server/http", () => ({ clientKey: mocks.clientKey }));
 vi.mock("@/lib/server/rateLimit", () => ({ limitRequest: mocks.limitRequest }));
 
 import { GET as holdersGet } from "@/app/api/markets/[id]/holders/route";
 import { GET as historyGet } from "@/app/api/markets/[id]/price-history/route";
+import { GET as metricsGet } from "@/app/api/markets/[id]/metrics/route";
 
 const MINT = "HWooSsdCWPq9sv87SGGqppGmpnf8VFNMa1RmZFtmo6j8";
 const POOL = "D2fzZHDfHHNWybyXLBHdvgJR6vmfH2rMj6rKXQF1WmGY";
@@ -55,6 +60,19 @@ describe("private market read routes", () => {
       scanned: 1,
       parsedSwaps: 1,
       error: null,
+    });
+    mocks.buildMarketMetrics.mockResolvedValue({
+      market: { pool: POOL, mint: MINT, quote: "SOL", lifecycle: "migrated", activeVenue: "DAMM v2" },
+      price: { quotePerToken: "0.00000001366", quoteSymbol: "SOL", solPerToken: "0.00000001366", usdPerToken: "0.0000015", sourceVenue: "damm-v2", observedAt: "2026-10-10T00:00:00.000Z" },
+      supply: { totalTokens: "1000000000", circulatingTokens: null, circulatingSource: "unavailable" },
+      valuation: { marketCapSol: null, marketCapUsd: null, fdvSol: "13.66", fdvUsd: "1500" },
+      liquidity: { sol: "5", usd: "700" },
+      volume24h: { sol: null, usd: null },
+      change24hPct: null,
+      holders: { supplyAtoms: "1000000000", decimals: 9, largestCount: 1, partial: false, source: "RPC token accounts" },
+      partial: false,
+      unavailableReasons: [],
+      provenance: { price: "DAMM v2", valuation: "FDV", marketCap: "Unavailable", liquidity: "DAMM reserve", holders: "RPC token accounts", usd: "reference" },
     });
   });
 
@@ -170,6 +188,40 @@ describe("private market read routes", () => {
       spot: null,
     });
   });
+
+  it("serves pool-identity metrics without leaking private RPC configuration", async () => {
+    const response = await metricsGet(
+      new Request(`https://equicurve.test/api/markets/${POOL}/metrics`),
+      params({ id: POOL }),
+    );
+    const body = await response.json();
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ ok: true, market: { pool: POOL, activeVenue: "DAMM v2" }, valuation: { marketCapSol: null, fdvSol: "13.66" } });
+    expect(mocks.buildMarketMetrics).toHaveBeenCalledWith(mocks.connection, expect.objectContaining({}));
+    expect(JSON.stringify(body)).not.toMatch(/helius|api[_-]?key|RPC_URL|DEVNET_RPC/i);
+  });
+
+  it("rejects malformed pool metrics ids before any RPC read", async () => {
+    const response = await metricsGet(
+      new Request("https://equicurve.test/api/markets/not-a-pool/metrics"),
+      params({ id: "not-a-pool" }),
+    );
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ ok: false, code: "invalid_pool" });
+    expect(mocks.buildMarketMetrics).not.toHaveBeenCalled();
+  });
+
+  it("degrades a complete metrics read failure without exposing the exception", async () => {
+    mocks.buildMarketMetrics.mockRejectedValue(new Error("private RPC key leaked in upstream error"));
+    const response = await metricsGet(
+      new Request(`https://equicurve.test/api/markets/${POOL}/metrics`),
+      params({ id: POOL }),
+    );
+    expect(response.status).toBe(503);
+    const body = await response.json();
+    expect(body).toMatchObject({ ok: false, code: "rpc_unavailable" });
+    expect(JSON.stringify(body)).not.toContain("private RPC key");
+  });
 });
 
 describe("market read client boundaries", () => {
@@ -182,6 +234,7 @@ describe("market read client boundaries", () => {
     expect(dynamicDirs).toEqual(["[id]"]);
     expect(existsSync(resolve(root, "[id]/holders/route.ts"))).toBe(true);
     expect(existsSync(resolve(root, "[id]/price-history/route.ts"))).toBe(true);
+    expect(existsSync(resolve(root, "[id]/metrics/route.ts"))).toBe(true);
   });
 
   it("keeps expensive reads out of the browser components", () => {

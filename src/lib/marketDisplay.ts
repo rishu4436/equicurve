@@ -24,10 +24,39 @@ export function formatTokenPrice(price: number, quote: string, ticker = "token")
   return { primary: `${precise} ${quote} / ${ticker}`, secondary: `${precise} ${quote}` };
 }
 
+/** Exact-string counterpart used by the server metrics contract. */
+export function formatTokenPriceExact(price: string | null, quote: string, ticker = "token") {
+  if (!price) return { primary: "Unavailable", secondary: "Price unavailable" };
+  const numeric = Number(price);
+  if (!(numeric > 0) || !Number.isFinite(numeric)) return { primary: "Unavailable", secondary: "Price unavailable" };
+  if (quote === "SOL" && numeric < 0.000001) {
+    return {
+      primary: `${fixedSignificant(numeric * 1_000_000_000, 8)} lamports / ${ticker}`,
+      secondary: `${fixedSignificant(numeric, 8)} SOL / ${ticker}`,
+    };
+  }
+  const precise = fixedSignificant(numeric, 8);
+  return { primary: `${precise} ${quote} / ${ticker}`, secondary: `${precise} ${quote}` };
+}
+
 export function formatPriceAxis(price: number, quote: string): string {
   if (!(price >= 0) || !Number.isFinite(price)) return "—";
-  if (quote === "SOL" && price < 0.000001) return `${(price * 1_000_000_000).toFixed(1)}ℓ`;
+  if (quote === "SOL" && price < 0.000001) return `${fixedSignificant(price * 1_000_000_000, 6)} lamports`;
   return fixedSignificant(price, 4);
+}
+
+export function formatMetricValue(value: string | null, unit: "SOL" | "USD"): string {
+  if (value == null) return "—";
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return "—";
+  if (numeric === 0) return unit === "USD" ? "$0" : "0 SOL";
+  if (unit === "USD") {
+    if (Math.abs(numeric) >= 1_000) {
+      return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", notation: "compact", maximumFractionDigits: 2 }).format(numeric);
+    }
+    return `$${fixedSignificant(numeric, 8)}`;
+  }
+  return `${fixedSignificant(numeric, 8)} SOL`;
 }
 
 /** Locale/time-zone independent output keeps server and browser hydration identical. */
@@ -55,15 +84,15 @@ export function formatQuoteReserveLabel(quoteLabel: string): string {
   return `Quote reserve (${quoteLabel})`;
 }
 
-export type MarketLifecycle = { label: string; activeVenue: "DBC" | "DAMM v2" | "Pending"; tradeEnabled: boolean };
+export type MarketLifecycle = { label: string; activeVenue: "DBC" | "DAMM v2" | "Pending" | "Unknown"; tradeEnabled: boolean };
 
 export function marketLifecycle(phase: CurvePhase, destination: DestinationCheck): MarketLifecycle {
   if (phase === "migrated") return {
-    label: destination === "exists" ? "Migrated · DAMM v2" : "Migrated · verifying DAMM v2",
-    activeVenue: destination === "exists" ? "DAMM v2" : "Pending",
+    label: destination === "exists" ? "Migrated · DAMM v2" : destination === "rpc_unavailable" ? "Migrated · venue unknown" : "Migrated · verifying DAMM v2",
+    activeVenue: destination === "exists" ? "DAMM v2" : destination === "rpc_unavailable" ? "Unknown" : "Pending",
     tradeEnabled: destination === "exists",
   };
   if (phase === "complete") return { label: "Curve complete · eligible to migrate", activeVenue: "Pending", tradeEnabled: false };
   if (phase === "raising") return { label: "Raising on DBC", activeVenue: "DBC", tradeEnabled: true };
-  return { label: "Lifecycle unknown", activeVenue: "Pending", tradeEnabled: false };
+  return { label: "Lifecycle unknown", activeVenue: "Unknown", tradeEnabled: false };
 }
