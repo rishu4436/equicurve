@@ -234,6 +234,7 @@ describe("market read client boundaries", () => {
     expect(dynamicDirs).toEqual(["[id]"]);
     expect(existsSync(resolve(root, "[id]/holders/route.ts"))).toBe(true);
     expect(existsSync(resolve(root, "[id]/price-history/route.ts"))).toBe(true);
+    expect(existsSync(resolve(root, "[id]/history/route.ts"))).toBe(true);
     expect(existsSync(resolve(root, "[id]/metrics/route.ts"))).toBe(true);
   });
 

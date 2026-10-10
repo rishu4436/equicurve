@@ -15,6 +15,9 @@ export type DammPoolSnapshot = {
   tokenBDecimals: number;
   tokenAReserve?: string | null;
   tokenBReserve?: string | null;
+  /** Verified vault accounts used to attribute confirmed swap deltas. */
+  tokenAVault?: string;
+  tokenBVault?: string;
   /** Verified pool sqrt price expressed as quote units per base token. */
   spotQuotePerBase?: string | null;
 };

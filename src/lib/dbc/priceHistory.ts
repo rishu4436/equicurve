@@ -9,13 +9,13 @@ import {
   type ParsedTransactionWithMeta,
 } from "@solana/web3.js";
 import type { PricePoint } from "@/lib/local/priceHistory";
-import { atomsRatioToPrice } from "@/lib/amounts";
+import { atomsRatioToDecimalString, atomsRatioToPrice } from "@/lib/amounts";
 import { fetchSpotPrice } from "./spotPrice";
 import { isTransientRpcError } from "@/lib/rpc";
 
 const DBC = DYNAMIC_BONDING_CURVE_PROGRAM_ID;
 
-type SwapEventLike = {
+export type SwapEventLike = {
   name: string;
   data: {
     tradeDirection?: number;
@@ -27,11 +27,12 @@ type SwapEventLike = {
       outputAmount?: { toString(): string } | number | string;
       nextSqrtPrice?: unknown;
     };
+    pool?: { toBase58?: () => string } | string;
   };
 };
 
 /** u64 event field → exact bigint (never via float). */
-function asAtoms(v: unknown): bigint | null {
+export function asAtoms(v: unknown): bigint | null {
   if (v == null) return null;
   try {
     if (typeof v === "bigint") return v;
@@ -58,6 +59,23 @@ export function priceFromSwapEvent(
   baseDecimals: number,
   quoteDecimals: number,
 ): { price: number; tsSec: number | null } | null {
+  const normalized = swapEventToAmounts(ev, baseDecimals, quoteDecimals);
+  if (!normalized) return null;
+  return { price: Number(normalized.priceQuotePerToken), tsSec: normalized.tsSec };
+}
+
+/** Exact, orientation-safe DBC swap quantities for the normalized history model. */
+export function swapEventToAmounts(
+  ev: SwapEventLike,
+  baseDecimals: number,
+  quoteDecimals: number,
+): {
+  side: "buy" | "sell";
+  baseAmountAtoms: bigint;
+  quoteAmountAtoms: bigint;
+  priceQuotePerToken: string;
+  tsSec: number | null;
+} | null {
   const dir = Number(ev.data.tradeDirection ?? -1);
   const result = ev.data.swapResult;
   if (!result) return null;
@@ -69,21 +87,39 @@ export function priceFromSwapEvent(
     asAtoms(ev.data.amountIn);
   if (outRaw == null || inRaw == null || outRaw <= 0n || inRaw <= 0n) return null;
 
-  let price: number | null;
+  let baseAmountAtoms: bigint;
+  let quoteAmountAtoms: bigint;
+  let side: "buy" | "sell";
   if (dir === 1) {
     // Buy: quote in → base out
-    price = atomsRatioToPrice(inRaw, outRaw, quoteDecimals, baseDecimals);
+    side = "buy";
+    baseAmountAtoms = outRaw;
+    quoteAmountAtoms = inRaw;
   } else if (dir === 0) {
     // Sell: base in → quote out
-    price = atomsRatioToPrice(outRaw, inRaw, quoteDecimals, baseDecimals);
+    side = "sell";
+    baseAmountAtoms = inRaw;
+    quoteAmountAtoms = outRaw;
   } else {
     return null;
   }
-  if (price == null) return null;
-  return { price, tsSec: asSeconds(ev.data.currentTimestamp) };
+  const priceQuotePerToken = atomsRatioToDecimalString(
+    quoteAmountAtoms,
+    baseAmountAtoms,
+    quoteDecimals,
+    baseDecimals,
+  );
+  if (!priceQuotePerToken) return null;
+  return {
+    side,
+    baseAmountAtoms,
+    quoteAmountAtoms,
+    priceQuotePerToken,
+    tsSec: asSeconds(ev.data.currentTimestamp),
+  };
 }
 
-function parseSwapEventsFromLogs(logs: string[] | null | undefined): SwapEventLike[] {
+export function parseSwapEventsFromLogs(logs: string[] | null | undefined): SwapEventLike[] {
   if (!logs?.length) return [];
   try {
     const coder = new BorshCoder(DynamicBondingCurveIdl as Idl);

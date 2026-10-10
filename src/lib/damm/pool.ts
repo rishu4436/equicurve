@@ -105,6 +105,8 @@ export async function fetchDammPoolSnapshot(args: {
       tokenBDecimals: 0,
       tokenAReserve: null,
       tokenBReserve: null,
+      tokenAVault: undefined,
+      tokenBVault: undefined,
       spotQuotePerBase: null,
     };
   }
@@ -163,6 +165,8 @@ export async function fetchDammPoolSnapshot(args: {
     tokenBDecimals,
     tokenAReserve,
     tokenBReserve,
+    tokenAVault: state.tokenAVault.toBase58(),
+    tokenBVault: state.tokenBVault.toBase58(),
     spotQuotePerBase,
   };
 }

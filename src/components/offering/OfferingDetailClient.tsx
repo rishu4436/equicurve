@@ -109,6 +109,12 @@ export function OfferingDetailClient({ id, demo }: Props) {
   const [metrics, setMetrics] = useState<MarketMetrics | null>(null);
   const [metricMode, setMetricMode] = useState<"price" | "mcap">("price");
   const [denomination, setDenomination] = useState<"SOL" | "USD">("SOL");
+  const [historySummary, setHistorySummary] = useState<{
+    volume24h: string | null;
+    change24hPct: string | null;
+    quoteMint: string | null;
+    complete24h: boolean;
+  } | null>(null);
   const [holders, setHolders] = useState<HolderHint>({
     supplyAtoms: null,
     decimals: null,
@@ -121,6 +127,13 @@ export function OfferingDetailClient({ id, demo }: Props) {
   });
   const [historyNonce, setHistoryNonce] = useState(0);
   const eligibility = useEligibilityGate();
+
+  const onHistorySummary = useCallback((summary: {
+    volume24h: string | null;
+    change24hPct: string | null;
+    quoteMint: string | null;
+    complete24h: boolean;
+  }) => setHistorySummary(summary), []);
 
   useEffect(() => {
     const requested = searchParams.get("tab")?.toLowerCase();
@@ -405,6 +418,15 @@ export function OfferingDetailClient({ id, demo }: Props) {
     : denomination === "USD" && !terminalPrice && metrics?.price.solPerToken
       ? "USD reference unavailable"
       : null;
+  // Once the confirmed-history read finishes, its coverage governs the
+  // header metrics. Never replace an incomplete/null history result with a
+  // different provider's sample and label it as canonical 24h data.
+  const historyVolume = historySummary
+    ? historySummary.complete24h && ((quote === "USDC" && denomination === "USD") || (quote === "SOL" && denomination === "SOL"))
+      ? historySummary.volume24h
+      : null
+    : metrics?.volume24h[denomination === "USD" ? "usd" : "sol"] ?? null;
+  const historyChange = historySummary ? historySummary.change24hPct : metrics?.change24hPct ?? null;
 
   const mint = snapshot?.baseMint ?? launch?.mint ?? demo?.mint;
   const config = snapshot?.config ?? launch?.config;
@@ -596,8 +618,8 @@ export function OfferingDetailClient({ id, demo }: Props) {
               { label: "Market Cap", value: metrics?.valuation[denomination === "USD" ? "marketCapUsd" : "marketCapSol"] ?? null, kind: "amount" as const },
               { label: "FDV", value: metrics?.valuation[denomination === "USD" ? "fdvUsd" : "fdvSol"] ?? null, kind: "amount" as const },
               { label: "Liquidity", value: metrics?.liquidity[denomination === "USD" ? "usd" : "sol"] ?? null, kind: "amount" as const },
-              { label: "24h Volume", value: metrics?.volume24h[denomination === "USD" ? "usd" : "sol"] ?? null, kind: "amount" as const },
-              { label: "24h Change", value: metrics?.change24hPct ?? null, kind: "change" as const },
+              { label: "24h Volume", value: historyVolume, kind: "amount" as const },
+              { label: "24h Change", value: historyChange, kind: "change" as const },
               { label: "Holders", value: metrics?.holders.supplyAtoms ? String(metrics.holders.largestCount) : null, kind: "holders" as const },
             ].map((stat) => (
               <div key={stat.label} className="bg-subtle px-3 py-3">
@@ -640,6 +662,11 @@ export function OfferingDetailClient({ id, demo }: Props) {
                 illustrative={illustrative}
                 priceMultiple={presetPriceMultiple(presetId, quote === "USDC" ? "USDC" : "SOL")}
                 historicalOnly={lifecycle.activeVenue === "DAMM v2"}
+                metricMode={metricMode}
+                denomination={denomination}
+                currentPrice={metrics?.price.quotePerToken ?? null}
+                currentPriceVenue={metrics?.price.sourceVenue === "damm-v2" ? "DAMM v2" : metrics?.price.sourceVenue === "dbc" ? "DBC" : null}
+                onSummary={onHistorySummary}
               />
               <div className="mt-4 flex items-center gap-4 border-t border-line pt-4">
                 <div className="space-y-1 text-sm text-fg-secondary">
