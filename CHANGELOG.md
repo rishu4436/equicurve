@@ -10,6 +10,66 @@ changes must be documented explicitly.
 
 Planned work belongs in [ROADMAP.md](./ROADMAP.md) and is not considered shipped.
 
+## [0.3.5] - 2026-10-10
+
+Market Operating & Verification Layer.
+
+### Creator identity
+
+- Added Website and X profile support with canonical creator-signed identity continuity.
+- Added direct validated project-image upload with Vercel Blob production persistence.
+
+### Scheduled launches
+
+- Added persisted launch intents, Upcoming discovery, reschedule/cancel, server-time readiness, and fingerprint-bound launch revalidation.
+- Scheduled launches remain intents: they do not contain pre-signed transactions or execute automatically.
+
+### Issuer updates and comments
+
+- Added canonical creator-only issuer posts with edit, delete, and pin actions.
+- Added wallet-authenticated comments with author-only mutation and short-lived wallet sessions.
+- Added durable production persistence in Upstash.
+
+### Global News
+
+- Added creator-post aggregation with Newest, Popular, category filtering, search, deterministic pagination, and creator provenance.
+
+### Market Passport
+
+- Added original design intent, configuration fingerprints, accepted constraint changes, deterministic robustness context, deployment verification, live design monitoring, and scheduled/pre-launch Passport views.
+
+### Production persistence
+
+- Added Upstash persistence for schedules, posts/comments, and auth challenges/sessions.
+- Added atomic nonce consumption, atomic pin behavior, and schedule CAS.
+- Added Vercel Blob persistence for production images.
+
+### Quality
+
+- 62 test files and 526 passing tests.
+- Production deployment smoke passed.
+- EQFULL live Passport passed.
+- Correct EQFULL holders mint endpoint passed 3/3.
+
+### Evidence boundaries
+
+- Synthetic scenarios are not forecasts, and robustness is not probability.
+- A fingerprint identifies the canonical EquiCurve configuration; the fingerprint itself is not stored on-chain.
+- Creator posts are creator-authored; EquiCurve verifies authorship where supported, not the truth of claims.
+- Token accounts are not necessarily beneficial owners.
+- A scheduled launch is an intent, not an automatic transaction.
+
+### Production QA disclosure
+
+- Wallet/auth/schedule/community behavior has focused automated coverage.
+- Production storage/backends and read-only surfaces were live-verified.
+- Disposable production wallet mutation flows were not exercised because no controlled signing wallet was used in that audit.
+
+### Versioning notes
+
+- Application release: `0.3.5`.
+- API schema, market engine, fingerprint, and robustness model versions remain independent.
+
 ## [0.3.0] - 2026-10-08
 
 Developer Preview — headless market-design API and TypeScript client.

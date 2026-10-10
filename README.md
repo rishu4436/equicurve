@@ -2,7 +2,7 @@
 
 EquiCurve is a constrained market-design engine for Meteora DBC launches.
 
-**Current release:** `v0.3.0 Developer Preview` · [Changelog](./CHANGELOG.md) · [Roadmap](./ROADMAP.md) · [Architecture](./docs/ARCHITECTURE.md)
+**Current release:** `v0.3.5 — Market Operating & Verification Layer` · [Changelog](./CHANGELOG.md) · [Roadmap](./ROADMAP.md) · [Architecture](./docs/ARCHITECTURE.md)
 
 ### v0.3.5 persistence backends
 
@@ -61,7 +61,7 @@ Further reading: [Architecture + lifecycle diagram](docs/ARCHITECTURE.md) · [Re
 
 ## Product direction
 
-Market Studio remains EquiCurve's reference application. v0.3.0 begins the Developer Preview with a headless market-design API, a thin source-included TypeScript client, and an external launchpad example. Verification API, market intelligence, events, authentication, and broader integration tooling remain planned. See the [directional roadmap](./ROADMAP.md) for shipped and future scope.
+Market Studio remains EquiCurve's reference application. The v0.3.0 Developer Preview introduced the headless market-design API, thin source-included TypeScript client, and external launchpad example. v0.3.5 adds creator identity, scheduled launches, issuer updates, Global News, Market Passport, and durable production persistence. See the [directional roadmap](./ROADMAP.md) for shipped and future scope.
 
 ## Developer Preview
 
